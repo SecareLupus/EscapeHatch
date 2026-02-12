@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: synapse
+      POSTGRES_DB: synapse
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    depends_on:
+      - postgres
+    environment:
+      SYNAPSE_SERVER_NAME: hub-localhost
+      SYNAPSE_REPORT_STATS: "no"
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./docker/synapse:/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+
+  livekit:
+    image: livekit/livekit-server:v1.8
+    command: ["--dev", "--bind", "0.0.0.0"]
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+
+  coturn:
+    image: coturn/coturn:4.6
+    command: ["-n", "--log-file=stdout", "--realm=localhost", "--fingerprint"]
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+
+volumes:
+  pg_data:
