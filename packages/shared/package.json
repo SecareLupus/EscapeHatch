@@ -10,11 +10,13 @@
   },
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "lint": "echo \"No shared lint config yet\"",
+    "lint": "tsc --project tsconfig.json --noEmit",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "test": "echo \"No shared tests yet\""
+    "test": "tsx --test src/test/*.test.ts"
   },
   "devDependencies": {
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.10.2"
   }
 }
