@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "test": "echo \"No web tests yet\""
+    "test": "node --test"
   },
   "dependencies": {
     "@escapehatch/shared": "workspace:*",

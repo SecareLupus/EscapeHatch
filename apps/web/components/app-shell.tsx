@@ -1,7 +1,17 @@
+import Link from "next/link";
+import type { ViewerSession } from "../lib/control-plane";
+
 const creatorServers = ["Creator HQ", "Art Guild", "Mod Room"];
 const channels = ["#announcements", "#general", "#voice-lounge"];
 
-export function AppShell() {
+interface AppShellProps {
+  viewer: ViewerSession | null;
+  loginUrl: string;
+}
+
+export function AppShell({ viewer, loginUrl }: AppShellProps) {
+  const username = viewer?.identity?.preferredUsername ?? "Guest";
+
   return (
     <main className="shell">
       <aside className="server-rail">
@@ -22,10 +32,12 @@ export function AppShell() {
       </aside>
       <section className="timeline">
         <h1>EscapeHatch Boilerplate Ready</h1>
-        <p>
-          This shell gives us a Discord-style layout to begin integrating Matrix timelines,
-          role-aware moderation controls, and SFU voice presence.
-        </p>
+        <p>Signed in as: {username}</p>
+        {!viewer ? (
+          <Link href={loginUrl}>Sign in with Discord</Link>
+        ) : (
+          <p>Session established with control-plane identity mapping.</p>
+        )}
       </section>
     </main>
   );
