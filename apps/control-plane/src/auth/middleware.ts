@@ -17,7 +17,13 @@ declare module "fastify" {
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const session = getSession(request);
   if (!session) {
-    reply.code(401).send({ message: "Unauthorized" });
+    reply.code(401).send({
+      statusCode: 401,
+      error: "Unauthorized",
+      code: "unauthorized",
+      message: "Unauthorized",
+      requestId: request.id
+    });
     return;
   }
 
@@ -28,18 +34,27 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   };
 }
 
-export async function requireInitialized(_: FastifyRequest, reply: FastifyReply): Promise<void> {
+export async function requireInitialized(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
     const initialized = await hasInitializedPlatform();
     if (!initialized) {
       reply
         .code(503)
-        .send({ message: "Platform not initialized. Complete bootstrap first.", code: "not_initialized" });
+        .send({
+          statusCode: 503,
+          error: "Service Unavailable",
+          message: "Platform not initialized. Complete bootstrap first.",
+          code: "not_initialized",
+          requestId: request.id
+        });
     }
   } catch (error) {
     reply.code(503).send({
+      statusCode: 503,
+      error: "Service Unavailable",
       message: error instanceof Error ? error.message : "Platform initialization check failed.",
-      code: "initialization_check_failed"
+      code: "initialization_check_failed",
+      requestId: request.id
     });
   }
 }

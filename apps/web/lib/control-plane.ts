@@ -56,6 +56,20 @@ export type PrivilegedAction =
   | "reports.triage"
   | "audit.read";
 
+export class ControlPlaneApiError extends Error {
+  readonly statusCode: number;
+  readonly code?: string;
+  readonly requestId?: string;
+
+  constructor(input: { message: string; statusCode: number; code?: string; requestId?: string }) {
+    super(input.message);
+    this.name = "ControlPlaneApiError";
+    this.statusCode = input.statusCode;
+    this.code = input.code;
+    this.requestId = input.requestId;
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${controlPlaneBaseUrl}${path}`, {
     credentials: "include",
@@ -64,14 +78,34 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const maybeJson = await response
+    const fallbackMessage = `${response.status} ${response.statusText}`;
+    const maybeJson = (await response
       .json()
-      .catch(() => ({ message: `${response.status} ${response.statusText}` }));
+      .catch(() => ({ message: fallbackMessage }))) as
+      | { message?: unknown; code?: unknown; requestId?: unknown }
+      | null;
+
     const message =
       typeof maybeJson === "object" && maybeJson !== null && "message" in maybeJson
         ? String(maybeJson.message)
-        : `${response.status} ${response.statusText}`;
-    throw new Error(message);
+        : fallbackMessage;
+    const code =
+      typeof maybeJson === "object" && maybeJson !== null && "code" in maybeJson
+        ? String(maybeJson.code)
+        : undefined;
+    const requestIdFromBody =
+      typeof maybeJson === "object" && maybeJson !== null && "requestId" in maybeJson
+        ? String(maybeJson.requestId)
+        : undefined;
+    const requestId = requestIdFromBody ?? response.headers.get("x-request-id") ?? undefined;
+    const decoratedMessage = requestId ? `${message} (request ${requestId})` : message;
+
+    throw new ControlPlaneApiError({
+      message: decoratedMessage,
+      statusCode: response.status,
+      code,
+      requestId
+    });
   }
 
   if (response.status === 204) {

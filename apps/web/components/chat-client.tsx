@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Category, Channel, ChatMessage, Server } from "@escapehatch/shared";
 import {
@@ -103,6 +103,9 @@ export function ChatClient() {
   const [mutatingStructure, setMutatingStructure] = useState(false);
   const [managementDialogOpen, setManagementDialogOpen] = useState(false);
   const messagesRef = useRef<HTMLOListElement | null>(null);
+  const chatStateRequestIdRef = useRef(0);
+  const managementDialogRef = useRef<HTMLElement | null>(null);
+  const initialChatLoadKeyRef = useRef<string | null>(null);
 
   const activeProvider = useMemo(() => providers?.primaryProvider ?? "discord", [providers]);
   const activeChannel = channels.find((channel) => channel.id === selectedChannelId) ?? null;
@@ -176,6 +179,9 @@ export function ChatClient() {
 
     return groups;
   }, [categories, filteredChannels]);
+  const groupedChannelIds = useMemo(() => {
+    return groupedChannels.flatMap((group) => group.channels.map((channel) => channel.id));
+  }, [groupedChannels]);
 
   const renderedMessages = useMemo(() => {
     const grouped: Array<{
@@ -252,7 +258,11 @@ export function ChatClient() {
   }, []);
 
   const refreshChatState = useCallback(async (preferredServerId?: string, preferredChannelId?: string): Promise<void> => {
+    const requestId = ++chatStateRequestIdRef.current;
     const serverItems = await listServers();
+    if (requestId !== chatStateRequestIdRef.current) {
+      return;
+    }
     setServers(serverItems);
 
     const candidateServerId =
@@ -276,9 +286,22 @@ export function ChatClient() {
       return;
     }
 
+    // Immediately clear room/message context while loading next space to avoid cross-space bleed.
+    setChannels([]);
+    setCategories([]);
+    setSelectedChannelId(null);
+    setMessages([]);
+
     const channelItems = await listChannels(nextServerId);
+    if (requestId !== chatStateRequestIdRef.current) {
+      return;
+    }
+    const categoryItems = await listCategories(nextServerId);
+    if (requestId !== chatStateRequestIdRef.current) {
+      return;
+    }
     setChannels(channelItems);
-    setCategories(await listCategories(nextServerId));
+    setCategories(categoryItems);
 
     const textChannels = channelItems.filter((channel) => channel.type === "text" || channel.type === "announcement");
     const candidateChannelId =
@@ -301,6 +324,9 @@ export function ChatClient() {
     }
 
     const messageItems = await listMessages(nextChannelId);
+    if (requestId !== chatStateRequestIdRef.current) {
+      return;
+    }
     setMessages(messageItems.map((message) => ({ ...message })));
   }, [selectedServerId, selectedChannelId, setUrlSelection, urlChannelId, urlServerId]);
 
@@ -322,8 +348,19 @@ export function ChatClient() {
 
   useEffect(() => {
     if (!viewer || !bootstrapStatus?.initialized) {
+      initialChatLoadKeyRef.current = null;
       return;
     }
+
+    const loadKey = [
+      viewer.productUserId,
+      bootstrapStatus.defaultServerId ?? "",
+      bootstrapStatus.defaultChannelId ?? ""
+    ].join(":");
+    if (initialChatLoadKeyRef.current === loadKey) {
+      return;
+    }
+    initialChatLoadKeyRef.current = loadKey;
 
     void refreshChatState(bootstrapStatus.defaultServerId ?? undefined, bootstrapStatus.defaultChannelId ?? undefined).catch(
       (cause) => {
@@ -483,8 +520,157 @@ export function ChatClient() {
     };
   }, [viewer, bootstrapStatus?.initialized, selectedChannelId]);
 
+  useEffect(() => {
+    if (!managementDialogOpen) {
+      return;
+    }
+
+    const dialog = managementDialogRef.current;
+    if (!dialog) {
+      return;
+    }
+
+    const selectors =
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const getFocusableElements = (): HTMLElement[] => {
+      return Array.from(dialog.querySelectorAll<HTMLElement>(selectors)).filter(
+        (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1
+      );
+    };
+
+    const focusables = getFocusableElements();
+    focusables[0]?.focus();
+
+    const handleDialogKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setManagementDialogOpen(false);
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const currentFocusables = getFocusableElements();
+      if (currentFocusables.length === 0) {
+        return;
+      }
+
+      const first = currentFocusables[0]!;
+      const last = currentFocusables[currentFocusables.length - 1]!;
+      const active = document.activeElement;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    dialog.addEventListener("keydown", handleDialogKeyDown);
+    return () => {
+      dialog.removeEventListener("keydown", handleDialogKeyDown);
+    };
+  }, [managementDialogOpen]);
+
+  function getAdjacentId(currentId: string, ids: string[], direction: "next" | "previous"): string | null {
+    if (ids.length === 0) {
+      return null;
+    }
+    const currentIndex = ids.indexOf(currentId);
+    if (currentIndex === -1) {
+      return ids[0] ?? null;
+    }
+
+    const offset = direction === "next" ? 1 : -1;
+    const nextIndex = (currentIndex + offset + ids.length) % ids.length;
+    return ids[nextIndex] ?? null;
+  }
+
+  function handleServerKeyboardNavigation(event: ReactKeyboardEvent, currentServerId: string): void {
+    const serverIds = servers.map((server) => server.id);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      const nextId = getAdjacentId(currentServerId, serverIds, "next");
+      if (nextId) {
+        void handleServerChange(nextId);
+      }
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      const previousId = getAdjacentId(currentServerId, serverIds, "previous");
+      if (previousId) {
+        void handleServerChange(previousId);
+      }
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      const first = serverIds[0];
+      if (first) {
+        void handleServerChange(first);
+      }
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      const last = serverIds[serverIds.length - 1];
+      if (last) {
+        void handleServerChange(last);
+      }
+    }
+  }
+
+  function handleChannelKeyboardNavigation(event: ReactKeyboardEvent, currentChannelId: string): void {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      const nextId = getAdjacentId(currentChannelId, groupedChannelIds, "next");
+      if (nextId) {
+        void handleChannelChange(nextId);
+      }
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      const previousId = getAdjacentId(currentChannelId, groupedChannelIds, "previous");
+      if (previousId) {
+        void handleChannelChange(previousId);
+      }
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      const first = groupedChannelIds[0];
+      if (first) {
+        void handleChannelChange(first);
+      }
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      const last = groupedChannelIds[groupedChannelIds.length - 1];
+      if (last) {
+        void handleChannelChange(last);
+      }
+    }
+  }
+
   async function handleServerChange(serverId: string): Promise<void> {
     setSelectedServerId(serverId);
+    setSelectedChannelId(null);
+    setChannels([]);
+    setCategories([]);
+    setMessages([]);
     setError(null);
     try {
       await refreshChatState(serverId);
@@ -924,10 +1110,16 @@ export function ChatClient() {
       ) : null}
 
       {managementDialogOpen && canManageHubOrSpace ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Management Console">
-          <section className="modal-panel">
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="modal-panel"
+            ref={managementDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="management-console-title"
+          >
             <header className="modal-header">
-              <h2>Management Console</h2>
+              <h2 id="management-console-title">Management Console</h2>
               <button type="button" className="ghost" onClick={() => setManagementDialogOpen(false)}>
                 Close
               </button>
@@ -1214,8 +1406,12 @@ export function ChatClient() {
                   <button
                     type="button"
                     className={selectedServerId === server.id ? "list-item active" : "list-item"}
+                    aria-current={selectedServerId === server.id ? "true" : undefined}
                     onClick={() => {
                       void handleServerChange(server.id);
+                    }}
+                    onKeyDown={(event) => {
+                      handleServerKeyboardNavigation(event, server.id);
                     }}
                   >
                     {server.name}
@@ -1243,8 +1439,12 @@ export function ChatClient() {
                         <button
                           type="button"
                           className={selectedChannelId === channel.id ? "list-item active" : "list-item"}
+                          aria-current={selectedChannelId === channel.id ? "true" : undefined}
                           onClick={() => {
                             void handleChannelChange(channel.id);
+                          }}
+                          onKeyDown={(event) => {
+                            handleChannelKeyboardNavigation(event, channel.id);
                           }}
                         >
                           #{channel.name}

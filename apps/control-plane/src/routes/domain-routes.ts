@@ -37,7 +37,7 @@ import { publishChannelMessage, subscribeToChannelMessages } from "../services/c
 import { listHubsForUser } from "../services/hub-service.js";
 
 export async function registerDomainRoutes(app: FastifyInstance): Promise<void> {
-  const initializedAuthHandlers = { preHandler: [requireInitialized, requireAuth] };
+  const initializedAuthHandlers = { preHandler: [requireAuth, requireInitialized] };
 
   app.get("/health", async () => {
     return { status: "ok", service: "control-plane" };

@@ -186,6 +186,15 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.button-link:focus-visible {
+  outline: 2px solid #184f95;
+  outline-offset: 2px;
+}
+
 .ghost {
   background: var(--surface-alt);
   color: var(--text);
