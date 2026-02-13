@@ -68,6 +68,15 @@ import {
   selectDiscordGuild,
   upsertDiscordChannelMapping
 } from "../services/discord-bridge-service.js";
+import {
+  assignSpaceAdmin,
+  expireSpaceAdminAssignments,
+  hasActiveSpaceAdminAssignment,
+  listDelegationAuditEvents,
+  listSpaceAdminAssignments,
+  revokeSpaceAdminAssignment,
+  transferSpaceOwnership
+} from "../services/delegation-service.js";
 
 export async function registerDomainRoutes(app: FastifyInstance): Promise<void> {
   const initializedAuthHandlers = { preHandler: [requireAuth, requireInitialized] };
@@ -555,8 +564,154 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       })
       .parse(request.body);
 
-    await grantRole(payload);
+    await grantRole({
+      actorUserId: request.auth!.productUserId,
+      ...payload
+    });
     reply.code(204).send();
+  });
+
+  app.post("/v1/servers/:serverId/delegation/space-admins", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        productUserId: z.string().min(1),
+        expiresAt: z.string().datetime().optional()
+      })
+      .parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: params.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({
+        message: "Forbidden: delegation assignment is outside assigned scope.",
+        code: "forbidden_scope"
+      });
+      return;
+    }
+
+    const assignment = await assignSpaceAdmin({
+      actorUserId: request.auth!.productUserId,
+      assignedUserId: payload.productUserId,
+      serverId: params.serverId,
+      expiresAt: payload.expiresAt
+    });
+
+    reply.code(201);
+    return assignment;
+  });
+
+  app.get("/v1/servers/:serverId/delegation/space-admins", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    await expireSpaceAdminAssignments({ serverId: params.serverId });
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: params.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({
+        message: "Forbidden: delegation read is outside assigned scope.",
+        code: "forbidden_scope"
+      });
+      return;
+    }
+    return {
+      items: await listSpaceAdminAssignments(params.serverId)
+    };
+  });
+
+  app.delete("/v1/delegation/space-admins/:assignmentId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ assignmentId: z.string().min(1) }).parse(request.params);
+    const query = z.object({ serverId: z.string().min(1) }).parse(request.query);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: query.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({
+        message: "Forbidden: delegation revoke is outside assigned scope.",
+        code: "forbidden_scope"
+      });
+      return;
+    }
+
+    await revokeSpaceAdminAssignment({
+      actorUserId: request.auth!.productUserId,
+      assignmentId: params.assignmentId
+    });
+    reply.code(204).send();
+  });
+
+  app.post("/v1/servers/:serverId/delegation/ownership/transfer", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        newOwnerUserId: z.string().min(1)
+      })
+      .parse(request.body);
+
+    const serverRows = await listServers();
+    const server = serverRows.find((item) => item.id === params.serverId);
+    if (!server) {
+      reply.code(404).send({ message: "Server not found." });
+      return;
+    }
+
+    const hasScopeManagement = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: params.serverId
+    });
+    const isCurrentOwner = server.ownerUserId === request.auth!.productUserId;
+    if (!hasScopeManagement && !isCurrentOwner) {
+      reply.code(403).send({
+        message: "Forbidden: ownership transfer is outside assigned scope.",
+        code: "forbidden_scope"
+      });
+      return;
+    }
+
+    const transfer = await transferSpaceOwnership({
+      actorUserId: request.auth!.productUserId,
+      serverId: params.serverId,
+      newOwnerUserId: payload.newOwnerUserId
+    });
+
+    if (!(await hasActiveSpaceAdminAssignment({ productUserId: payload.newOwnerUserId, serverId: params.serverId }))) {
+      await assignSpaceAdmin({
+        actorUserId: request.auth!.productUserId,
+        assignedUserId: payload.newOwnerUserId,
+        serverId: params.serverId
+      });
+    }
+
+    return transfer;
+  });
+
+  app.get("/v1/hubs/:hubId/delegation/audit-events", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }).parse(request.query);
+
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({
+        message: "Forbidden: delegation audit read is outside assigned scope.",
+        code: "forbidden_scope"
+      });
+      return;
+    }
+
+    return {
+      items: await listDelegationAuditEvents({
+        hubId: params.hubId,
+        limit: query.limit
+      })
+    };
   });
 
   app.get("/v1/me/roles", initializedAuthHandlers, async (request) => {

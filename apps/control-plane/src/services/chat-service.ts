@@ -69,6 +69,7 @@ export async function listServers(): Promise<Server[]> {
       name: string;
       matrix_space_id: string | null;
       created_by_user_id: string;
+      owner_user_id: string;
       created_at: string;
     }>("select * from servers order by created_at asc");
 
@@ -78,6 +79,7 @@ export async function listServers(): Promise<Server[]> {
       name: row.name,
       matrixSpaceId: row.matrix_space_id,
       createdByUserId: row.created_by_user_id,
+      ownerUserId: row.owner_user_id,
       createdAt: row.created_at
     }));
   });
@@ -426,6 +428,7 @@ export async function renameServer(input: { serverId: string; name: string }): P
       name: string;
       matrix_space_id: string | null;
       created_by_user_id: string;
+      owner_user_id: string;
       created_at: string;
     }>(
       `update servers
@@ -446,6 +449,7 @@ export async function renameServer(input: { serverId: string; name: string }): P
       name: value.name,
       matrixSpaceId: value.matrix_space_id,
       createdByUserId: value.created_by_user_id,
+      ownerUserId: value.owner_user_id,
       createdAt: value.created_at
     };
   });

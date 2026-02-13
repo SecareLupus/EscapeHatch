@@ -46,6 +46,7 @@ export async function initDb(): Promise<void> {
       name text not null,
       matrix_space_id text,
       created_by_user_id text not null,
+      owner_user_id text not null,
       created_at timestamptz not null default now()
     );
 
@@ -86,6 +87,44 @@ export async function initDb(): Promise<void> {
       hub_id text,
       server_id text,
       channel_id text,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists role_assignment_audit_logs (
+      id text primary key,
+      actor_user_id text not null,
+      target_user_id text not null,
+      role text not null,
+      hub_id text,
+      server_id text,
+      channel_id text,
+      outcome text not null,
+      reason text,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists space_admin_assignments (
+      id text primary key,
+      hub_id text not null references hubs(id) on delete cascade,
+      server_id text not null references servers(id) on delete cascade,
+      assigned_user_id text not null,
+      assigned_by_user_id text not null,
+      status text not null default 'active',
+      expires_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique(server_id, assigned_user_id)
+    );
+
+    create table if not exists delegation_audit_events (
+      id text primary key,
+      action_type text not null,
+      actor_user_id text not null,
+      target_user_id text,
+      assignment_id text references space_admin_assignments(id) on delete set null,
+      hub_id text references hubs(id) on delete set null,
+      server_id text references servers(id) on delete set null,
+      metadata jsonb not null default '{}'::jsonb,
       created_at timestamptz not null default now()
     );
 
@@ -241,5 +280,7 @@ export async function initDb(): Promise<void> {
     alter table platform_settings add column if not exists bootstrap_hub_id text;
     alter table platform_settings add column if not exists default_server_id text;
     alter table platform_settings add column if not exists default_channel_id text;
+    alter table servers add column if not exists owner_user_id text;
+    update servers set owner_user_id = created_by_user_id where owner_user_id is null;
   `);
 }

@@ -36,6 +36,7 @@ export interface Server {
   name: string;
   matrixSpaceId: string | null;
   createdByUserId: string;
+  ownerUserId: string;
   createdAt: string;
 }
 
@@ -191,6 +192,36 @@ export interface DiscordBridgeChannelMapping {
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type DelegationAssignmentStatus = "active" | "revoked" | "expired";
+
+export interface SpaceAdminAssignment {
+  id: string;
+  hubId: string;
+  serverId: string;
+  assignedUserId: string;
+  assignedByUserId: string;
+  status: DelegationAssignmentStatus;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DelegationAuditEvent {
+  id: string;
+  actionType:
+    | "space_admin_assigned"
+    | "space_admin_revoked"
+    | "space_admin_transfer_started"
+    | "space_admin_transfer_completed";
+  actorUserId: string;
+  targetUserId: string | null;
+  assignmentId: string | null;
+  hubId: string | null;
+  serverId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface ChannelReadState {

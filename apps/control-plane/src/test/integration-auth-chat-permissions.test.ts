@@ -21,6 +21,9 @@ async function resetDb(): Promise<void> {
     await pool.query("delete from federation_policy_events");
     await pool.query("delete from room_acl_status");
     await pool.query("delete from hub_federation_policies");
+    await pool.query("delete from delegation_audit_events");
+    await pool.query("delete from space_admin_assignments");
+    await pool.query("delete from role_assignment_audit_logs");
     await pool.query("delete from role_bindings");
     await pool.query("delete from chat_messages");
     await pool.query("delete from channels");
@@ -551,6 +554,395 @@ test("federation + discord bridge + video controls admin workflow", async (t) =>
     });
     assert.equal(relay.statusCode, 200);
     assert.equal(relay.json().relayed, true);
+  } finally {
+    await app.close();
+  }
+});
+
+test("role grants are scope-gated and prevent escalation", async (t) => {
+  if (!pool) {
+    t.skip("DATABASE_URL not configured.");
+    return;
+  }
+  if (!config.setupBootstrapToken) {
+    t.skip("SETUP_BOOTSTRAP_TOKEN not configured.");
+    return;
+  }
+
+  await initDb();
+  await resetDb();
+  const app = await buildApp();
+
+  try {
+    const adminIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "deleg_admin",
+      email: "deleg-admin@dev.local",
+      preferredUsername: "deleg-admin",
+      avatarUrl: null
+    });
+    const adminCookie = createAuthCookie({
+      productUserId: adminIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "deleg_admin"
+    });
+
+    const bootstrapResponse = await app.inject({
+      method: "POST",
+      url: "/auth/bootstrap-admin",
+      headers: { cookie: adminCookie },
+      payload: {
+        setupToken: config.setupBootstrapToken,
+        hubName: "Delegation Policy Hub"
+      }
+    });
+    assert.equal(bootstrapResponse.statusCode, 201);
+    const bootstrapBody = bootstrapResponse.json() as { defaultServerId: string };
+
+    const memberIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "deleg_member",
+      email: "deleg-member@dev.local",
+      preferredUsername: "deleg-member",
+      avatarUrl: null
+    });
+    const memberCookie = createAuthCookie({
+      productUserId: memberIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "deleg_member"
+    });
+
+    const unauthorizedGrant = await app.inject({
+      method: "POST",
+      url: "/v1/roles/grant",
+      headers: { cookie: memberCookie },
+      payload: {
+        productUserId: memberIdentity.productUserId,
+        role: "creator_moderator",
+        serverId: bootstrapBody.defaultServerId
+      }
+    });
+    assert.equal(unauthorizedGrant.statusCode, 403);
+    assert.equal(unauthorizedGrant.json().code, "forbidden_scope");
+
+    const grantAsAdmin = await app.inject({
+      method: "POST",
+      url: "/v1/roles/grant",
+      headers: { cookie: adminCookie },
+      payload: {
+        productUserId: memberIdentity.productUserId,
+        role: "creator_admin",
+        serverId: bootstrapBody.defaultServerId
+      }
+    });
+    assert.equal(grantAsAdmin.statusCode, 204);
+
+    const outsiderIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "deleg_outsider",
+      email: "deleg-outsider@dev.local",
+      preferredUsername: "deleg-outsider",
+      avatarUrl: null
+    });
+
+    const escalationAttempt = await app.inject({
+      method: "POST",
+      url: "/v1/roles/grant",
+      headers: { cookie: memberCookie },
+      payload: {
+        productUserId: outsiderIdentity.productUserId,
+        role: "hub_operator",
+        serverId: bootstrapBody.defaultServerId
+      }
+    });
+    assert.equal(escalationAttempt.statusCode, 409);
+    assert.equal(escalationAttempt.json().code, "role_escalation_denied");
+  } finally {
+    await app.close();
+  }
+});
+
+test("space admin assignment lifecycle grants and revokes scoped management", async (t) => {
+  if (!pool) {
+    t.skip("DATABASE_URL not configured.");
+    return;
+  }
+  if (!config.setupBootstrapToken) {
+    t.skip("SETUP_BOOTSTRAP_TOKEN not configured.");
+    return;
+  }
+
+  await initDb();
+  await resetDb();
+  const app = await buildApp();
+
+  try {
+    const adminIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "space_owner",
+      email: "space-owner@dev.local",
+      preferredUsername: "space-owner",
+      avatarUrl: null
+    });
+    const adminCookie = createAuthCookie({
+      productUserId: adminIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "space_owner"
+    });
+
+    const bootstrapResponse = await app.inject({
+      method: "POST",
+      url: "/auth/bootstrap-admin",
+      headers: { cookie: adminCookie },
+      payload: {
+        setupToken: config.setupBootstrapToken,
+        hubName: "Space Delegation Hub"
+      }
+    });
+    assert.equal(bootstrapResponse.statusCode, 201);
+    const bootstrapBody = bootstrapResponse.json() as { defaultServerId: string };
+
+    const delegatedIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "space_delegate",
+      email: "space-delegate@dev.local",
+      preferredUsername: "space-delegate",
+      avatarUrl: null
+    });
+    const delegatedCookie = createAuthCookie({
+      productUserId: delegatedIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "space_delegate"
+    });
+
+    const assignResponse = await app.inject({
+      method: "POST",
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-admins`,
+      headers: { cookie: adminCookie },
+      payload: {
+        productUserId: delegatedIdentity.productUserId
+      }
+    });
+    assert.equal(assignResponse.statusCode, 201);
+    const assignmentId = assignResponse.json().id as string;
+    assert.ok(assignmentId);
+
+    const delegatedCreateChannel = await app.inject({
+      method: "POST",
+      url: "/v1/channels",
+      headers: { cookie: delegatedCookie },
+      payload: {
+        serverId: bootstrapBody.defaultServerId,
+        name: "delegate-room",
+        type: "text"
+      }
+    });
+    assert.equal(delegatedCreateChannel.statusCode, 201);
+
+    const listAssignments = await app.inject({
+      method: "GET",
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-admins`,
+      headers: { cookie: adminCookie }
+    });
+    assert.equal(listAssignments.statusCode, 200);
+    assert.ok(listAssignments.json().items.some((item: { id: string }) => item.id === assignmentId));
+
+    const bootstrapContext = await app.inject({
+      method: "GET",
+      url: "/v1/bootstrap/context",
+      headers: { cookie: adminCookie }
+    });
+    const hubId = bootstrapContext.json().hubId as string;
+
+    const auditEvents = await app.inject({
+      method: "GET",
+      url: `/v1/hubs/${hubId}/delegation/audit-events`,
+      headers: { cookie: adminCookie }
+    });
+    assert.equal(auditEvents.statusCode, 200);
+    assert.ok(
+      auditEvents.json().items.some((item: { actionType: string }) => item.actionType === "space_admin_assigned")
+    );
+
+    const revokeResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/delegation/space-admins/${assignmentId}?serverId=${encodeURIComponent(bootstrapBody.defaultServerId)}`,
+      headers: { cookie: adminCookie }
+    });
+    assert.equal(revokeResponse.statusCode, 204);
+
+    const delegatedCreateAfterRevoke = await app.inject({
+      method: "POST",
+      url: "/v1/channels",
+      headers: { cookie: delegatedCookie },
+      payload: {
+        serverId: bootstrapBody.defaultServerId,
+        name: "should-fail",
+        type: "text"
+      }
+    });
+    assert.equal(delegatedCreateAfterRevoke.statusCode, 403);
+  } finally {
+    await app.close();
+  }
+});
+
+test("expired space admin assignments no longer grant management scope", async (t) => {
+  if (!pool) {
+    t.skip("DATABASE_URL not configured.");
+    return;
+  }
+  if (!config.setupBootstrapToken) {
+    t.skip("SETUP_BOOTSTRAP_TOKEN not configured.");
+    return;
+  }
+
+  await initDb();
+  await resetDb();
+  const app = await buildApp();
+
+  try {
+    const adminIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "exp_admin",
+      email: "exp-admin@dev.local",
+      preferredUsername: "exp-admin",
+      avatarUrl: null
+    });
+    const adminCookie = createAuthCookie({
+      productUserId: adminIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "exp_admin"
+    });
+
+    const bootstrapResponse = await app.inject({
+      method: "POST",
+      url: "/auth/bootstrap-admin",
+      headers: { cookie: adminCookie },
+      payload: {
+        setupToken: config.setupBootstrapToken,
+        hubName: "Expiry Hub"
+      }
+    });
+    assert.equal(bootstrapResponse.statusCode, 201);
+    const bootstrapBody = bootstrapResponse.json() as { defaultServerId: string };
+
+    const delegatedIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "exp_delegate",
+      email: "exp-delegate@dev.local",
+      preferredUsername: "exp-delegate",
+      avatarUrl: null
+    });
+    const delegatedCookie = createAuthCookie({
+      productUserId: delegatedIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "exp_delegate"
+    });
+
+    const expiredAt = new Date(Date.now() - 60_000).toISOString();
+    const assignmentResponse = await app.inject({
+      method: "POST",
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-admins`,
+      headers: { cookie: adminCookie },
+      payload: {
+        productUserId: delegatedIdentity.productUserId,
+        expiresAt: expiredAt
+      }
+    });
+    assert.equal(assignmentResponse.statusCode, 201);
+
+    const delegatedCreateChannel = await app.inject({
+      method: "POST",
+      url: "/v1/channels",
+      headers: { cookie: delegatedCookie },
+      payload: {
+        serverId: bootstrapBody.defaultServerId,
+        name: "expired-should-fail",
+        type: "text"
+      }
+    });
+    assert.equal(delegatedCreateChannel.statusCode, 403);
+  } finally {
+    await app.close();
+  }
+});
+
+test("space ownership transfer updates effective management owner", async (t) => {
+  if (!pool) {
+    t.skip("DATABASE_URL not configured.");
+    return;
+  }
+  if (!config.setupBootstrapToken) {
+    t.skip("SETUP_BOOTSTRAP_TOKEN not configured.");
+    return;
+  }
+
+  await initDb();
+  await resetDb();
+  const app = await buildApp();
+
+  try {
+    const ownerIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "owner_transfer_from",
+      email: "owner-transfer-from@dev.local",
+      preferredUsername: "owner-transfer-from",
+      avatarUrl: null
+    });
+    const ownerCookie = createAuthCookie({
+      productUserId: ownerIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "owner_transfer_from"
+    });
+
+    const bootstrapResponse = await app.inject({
+      method: "POST",
+      url: "/auth/bootstrap-admin",
+      headers: { cookie: ownerCookie },
+      payload: {
+        setupToken: config.setupBootstrapToken,
+        hubName: "Owner Transfer Hub"
+      }
+    });
+    assert.equal(bootstrapResponse.statusCode, 201);
+    const bootstrapBody = bootstrapResponse.json() as { defaultServerId: string };
+
+    const targetOwnerIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "owner_transfer_to",
+      email: "owner-transfer-to@dev.local",
+      preferredUsername: "owner-transfer-to",
+      avatarUrl: null
+    });
+    const targetOwnerCookie = createAuthCookie({
+      productUserId: targetOwnerIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "owner_transfer_to"
+    });
+
+    const transferResponse = await app.inject({
+      method: "POST",
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/ownership/transfer`,
+      headers: { cookie: ownerCookie },
+      payload: {
+        newOwnerUserId: targetOwnerIdentity.productUserId
+      }
+    });
+    assert.equal(transferResponse.statusCode, 200);
+    assert.equal(transferResponse.json().newOwnerUserId, targetOwnerIdentity.productUserId);
+
+    const newOwnerCreateChannel = await app.inject({
+      method: "POST",
+      url: "/v1/channels",
+      headers: { cookie: targetOwnerCookie },
+      payload: {
+        serverId: bootstrapBody.defaultServerId,
+        name: "owner-room",
+        type: "text"
+      }
+    });
+    assert.equal(newOwnerCreateChannel.statusCode, 201);
   } finally {
     await app.close();
   }

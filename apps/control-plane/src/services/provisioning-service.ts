@@ -75,12 +75,13 @@ export async function createServerWorkflow(input: {
       name: string;
       matrix_space_id: string | null;
       created_by_user_id: string;
+      owner_user_id: string;
       created_at: string;
     }>(
-      `insert into servers (id, hub_id, name, matrix_space_id, created_by_user_id)
-       values ($1, $2, $3, $4, $5)
+      `insert into servers (id, hub_id, name, matrix_space_id, created_by_user_id, owner_user_id)
+       values ($1, $2, $3, $4, $5, $6)
        returning *`,
-      [id, input.hubId, input.name, matrixSpaceId, input.productUserId]
+      [id, input.hubId, input.name, matrixSpaceId, input.productUserId, input.productUserId]
     );
 
     const value = row.rows[0];
@@ -94,6 +95,7 @@ export async function createServerWorkflow(input: {
       name: value.name,
       matrixSpaceId: value.matrix_space_id,
       createdByUserId: value.created_by_user_id,
+      ownerUserId: value.owner_user_id,
       createdAt: value.created_at
     };
   });
