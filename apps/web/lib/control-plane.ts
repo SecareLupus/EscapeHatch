@@ -21,9 +21,20 @@ export interface ViewerSession {
   productUserId: string;
   identity: {
     provider: string;
+    oidcSubject: string;
     preferredUsername: string | null;
     email: string | null;
+    avatarUrl?: string | null;
+    matrixUserId?: string | null;
   } | null;
+  linkedIdentities: Array<{
+    provider: string;
+    oidcSubject: string;
+    preferredUsername: string | null;
+    email: string | null;
+    avatarUrl: string | null;
+  }>;
+  needsOnboarding: boolean;
 }
 
 export interface BootstrapStatus {
@@ -172,6 +183,14 @@ export async function bootstrapAdmin(input: {
 export async function logout(): Promise<void> {
   await apiFetch("/auth/logout", {
     method: "POST"
+  });
+}
+
+export async function completeUsernameOnboarding(username: string): Promise<void> {
+  await apiFetch("/auth/onboarding/username", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username })
   });
 }
 
@@ -522,4 +541,8 @@ export function providerLoginUrl(provider: string, username?: string): string {
   }
 
   return `${controlPlaneBaseUrl}/auth/login/${encodeURIComponent(provider)}`;
+}
+
+export function providerLinkUrl(provider: string): string {
+  return `${controlPlaneBaseUrl}/auth/link/${encodeURIComponent(provider)}`;
 }

@@ -94,12 +94,18 @@ export async function listVoicePresence(input: { channelId: string; serverId: st
          vp.deafened,
          vp.joined_at,
          vp.updated_at,
-         im.preferred_username,
-         im.email,
+         profile.preferred_username,
+         profile.email,
          ch.server_id as channel_server_id
        from voice_presence vp
        join channels ch on ch.id = vp.channel_id
-       left join identity_mappings im on im.product_user_id = vp.product_user_id
+       left join lateral (
+         select im.preferred_username, im.email
+         from identity_mappings im
+         where im.product_user_id = vp.product_user_id
+         order by (im.preferred_username is not null) desc, im.updated_at desc, im.created_at asc
+         limit 1
+       ) profile on true
        where vp.channel_id = $1
          and ch.server_id = $2
        order by vp.joined_at asc`,

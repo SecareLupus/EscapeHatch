@@ -7,6 +7,7 @@ import {
   bootstrapAdmin,
   createReport,
   connectMessageStream,
+  completeUsernameOnboarding,
   createCategory,
   createChannel,
   createServer,
@@ -33,6 +34,7 @@ import {
   moveChannelCategory,
   performModerationAction,
   logout,
+  providerLinkUrl,
   providerLoginUrl,
   renameCategory,
   renameChannel,
@@ -82,8 +84,10 @@ export function ChatClient() {
   const [hubName, setHubName] = useState("Local Creator Hub");
   const [draftMessage, setDraftMessage] = useState("");
   const [devUsername, setDevUsername] = useState("local-admin");
+  const [onboardingUsername, setOnboardingUsername] = useState("");
   const [sending, setSending] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(false);
+  const [savingOnboarding, setSavingOnboarding] = useState(false);
   const [realtimeState, setRealtimeState] = useState<"disconnected" | "polling" | "live">("disconnected");
   const [allowedActions, setAllowedActions] = useState<PrivilegedAction[]>([]);
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -134,7 +138,11 @@ export function ChatClient() {
   const managementDialogRef = useRef<HTMLElement | null>(null);
   const initialChatLoadKeyRef = useRef<string | null>(null);
 
-  const activeProvider = useMemo(() => providers?.primaryProvider ?? "discord", [providers]);
+  const enabledLoginProviders = useMemo(
+    () => (providers?.providers ?? []).filter((provider) => provider.isEnabled && provider.provider !== "dev"),
+    [providers]
+  );
+  const canAccessWorkspace = Boolean(viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized);
   const activeChannel = channels.find((channel) => channel.id === selectedChannelId) ?? null;
   const canManageChannel = useMemo(
     () =>
@@ -374,7 +382,7 @@ export function ChatClient() {
   }, [initialize]);
 
   useEffect(() => {
-    if (!viewer || !bootstrapStatus?.initialized) {
+    if (!viewer || viewer.needsOnboarding || !bootstrapStatus?.initialized) {
       initialChatLoadKeyRef.current = null;
       return;
     }
@@ -397,7 +405,7 @@ export function ChatClient() {
   }, [viewer, bootstrapStatus?.initialized, bootstrapStatus?.defaultServerId, bootstrapStatus?.defaultChannelId, refreshChatState]);
 
   useEffect(() => {
-    if (!viewer || !bootstrapStatus?.initialized || !selectedServerId) {
+    if (!canAccessWorkspace || !selectedServerId) {
       setAllowedActions([]);
       return;
     }
@@ -407,10 +415,10 @@ export function ChatClient() {
       .catch(() => {
         setAllowedActions([]);
       });
-  }, [viewer, bootstrapStatus?.initialized, selectedServerId, selectedChannelId]);
+  }, [canAccessWorkspace, selectedServerId, selectedChannelId]);
 
   useEffect(() => {
-    if (!viewer || !bootstrapStatus?.initialized || !selectedServerId) {
+    if (!canAccessWorkspace || !selectedServerId) {
       setLastReadByChannel({});
       return;
     }
@@ -426,10 +434,10 @@ export function ChatClient() {
       .catch(() => {
         // Keep local map if read-state fetch fails.
       });
-  }, [viewer, bootstrapStatus?.initialized, selectedServerId]);
+  }, [canAccessWorkspace, selectedServerId]);
 
   useEffect(() => {
-    if (!viewer || !bootstrapStatus?.initialized || !selectedServerId) {
+    if (!canAccessWorkspace || !selectedServerId) {
       setReports([]);
       setAuditLogs([]);
       return;
@@ -442,10 +450,10 @@ export function ChatClient() {
       setReports(reportItems);
       setAuditLogs(auditItems);
     });
-  }, [viewer, bootstrapStatus?.initialized, selectedServerId]);
+  }, [canAccessWorkspace, selectedServerId]);
 
   useEffect(() => {
-    if (!viewer || !bootstrapStatus?.initialized || !selectedChannelId) {
+    if (!canAccessWorkspace || !selectedChannelId) {
       setMentions([]);
       return;
     }
@@ -461,7 +469,7 @@ export function ChatClient() {
       .catch(() => {
         // Keep previous mention snapshot on fetch failures.
       });
-  }, [viewer, bootstrapStatus?.initialized, selectedChannelId]);
+  }, [canAccessWorkspace, selectedChannelId]);
 
   useEffect(() => {
     setPendingNewMessageCount(0);
@@ -577,7 +585,7 @@ export function ChatClient() {
   }, [isNearBottom, lastSeenMessageId, messages]);
 
   useEffect(() => {
-    if (!viewer || !bootstrapStatus?.initialized || !selectedChannelId) {
+    if (!canAccessWorkspace || !selectedChannelId) {
       setRealtimeState("disconnected");
       return;
     }
@@ -639,7 +647,7 @@ export function ChatClient() {
       disconnectStream();
       stopPolling();
     };
-  }, [viewer, bootstrapStatus?.initialized, selectedChannelId]);
+  }, [canAccessWorkspace, selectedChannelId]);
 
   useEffect(() => {
     if (!managementDialogOpen) {
@@ -1252,6 +1260,25 @@ export function ChatClient() {
     }
   }
 
+  async function handleOnboardingUsername(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!onboardingUsername.trim()) {
+      return;
+    }
+
+    setSavingOnboarding(true);
+    setError(null);
+    try {
+      await completeUsernameOnboarding(onboardingUsername.trim());
+      setOnboardingUsername("");
+      await refreshAuthState();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to save username.");
+    } finally {
+      setSavingOnboarding(false);
+    }
+  }
+
   async function sendContentWithOptimistic(content: string, existingMessageId?: string): Promise<void> {
     if (!selectedChannelId || !viewer || !content.trim()) {
       return;
@@ -1597,8 +1624,8 @@ export function ChatClient() {
       {!viewer ? (
         <section className="panel">
           <h2>Sign In</h2>
-          <p>Use developer login for local testing, or configured OAuth providers.</p>
-          {activeProvider === "dev" ? (
+          <p>Use developer login for local testing, or sign in with OAuth providers.</p>
+          {providers?.providers.some((provider) => provider.provider === "dev" && provider.isEnabled) ? (
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -1617,15 +1644,77 @@ export function ChatClient() {
               />
               <button type="submit">Continue with Developer Login</button>
             </form>
-          ) : (
-            <a className="button-link" href={providerLoginUrl(activeProvider)}>
-              Continue with {activeProvider}
-            </a>
-          )}
+          ) : null}
+          <div className="stack">
+            {enabledLoginProviders.length > 0 ? (
+              enabledLoginProviders.map((provider) => (
+                <a key={provider.provider} className="button-link" href={providerLoginUrl(provider.provider)}>
+                  Continue with {provider.displayName}
+                </a>
+              ))
+            ) : (
+              <p>No OAuth providers are enabled.</p>
+            )}
+          </div>
+          {!providers?.providers.some((provider) => provider.isEnabled) ? (
+            <p>Configure at least one auth provider in `.env`.</p>
+          ) : null}
         </section>
       ) : null}
 
-      {viewer && !bootstrapStatus?.initialized ? (
+      {viewer ? (
+        <section className="panel">
+          <h2>Connected Accounts</h2>
+          <p>
+            {viewer.linkedIdentities.length} linked provider
+            {viewer.linkedIdentities.length === 1 ? "" : "s"}.
+          </p>
+          <ul>
+            {viewer.linkedIdentities.map((identity) => (
+              <li key={`${identity.provider}:${identity.oidcSubject}`}>
+                {identity.provider}
+                {identity.email ? ` (${identity.email})` : ""}
+              </li>
+            ))}
+          </ul>
+          <div className="stack">
+            {enabledLoginProviders
+              .filter(
+                (provider) =>
+                  !viewer.linkedIdentities.some((identity) => identity.provider === provider.provider)
+              )
+              .map((provider) => (
+                <a key={provider.provider} className="button-link" href={providerLinkUrl(provider.provider)}>
+                  Link {provider.displayName}
+                </a>
+              ))}
+          </div>
+        </section>
+      ) : null}
+
+      {viewer && viewer.needsOnboarding ? (
+        <section className="panel">
+          <h2>Choose Username</h2>
+          <p>Complete onboarding by picking your handle. This is used for mentions and display.</p>
+          <form onSubmit={handleOnboardingUsername} className="stack">
+            <label htmlFor="onboarding-username">Username</label>
+            <input
+              id="onboarding-username"
+              value={onboardingUsername}
+              onChange={(event) => setOnboardingUsername(event.target.value)}
+              minLength={3}
+              maxLength={40}
+              pattern="^[a-zA-Z0-9._-]+$"
+              required
+            />
+            <button type="submit" disabled={savingOnboarding}>
+              {savingOnboarding ? "Saving..." : "Save Username"}
+            </button>
+          </form>
+        </section>
+      ) : null}
+
+      {viewer && !viewer.needsOnboarding && !bootstrapStatus?.initialized ? (
         <section className="panel">
           <h2>Initialize Workspace</h2>
           <p>First login must bootstrap the hub and default channel.</p>
@@ -1654,7 +1743,7 @@ export function ChatClient() {
         </section>
       ) : null}
 
-      {viewer && bootstrapStatus?.initialized ? (
+      {viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized ? (
         <section className="chat-shell" aria-label="Chat workspace">
           <nav className="servers panel" aria-label="Servers">
             <h2>Servers</h2>

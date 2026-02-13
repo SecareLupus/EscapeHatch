@@ -164,7 +164,11 @@ export async function createMessage(input: {
 }): Promise<ChatMessage> {
   return withDb(async (db) => {
     const identity = await db.query<{ preferred_username: string | null; email: string | null }>(
-      "select preferred_username, email from identity_mappings where product_user_id = $1 order by created_at asc limit 1",
+      `select preferred_username, email
+       from identity_mappings
+       where product_user_id = $1
+       order by (preferred_username is not null) desc, updated_at desc, created_at asc
+       limit 1`,
       [input.actorUserId]
     );
 

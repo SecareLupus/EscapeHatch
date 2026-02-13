@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ControlPlaneApiError,
   fetchAllowedActions,
+  providerLinkUrl,
   providerLoginUrl
 } from "../lib/control-plane";
 
@@ -12,6 +13,10 @@ test("providerLoginUrl builds Discord auth route", () => {
 
 test("providerLoginUrl builds developer login route", () => {
   assert.equal(providerLoginUrl("dev", "alice"), "http://localhost:4000/auth/dev-login?username=alice");
+});
+
+test("providerLinkUrl builds OAuth linking route", () => {
+  assert.equal(providerLinkUrl("google"), "http://localhost:4000/auth/link/google");
 });
 
 test("api errors include correlation request id when available", async () => {

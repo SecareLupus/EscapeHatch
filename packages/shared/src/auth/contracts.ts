@@ -1,4 +1,4 @@
-export type IdentityProvider = "discord" | "keycloak" | "google" | "github" | "dev";
+export type IdentityProvider = "discord" | "keycloak" | "google" | "github" | "twitch" | "dev";
 
 export interface IdentityMapping {
   id: string;

@@ -4,7 +4,7 @@ import { buildApp } from "../app.js";
 import { config } from "../config.js";
 import { createSessionToken } from "../auth/session.js";
 import { initDb, pool } from "../db/client.js";
-import { upsertIdentityMapping } from "../services/identity-service.js";
+import { getIdentityByProviderSubject, upsertIdentityMapping } from "../services/identity-service.js";
 
 async function resetDb(): Promise<void> {
   if (!pool) {
@@ -244,6 +244,136 @@ test("dev login establishes session when bypass is enabled", async (t) => {
     });
     assert.equal(sessionResponse.statusCode, 200);
     assert.equal(sessionResponse.json().identity?.provider, "dev");
+    assert.equal(sessionResponse.json().needsOnboarding, true);
+  } finally {
+    await app.close();
+  }
+});
+
+test("session includes linked identities for same product user", async (t) => {
+  if (!pool) {
+    t.skip("DATABASE_URL not configured.");
+    return;
+  }
+
+  await initDb();
+  await resetDb();
+  const app = await buildApp();
+
+  try {
+    const primary = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "linked_primary",
+      email: "linked@example.test",
+      preferredUsername: "linkeduser",
+      avatarUrl: null
+    });
+    await upsertIdentityMapping({
+      provider: "google",
+      oidcSubject: "google_sub_1",
+      email: "linked@example.test",
+      preferredUsername: null,
+      avatarUrl: null,
+      productUserId: primary.productUserId
+    });
+
+    const cookie = createAuthCookie({
+      productUserId: primary.productUserId,
+      provider: "google",
+      oidcSubject: "google_sub_1"
+    });
+
+    const sessionResponse = await app.inject({
+      method: "GET",
+      url: "/auth/session/me",
+      headers: { cookie }
+    });
+    assert.equal(sessionResponse.statusCode, 200);
+    assert.equal(sessionResponse.json().linkedIdentities.length, 2);
+    assert.equal(sessionResponse.json().needsOnboarding, false);
+    assert.equal(sessionResponse.json().identity?.provider, "google");
+  } finally {
+    await app.close();
+  }
+});
+
+test("onboarding username assignment updates linked identities and enforces uniqueness", async (t) => {
+  if (!pool) {
+    t.skip("DATABASE_URL not configured.");
+    return;
+  }
+
+  await initDb();
+  await resetDb();
+  const app = await buildApp();
+
+  try {
+    const existing = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "existing_user",
+      email: "existing@example.test",
+      preferredUsername: "taken_name",
+      avatarUrl: null
+    });
+    const onboardingUser = await upsertIdentityMapping({
+      provider: "discord",
+      oidcSubject: "discord_pending",
+      email: "pending@example.test",
+      preferredUsername: null,
+      avatarUrl: null
+    });
+    await upsertIdentityMapping({
+      provider: "twitch",
+      oidcSubject: "twitch_pending",
+      email: "pending@example.test",
+      preferredUsername: null,
+      avatarUrl: null,
+      productUserId: onboardingUser.productUserId
+    });
+
+    const onboardingCookie = createAuthCookie({
+      productUserId: onboardingUser.productUserId,
+      provider: "discord",
+      oidcSubject: "discord_pending"
+    });
+
+    const takenResponse = await app.inject({
+      method: "POST",
+      url: "/auth/onboarding/username",
+      headers: { cookie: onboardingCookie },
+      payload: { username: "taken_name" }
+    });
+    assert.equal(takenResponse.statusCode, 409);
+    assert.equal(takenResponse.json().code, "username_taken");
+
+    const saveResponse = await app.inject({
+      method: "POST",
+      url: "/auth/onboarding/username",
+      headers: { cookie: onboardingCookie },
+      payload: { username: "fresh_name" }
+    });
+    assert.equal(saveResponse.statusCode, 204);
+
+    const discordIdentity = await getIdentityByProviderSubject({
+      provider: "discord",
+      oidcSubject: "discord_pending"
+    });
+    const twitchIdentity = await getIdentityByProviderSubject({
+      provider: "twitch",
+      oidcSubject: "twitch_pending"
+    });
+    assert.equal(discordIdentity?.preferredUsername, "fresh_name");
+    assert.equal(twitchIdentity?.preferredUsername, "fresh_name");
+
+    const sessionResponse = await app.inject({
+      method: "GET",
+      url: "/auth/session/me",
+      headers: { cookie: onboardingCookie }
+    });
+    assert.equal(sessionResponse.statusCode, 200);
+    assert.equal(sessionResponse.json().needsOnboarding, false);
+
+    assert.ok(existing.productUserId);
   } finally {
     await app.close();
   }

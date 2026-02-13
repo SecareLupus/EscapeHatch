@@ -16,7 +16,18 @@ export const config = {
     discordAuthorizeUrl:
       process.env.OIDC_DISCORD_AUTHORIZE_URL ?? "https://discord.com/api/oauth2/authorize",
     discordTokenUrl: process.env.OIDC_DISCORD_TOKEN_URL ?? "https://discord.com/api/oauth2/token",
-    discordUserInfoUrl: process.env.OIDC_DISCORD_USERINFO_URL ?? "https://discord.com/api/users/@me"
+    discordUserInfoUrl: process.env.OIDC_DISCORD_USERINFO_URL ?? "https://discord.com/api/users/@me",
+    googleClientId: process.env.OIDC_GOOGLE_CLIENT_ID,
+    googleClientSecret: process.env.OIDC_GOOGLE_CLIENT_SECRET,
+    googleAuthorizeUrl:
+      process.env.OIDC_GOOGLE_AUTHORIZE_URL ?? "https://accounts.google.com/o/oauth2/v2/auth",
+    googleTokenUrl: process.env.OIDC_GOOGLE_TOKEN_URL ?? "https://oauth2.googleapis.com/token",
+    googleUserInfoUrl: process.env.OIDC_GOOGLE_USERINFO_URL ?? "https://openidconnect.googleapis.com/v1/userinfo",
+    twitchClientId: process.env.OIDC_TWITCH_CLIENT_ID,
+    twitchClientSecret: process.env.OIDC_TWITCH_CLIENT_SECRET,
+    twitchAuthorizeUrl: process.env.OIDC_TWITCH_AUTHORIZE_URL ?? "https://id.twitch.tv/oauth2/authorize",
+    twitchTokenUrl: process.env.OIDC_TWITCH_TOKEN_URL ?? "https://id.twitch.tv/oauth2/token",
+    twitchUserInfoUrl: process.env.OIDC_TWITCH_USERINFO_URL ?? "https://api.twitch.tv/helix/users"
   },
   synapse: {
     baseUrl: process.env.SYNAPSE_BASE_URL,

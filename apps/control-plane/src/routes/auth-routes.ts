@@ -1,14 +1,39 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createAuthorizationRedirect, exchangeDiscordCode } from "../auth/oidc.js";
+import { createAuthorizationRedirect, exchangeAuthorizationCode } from "../auth/oidc.js";
 import { clearSessionCookie, setSessionCookie } from "../auth/session.js";
-import { getIdentityByProductUserId, upsertIdentityMapping } from "../services/identity-service.js";
+import {
+  findUniqueProductUserIdByEmail,
+  getIdentityByProductUserId,
+  getIdentityByProviderSubject,
+  isOnboardingComplete,
+  isPreferredUsernameTaken,
+  listIdentitiesByProductUserId,
+  setPreferredUsernameForProductUser,
+  upsertIdentityMapping
+} from "../services/identity-service.js";
 import { requireAuth } from "../auth/middleware.js";
 import type { AccountLinkingRequirement, IdentityProvider } from "@escapehatch/shared";
 import { config } from "../config.js";
 import { bootstrapAdmin, getBootstrapStatus } from "../services/bootstrap-service.js";
 
-const providerSchema = z.enum(["discord", "keycloak", "google", "github", "dev"]);
+const providerSchema = z.enum(["discord", "keycloak", "google", "github", "twitch", "dev"]);
+
+function providerEnabled(provider: IdentityProvider): boolean {
+  if (provider === "discord") {
+    return Boolean(config.oidc.discordClientId);
+  }
+  if (provider === "google") {
+    return Boolean(config.oidc.googleClientId);
+  }
+  if (provider === "twitch") {
+    return Boolean(config.oidc.twitchClientId);
+  }
+  if (provider === "dev") {
+    return config.devAuthBypass;
+  }
+  return false;
+}
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get("/auth/bootstrap-status", async (_, reply) => {
@@ -28,14 +53,20 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       {
         provider: "discord",
         displayName: "Discord",
-        isEnabled: Boolean(config.oidc.discordClientId),
+        isEnabled: providerEnabled("discord"),
         requiresReauthentication: false
       },
       {
         provider: "google",
         displayName: "Google",
-        isEnabled: false,
-        requiresReauthentication: true
+        isEnabled: providerEnabled("google"),
+        requiresReauthentication: false
+      },
+      {
+        provider: "twitch",
+        displayName: "Twitch",
+        isEnabled: providerEnabled("twitch"),
+        requiresReauthentication: false
       },
       {
         provider: "github",
@@ -46,11 +77,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       {
         provider: "dev",
         displayName: "Developer Login",
-        isEnabled: config.devAuthBypass,
+        isEnabled: providerEnabled("dev"),
         requiresReauthentication: false
       }
     ];
-    return { primaryProvider: config.devAuthBypass ? "dev" : "discord", providers };
+    const primaryProvider =
+      providers.find((provider) => provider.provider === "dev" && provider.isEnabled)?.provider ??
+      providers.find((provider) => provider.provider === "discord" && provider.isEnabled)?.provider ??
+      providers.find((provider) => provider.provider === "google" && provider.isEnabled)?.provider ??
+      providers.find((provider) => provider.provider === "twitch" && provider.isEnabled)?.provider ??
+      "discord";
+
+    return { primaryProvider, providers };
   });
 
   app.post("/auth/dev-login", async (request, reply) => {
@@ -71,7 +109,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       provider: "dev",
       oidcSubject: normalizedSubject,
       email: payload.email ?? `${normalizedSubject}@dev.local`,
-      preferredUsername: payload.username,
+      preferredUsername: null,
       avatarUrl: null
     });
 
@@ -107,7 +145,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       provider: "dev",
       oidcSubject: normalizedSubject,
       email: query.email ?? `${normalizedSubject}@dev.local`,
-      preferredUsername: query.username,
+      preferredUsername: null,
       avatarUrl: null
     });
 
@@ -126,23 +164,91 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       reply.code(404).send({ message: "Use POST /auth/dev-login for developer login." });
       return;
     }
-    const redirect = createAuthorizationRedirect(provider as IdentityProvider);
+    if (!providerEnabled(provider)) {
+      reply.code(404).send({ message: `Provider ${provider} is not enabled.` });
+      return;
+    }
+    const redirect = createAuthorizationRedirect({ provider, intent: "login" });
     reply.redirect(redirect, 302);
   });
 
-  app.get("/auth/callback/discord", async (request, reply) => {
-    const query = z.object({ code: z.string(), state: z.string() }).parse(request.query);
-    const profile = await exchangeDiscordCode(query);
-
-    const identity = await upsertIdentityMapping({
-      provider: "discord",
-      oidcSubject: profile.id,
-      email: profile.email ?? null,
-      preferredUsername: profile.username ?? null,
-      avatarUrl: profile.avatar
-        ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png`
-        : null
+  app.get("/auth/link/:provider", { preHandler: requireAuth }, async (request, reply) => {
+    const { provider } = z.object({ provider: providerSchema }).parse(request.params);
+    if (provider === "dev") {
+      reply.code(404).send({ message: "Developer auth does not support account linking." });
+      return;
+    }
+    if (!providerEnabled(provider)) {
+      reply.code(404).send({ message: `Provider ${provider} is not enabled.` });
+      return;
+    }
+    const redirect = createAuthorizationRedirect({
+      provider,
+      intent: "link",
+      productUserId: request.auth!.productUserId
     });
+    reply.redirect(redirect, 302);
+  });
+
+  app.get("/auth/callback/:provider", async (request, reply) => {
+    const { provider } = z.object({ provider: providerSchema }).parse(request.params);
+    if (provider === "dev") {
+      reply.code(400).send({ message: "Developer auth does not use callback endpoints." });
+      return;
+    }
+    const query = z.object({ code: z.string(), state: z.string() }).parse(request.query);
+    const exchanged = await exchangeAuthorizationCode(query);
+    const profile = exchanged.profile;
+
+    if (provider !== profile.provider) {
+      reply.code(400).send({ message: "OIDC callback provider mismatch." });
+      return;
+    }
+
+    const linkedIdentity = await getIdentityByProviderSubject({
+      provider: profile.provider,
+      oidcSubject: profile.oidcSubject
+    });
+
+    let identity = linkedIdentity;
+    if (exchanged.intent === "link") {
+      if (!exchanged.productUserId) {
+        reply.code(400).send({ message: "Missing account-linking session context." });
+        return;
+      }
+      if (linkedIdentity && linkedIdentity.productUserId !== exchanged.productUserId) {
+        reply.code(409).send({
+          message: "This provider account is already linked to another user.",
+          code: "identity_already_linked"
+        });
+        return;
+      }
+      if (!linkedIdentity) {
+        identity = await upsertIdentityMapping({
+          provider: profile.provider,
+          oidcSubject: profile.oidcSubject,
+          email: profile.email,
+          preferredUsername: null,
+          avatarUrl: profile.avatarUrl,
+          productUserId: exchanged.productUserId
+        });
+      }
+    } else if (!linkedIdentity) {
+      const existingUserIdFromEmail =
+        profile.email ? await findUniqueProductUserIdByEmail(profile.email) : null;
+      identity = await upsertIdentityMapping({
+        provider: profile.provider,
+        oidcSubject: profile.oidcSubject,
+        email: profile.email,
+        preferredUsername: null,
+        avatarUrl: profile.avatarUrl,
+        productUserId: existingUserIdFromEmail ?? undefined
+      });
+    }
+
+    if (!identity) {
+      throw new Error("Identity mapping could not be resolved.");
+    }
 
     setSessionCookie(reply, {
       productUserId: identity.productUserId,
@@ -150,7 +256,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       oidcSubject: identity.oidcSubject
     });
 
-    reply.redirect(config.webBaseUrl, 302);
+    const destination =
+      exchanged.intent === "link" ? `${config.webBaseUrl}?linked=${encodeURIComponent(profile.provider)}` : config.webBaseUrl;
+    reply.redirect(destination, 302);
   });
 
   app.get("/auth/session/me", { preHandler: requireAuth }, async (request) => {
@@ -159,20 +267,69 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       throw new Error("Auth context missing");
     }
 
-    const identity = await getIdentityByProductUserId(auth.productUserId);
+    const [activeIdentity, identities, onboardingComplete] = await Promise.all([
+      getIdentityByProviderSubject({
+        provider: auth.provider as IdentityProvider,
+        oidcSubject: auth.oidcSubject
+      }),
+      listIdentitiesByProductUserId(auth.productUserId),
+      isOnboardingComplete(auth.productUserId)
+    ]);
+
+    const fallbackIdentity = await getIdentityByProductUserId(auth.productUserId);
+    const resolvedIdentity = activeIdentity ?? fallbackIdentity;
     return {
       productUserId: auth.productUserId,
-      identity: identity
+      identity: resolvedIdentity
         ? {
-            provider: identity.provider,
-            oidcSubject: identity.oidcSubject,
-            email: identity.email,
-            preferredUsername: identity.preferredUsername,
-            avatarUrl: identity.avatarUrl,
-            matrixUserId: identity.matrixUserId
+            provider: resolvedIdentity.provider,
+            oidcSubject: resolvedIdentity.oidcSubject,
+            email: resolvedIdentity.email,
+            preferredUsername: resolvedIdentity.preferredUsername,
+            avatarUrl: resolvedIdentity.avatarUrl,
+            matrixUserId: resolvedIdentity.matrixUserId
           }
-        : null
+        : null,
+      linkedIdentities: identities.map((identity) => ({
+        provider: identity.provider,
+        oidcSubject: identity.oidcSubject,
+        email: identity.email,
+        preferredUsername: identity.preferredUsername,
+        avatarUrl: identity.avatarUrl
+      })),
+      needsOnboarding: !onboardingComplete
     };
+  });
+
+  app.post("/auth/onboarding/username", { preHandler: requireAuth }, async (request, reply) => {
+    const payload = z
+      .object({
+        username: z
+          .string()
+          .min(3)
+          .max(40)
+          .regex(/^[a-zA-Z0-9._-]+$/)
+      })
+      .parse(request.body);
+
+    const normalizedUsername = payload.username.trim();
+    const taken = await isPreferredUsernameTaken({
+      preferredUsername: normalizedUsername,
+      excludingProductUserId: request.auth!.productUserId
+    });
+    if (taken) {
+      reply.code(409).send({
+        message: "Username is already taken.",
+        code: "username_taken"
+      });
+      return;
+    }
+
+    await setPreferredUsernameForProductUser({
+      productUserId: request.auth!.productUserId,
+      preferredUsername: normalizedUsername
+    });
+    reply.code(204).send();
   });
 
   app.post("/auth/logout", async (_, reply) => {
