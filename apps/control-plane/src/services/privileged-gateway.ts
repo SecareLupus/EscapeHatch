@@ -32,7 +32,13 @@ export async function executePrivilegedAction<T>(input: {
   });
 
   if (!allowed) {
-    throw new Error("Forbidden: action is outside of assigned moderation scope.");
+    const error = new Error("Forbidden: action is outside of assigned moderation scope.") as Error & {
+      statusCode: number;
+      code: string;
+    };
+    error.statusCode = 403;
+    error.code = "forbidden_scope";
+    throw error;
   }
 
   const result = await input.run();

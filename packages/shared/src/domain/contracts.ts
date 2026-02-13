@@ -121,6 +121,32 @@ export interface VoiceTokenGrant {
   expiresAt: string;
 }
 
+export interface VoicePresenceMember {
+  channelId: string;
+  serverId: string;
+  userId: string;
+  displayName: string;
+  muted: boolean;
+  deafened: boolean;
+  joinedAt: string;
+  updatedAt: string;
+}
+
+export interface ChannelReadState {
+  channelId: string;
+  userId: string;
+  lastReadAt: string;
+  updatedAt: string;
+}
+
+export interface MentionMarker {
+  id: string;
+  channelId: string;
+  messageId: string;
+  mentionedUserId: string;
+  createdAt: string;
+}
+
 export interface ChatMessage {
   id: string;
   channelId: string;

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Category, Channel, ChatMessage, Server } from "@escapehatch/shared";
+import type { Category, Channel, ChannelReadState, ChatMessage, MentionMarker, Server } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
 
 interface ChannelRow {
@@ -191,7 +191,7 @@ export async function createMessage(input: {
       throw new Error("Message was not created.");
     }
 
-    return {
+    const message = {
       id: row.id,
       channelId: row.channel_id,
       authorUserId: row.author_user_id,
@@ -199,6 +199,137 @@ export async function createMessage(input: {
       content: row.content,
       createdAt: row.created_at
     };
+
+    const mentionHandles = [...new Set((input.content.match(/@([a-zA-Z0-9._-]{3,40})/g) ?? []).map((token) => token.slice(1).toLowerCase()))];
+    if (mentionHandles.length > 0) {
+      const mentionRows = await db.query<{ product_user_id: string }>(
+        `select distinct product_user_id
+         from identity_mappings
+         where lower(preferred_username) = any($1::text[])`,
+        [mentionHandles]
+      );
+
+      for (const mentioned of mentionRows.rows) {
+        if (!mentioned.product_user_id || mentioned.product_user_id === input.actorUserId) {
+          continue;
+        }
+
+        await db.query(
+          `insert into mention_markers (id, channel_id, message_id, mentioned_user_id)
+           values ($1, $2, $3, $4)`,
+          [
+            `mm_${crypto.randomUUID().replaceAll("-", "")}`,
+            input.channelId,
+            message.id,
+            mentioned.product_user_id
+          ]
+        );
+      }
+    }
+
+    return message;
+  });
+}
+
+export async function listChannelReadStates(input: {
+  productUserId: string;
+  serverId: string;
+}): Promise<ChannelReadState[]> {
+  return withDb(async (db) => {
+    const rows = await db.query<{
+      channel_id: string;
+      product_user_id: string;
+      last_read_at: string;
+      updated_at: string;
+    }>(
+      `select rs.channel_id, rs.product_user_id, rs.last_read_at, rs.updated_at
+       from channel_read_states rs
+       join channels ch on ch.id = rs.channel_id
+       where rs.product_user_id = $1 and ch.server_id = $2
+       order by rs.updated_at desc`,
+      [input.productUserId, input.serverId]
+    );
+
+    return rows.rows.map((row) => ({
+      channelId: row.channel_id,
+      userId: row.product_user_id,
+      lastReadAt: row.last_read_at,
+      updatedAt: row.updated_at
+    }));
+  });
+}
+
+export async function upsertChannelReadState(input: {
+  productUserId: string;
+  channelId: string;
+  at?: string;
+}): Promise<ChannelReadState> {
+  return withDb(async (db) => {
+    const rows = await db.query<{
+      channel_id: string;
+      product_user_id: string;
+      last_read_at: string;
+      updated_at: string;
+    }>(
+      `insert into channel_read_states (product_user_id, channel_id, last_read_at)
+       values ($1, $2, coalesce($3::timestamptz, now()))
+       on conflict (product_user_id, channel_id)
+       do update set last_read_at = excluded.last_read_at, updated_at = now()
+       returning channel_id, product_user_id, last_read_at, updated_at`,
+      [input.productUserId, input.channelId, input.at ?? null]
+    );
+
+    const row = rows.rows[0];
+    if (!row) {
+      throw new Error("Read state was not updated.");
+    }
+
+    return {
+      channelId: row.channel_id,
+      userId: row.product_user_id,
+      lastReadAt: row.last_read_at,
+      updatedAt: row.updated_at
+    };
+  });
+}
+
+export async function listMentionMarkers(input: {
+  productUserId: string;
+  channelId?: string;
+  serverId?: string;
+  limit?: number;
+}): Promise<MentionMarker[]> {
+  return withDb(async (db) => {
+    const limit = Math.min(Math.max(input.limit ?? 100, 1), 300);
+    const rows = await db.query<{
+      id: string;
+      channel_id: string;
+      message_id: string;
+      mentioned_user_id: string;
+      created_at: string;
+    }>(
+      `select mm.id, mm.channel_id, mm.message_id, mm.mentioned_user_id, mm.created_at
+       from mention_markers mm
+       join channels ch on ch.id = mm.channel_id
+       left join channel_read_states rs
+         on rs.channel_id = mm.channel_id
+        and rs.product_user_id = mm.mentioned_user_id
+       where mm.mentioned_user_id = $1
+         and ($2::text is null or mm.channel_id = $2)
+         and ($3::text is null or ch.server_id = $3)
+         and (rs.last_read_at is null or mm.created_at > rs.last_read_at)
+       order by mm.created_at desc
+       limit $4`,
+      [input.productUserId, input.channelId ?? null, input.serverId ?? null, limit]
+    );
+
+    return rows.rows.map((row) => ({
+      id: row.id,
+      channelId: row.channel_id,
+      messageId: row.message_id,
+      mentionedUserId: row.mentioned_user_id,
+      createdAt: row.created_at
+    }));
   });
 }
 

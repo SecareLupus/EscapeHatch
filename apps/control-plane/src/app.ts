@@ -27,7 +27,12 @@ export async function buildApp() {
       return 500;
     })();
 
-    const code = parsedError instanceof ZodError ? "validation_error" : "internal_error";
+    const code =
+      parsedError instanceof ZodError
+        ? "validation_error"
+        : "code" in parsedError && typeof parsedError.code === "string"
+          ? parsedError.code
+          : "internal_error";
     const message =
       parsedError instanceof ZodError
         ? "Request validation failed."

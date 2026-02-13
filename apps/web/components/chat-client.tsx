@@ -2,33 +2,46 @@
 
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { Category, Channel, ChatMessage, Server } from "@escapehatch/shared";
+import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@escapehatch/shared";
 import {
   bootstrapAdmin,
+  createReport,
   connectMessageStream,
   createCategory,
   createChannel,
   createServer,
   deleteChannel,
   deleteServer,
+  issueVoiceToken,
   fetchAllowedActions,
   fetchAuthProviders,
   fetchBootstrapStatus,
   fetchViewerSession,
   listHubs,
+  listMentions,
+  listAuditLogs,
+  listReports,
+  listChannelReadStates,
   listCategories,
   listChannels,
   listMessages,
   listServers,
   listViewerRoleBindings,
+  joinVoicePresence,
+  leaveVoicePresence,
+  listVoicePresence,
   moveChannelCategory,
+  performModerationAction,
   logout,
   providerLoginUrl,
   renameCategory,
   renameChannel,
   renameServer,
   sendMessage,
+  transitionReportStatus,
+  upsertChannelReadState,
   updateChannelControls,
+  updateVoicePresenceState,
   type AuthProvidersResponse,
   type BootstrapStatus,
   type ViewerRoleBinding,
@@ -78,6 +91,7 @@ export function ChatClient() {
   const [slowModeSeconds, setSlowModeSeconds] = useState("0");
   const [updatingControls, setUpdatingControls] = useState(false);
   const [lastReadByChannel, setLastReadByChannel] = useState<Record<string, string>>({});
+  const [mentionCountByChannel, setMentionCountByChannel] = useState<Record<string, number>>({});
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [pendingNewMessageCount, setPendingNewMessageCount] = useState(0);
   const [lastSeenMessageId, setLastSeenMessageId] = useState<string | null>(null);
@@ -102,6 +116,19 @@ export function ChatClient() {
   const [deleteRoomConfirm, setDeleteRoomConfirm] = useState("");
   const [mutatingStructure, setMutatingStructure] = useState(false);
   const [managementDialogOpen, setManagementDialogOpen] = useState(false);
+  const [voiceConnected, setVoiceConnected] = useState(false);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceDeafened, setVoiceDeafened] = useState(false);
+  const [voiceGrant, setVoiceGrant] = useState<VoiceTokenGrant | null>(null);
+  const [voiceMembers, setVoiceMembers] = useState<VoicePresenceMember[]>([]);
+  const [modActionType, setModActionType] = useState<"kick" | "ban" | "unban" | "timeout" | "redact_message">("kick");
+  const [modReason, setModReason] = useState("Moderator action");
+  const [modTargetUserId, setModTargetUserId] = useState("");
+  const [reportReason, setReportReason] = useState("Report reason");
+  const [reportTargetUserId, setReportTargetUserId] = useState("");
+  const [reports, setReports] = useState<ModerationReport[]>([]);
+  const [auditLogs, setAuditLogs] = useState<ModerationAction[]>([]);
+  const [mentions, setMentions] = useState<MentionMarker[]>([]);
   const messagesRef = useRef<HTMLOListElement | null>(null);
   const chatStateRequestIdRef = useRef(0);
   const managementDialogRef = useRef<HTMLElement | null>(null);
@@ -383,9 +410,68 @@ export function ChatClient() {
   }, [viewer, bootstrapStatus?.initialized, selectedServerId, selectedChannelId]);
 
   useEffect(() => {
+    if (!viewer || !bootstrapStatus?.initialized || !selectedServerId) {
+      setLastReadByChannel({});
+      return;
+    }
+
+    void listChannelReadStates(selectedServerId)
+      .then((items) => {
+        const next: Record<string, string> = {};
+        for (const item of items) {
+          next[item.channelId] = item.lastReadAt;
+        }
+        setLastReadByChannel(next);
+      })
+      .catch(() => {
+        // Keep local map if read-state fetch fails.
+      });
+  }, [viewer, bootstrapStatus?.initialized, selectedServerId]);
+
+  useEffect(() => {
+    if (!viewer || !bootstrapStatus?.initialized || !selectedServerId) {
+      setReports([]);
+      setAuditLogs([]);
+      return;
+    }
+
+    void Promise.all([
+      listReports(selectedServerId).catch(() => []),
+      listAuditLogs(selectedServerId).catch(() => [])
+    ]).then(([reportItems, auditItems]) => {
+      setReports(reportItems);
+      setAuditLogs(auditItems);
+    });
+  }, [viewer, bootstrapStatus?.initialized, selectedServerId]);
+
+  useEffect(() => {
+    if (!viewer || !bootstrapStatus?.initialized || !selectedChannelId) {
+      setMentions([]);
+      return;
+    }
+
+    void listMentions(selectedChannelId, 150)
+      .then((items) => {
+        setMentions(items);
+        setMentionCountByChannel((current) => ({
+          ...current,
+          [selectedChannelId]: items.length
+        }));
+      })
+      .catch(() => {
+        // Keep previous mention snapshot on fetch failures.
+      });
+  }, [viewer, bootstrapStatus?.initialized, selectedChannelId]);
+
+  useEffect(() => {
     setPendingNewMessageCount(0);
     setLastSeenMessageId(null);
     setIsNearBottom(true);
+    setVoiceConnected(false);
+    setVoiceMuted(false);
+    setVoiceDeafened(false);
+    setVoiceGrant(null);
+    setVoiceMembers([]);
   }, [selectedChannelId]);
 
   useEffect(() => {
@@ -431,7 +517,42 @@ export function ChatClient() {
       ...current,
       [selectedChannelId]: newest.createdAt
     }));
+
+    void upsertChannelReadState(selectedChannelId, newest.createdAt).catch(() => {
+      // Ignore transient read-state sync errors.
+    });
   }, [messages, selectedChannelId]);
+
+  useEffect(() => {
+    if (!voiceConnected || !selectedServerId || !selectedChannelId || activeChannel?.type !== "voice") {
+      setVoiceMembers([]);
+      return;
+    }
+
+    let stopped = false;
+    const refresh = () => {
+      void listVoicePresence({
+        serverId: selectedServerId,
+        channelId: selectedChannelId
+      })
+        .then((items) => {
+          if (stopped) {
+            return;
+          }
+          setVoiceMembers(items);
+        })
+        .catch(() => {
+          // Keep previous roster on transient failures.
+        });
+    };
+
+    refresh();
+    const timer = setInterval(refresh, 3000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [voiceConnected, selectedServerId, selectedChannelId, activeChannel?.type]);
 
   useEffect(() => {
     const newest = messages[messages.length - 1];
@@ -978,6 +1099,143 @@ export function ChatClient() {
     }
   }
 
+  async function handleModerationAction(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedServerId) {
+      return;
+    }
+
+    setError(null);
+    try {
+      await performModerationAction({
+        action: modActionType,
+        serverId: selectedServerId,
+        channelId: selectedChannelId ?? undefined,
+        targetUserId: modTargetUserId || undefined,
+        reason: modReason
+      });
+      const [reportItems, auditItems] = await Promise.all([
+        listReports(selectedServerId).catch(() => []),
+        listAuditLogs(selectedServerId).catch(() => [])
+      ]);
+      setReports(reportItems);
+      setAuditLogs(auditItems);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to run moderation action.");
+    }
+  }
+
+  async function handleCreateReport(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedServerId || !reportReason.trim()) {
+      return;
+    }
+
+    setError(null);
+    try {
+      await createReport({
+        serverId: selectedServerId,
+        channelId: selectedChannelId ?? undefined,
+        targetUserId: reportTargetUserId || undefined,
+        reason: reportReason.trim()
+      });
+      setReportReason("Report reason");
+      setReportTargetUserId("");
+      setReports(await listReports(selectedServerId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to create report.");
+    }
+  }
+
+  async function handleTransitionReport(reportId: string, status: "triaged" | "resolved" | "dismissed"): Promise<void> {
+    if (!selectedServerId) {
+      return;
+    }
+    setError(null);
+    try {
+      await transitionReportStatus({
+        reportId,
+        serverId: selectedServerId,
+        status,
+        reason: `Report ${status}`
+      });
+      setReports(await listReports(selectedServerId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to transition report.");
+    }
+  }
+
+  async function handleJoinVoice(): Promise<void> {
+    if (!selectedServerId || !selectedChannelId || activeChannel?.type !== "voice") {
+      return;
+    }
+
+    setError(null);
+    try {
+      const grant = await issueVoiceToken({
+        serverId: selectedServerId,
+        channelId: selectedChannelId
+      });
+      await joinVoicePresence({
+        serverId: selectedServerId,
+        channelId: selectedChannelId,
+        muted: voiceMuted,
+        deafened: voiceDeafened
+      });
+      setVoiceGrant(grant);
+      setVoiceConnected(true);
+      setVoiceMembers(
+        await listVoicePresence({
+          serverId: selectedServerId,
+          channelId: selectedChannelId
+        })
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to join voice.");
+    }
+  }
+
+  async function handleLeaveVoice(): Promise<void> {
+    if (!selectedServerId || !selectedChannelId || !voiceConnected) {
+      return;
+    }
+
+    setError(null);
+    try {
+      await leaveVoicePresence({
+        serverId: selectedServerId,
+        channelId: selectedChannelId
+      });
+      setVoiceConnected(false);
+      setVoiceGrant(null);
+      setVoiceMembers([]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to leave voice.");
+    }
+  }
+
+  async function handleToggleMuteDeafen(nextMuted: boolean, nextDeafened: boolean): Promise<void> {
+    if (!selectedServerId || !selectedChannelId || !voiceConnected) {
+      setVoiceMuted(nextMuted);
+      setVoiceDeafened(nextDeafened);
+      return;
+    }
+
+    setError(null);
+    try {
+      await updateVoicePresenceState({
+        serverId: selectedServerId,
+        channelId: selectedChannelId,
+        muted: nextMuted,
+        deafened: nextDeafened
+      });
+      setVoiceMuted(nextMuted);
+      setVoiceDeafened(nextDeafened);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to update voice state.");
+    }
+  }
+
   async function handleBootstrap(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setBootstrapping(true);
@@ -1451,6 +1709,9 @@ export function ChatClient() {
                           {(unreadCountByChannel[channel.id] ?? 0) > 0 ? (
                             <span className="unread-pill">{unreadCountByChannel[channel.id]}</span>
                           ) : null}
+                          {(mentionCountByChannel[channel.id] ?? 0) > 0 ? (
+                            <span className="mention-pill">@{mentionCountByChannel[channel.id]}</span>
+                          ) : null}
                         </button>
                       </li>
                     ))}
@@ -1608,6 +1869,77 @@ export function ChatClient() {
                 <p className="context-line">
                   <strong>Slow mode:</strong> {activeChannel.slowModeSeconds}s
                 </p>
+                {(mentions.length ?? 0) > 0 ? (
+                  <p className="context-line">
+                    <strong>Mentions in channel:</strong> {mentions.length}
+                  </p>
+                ) : null}
+                {activeChannel.type === "voice" ? (
+                  <>
+                    <hr />
+                    <h3>Voice Controls</h3>
+                    <p className="context-line">
+                      <strong>Status:</strong> {voiceConnected ? "Connected" : "Disconnected"}
+                    </p>
+                    {voiceGrant ? (
+                      <p className="context-line">
+                        <strong>Voice Room:</strong> {voiceGrant.sfuRoomId}
+                      </p>
+                    ) : null}
+                    <div className="voice-actions">
+                      {!voiceConnected ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleJoinVoice();
+                          }}
+                        >
+                          Join Voice
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() => {
+                            void handleLeaveVoice();
+                          }}
+                        >
+                          Leave Voice
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={voiceMuted ? "ghost active-toggle" : "ghost"}
+                        onClick={() => {
+                          void handleToggleMuteDeafen(!voiceMuted, voiceDeafened);
+                        }}
+                      >
+                        {voiceMuted ? "Unmute" : "Mute"}
+                      </button>
+                      <button
+                        type="button"
+                        className={voiceDeafened ? "ghost active-toggle" : "ghost"}
+                        onClick={() => {
+                          void handleToggleMuteDeafen(voiceMuted, !voiceDeafened);
+                        }}
+                      >
+                        {voiceDeafened ? "Undeafen" : "Deafen"}
+                      </button>
+                    </div>
+                    <h3>Voice Roster</h3>
+                    <ul className="member-list">
+                      {voiceMembers.length === 0 ? <li>No one connected.</li> : null}
+                      {voiceMembers.map((member) => (
+                        <li key={member.userId}>
+                          <span className="member-dot" />
+                          {member.displayName}
+                          {member.muted ? " (muted)" : ""}
+                          {member.deafened ? " (deafened)" : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
                 <hr />
                 <h3>Members in View</h3>
                 <ul className="member-list">
@@ -1624,6 +1956,108 @@ export function ChatClient() {
                     <hr />
                     <h3>Manager Console</h3>
                     <p className="context-line">Open the manager dialog from the account area.</p>
+                  </>
+                ) : null}
+                {(allowedActions.includes("reports.triage") || allowedActions.includes("audit.read")) && selectedServerId ? (
+                  <>
+                    <hr />
+                    <h3>Moderation</h3>
+                    <form className="stack" onSubmit={handleModerationAction}>
+                      <label htmlFor="mod-action">Action</label>
+                      <select
+                        id="mod-action"
+                        value={modActionType}
+                        onChange={(event) =>
+                          setModActionType(
+                            event.target.value as "kick" | "ban" | "unban" | "timeout" | "redact_message"
+                          )
+                        }
+                      >
+                        <option value="kick">Kick</option>
+                        <option value="ban">Ban</option>
+                        <option value="unban">Unban</option>
+                        <option value="timeout">Timeout</option>
+                        <option value="redact_message">Redact Message</option>
+                      </select>
+                      <label htmlFor="mod-target">Target User (optional)</label>
+                      <input
+                        id="mod-target"
+                        value={modTargetUserId}
+                        onChange={(event) => setModTargetUserId(event.target.value)}
+                        placeholder="product user id"
+                      />
+                      <label htmlFor="mod-reason">Reason</label>
+                      <input
+                        id="mod-reason"
+                        value={modReason}
+                        onChange={(event) => setModReason(event.target.value)}
+                        minLength={3}
+                        required
+                      />
+                      <button type="submit">Run Action</button>
+                    </form>
+
+                    <form className="stack" onSubmit={handleCreateReport}>
+                      <label htmlFor="report-target">Report Target User (optional)</label>
+                      <input
+                        id="report-target"
+                        value={reportTargetUserId}
+                        onChange={(event) => setReportTargetUserId(event.target.value)}
+                        placeholder="product user id"
+                      />
+                      <label htmlFor="report-reason">Report Reason</label>
+                      <input
+                        id="report-reason"
+                        value={reportReason}
+                        onChange={(event) => setReportReason(event.target.value)}
+                        minLength={3}
+                        required
+                      />
+                      <button type="submit">Create Report</button>
+                    </form>
+
+                    <h3>Open Reports</h3>
+                    <ul className="audit-list">
+                      {reports.length === 0 ? <li>No reports yet.</li> : null}
+                      {reports.slice(0, 5).map((report) => (
+                        <li key={report.id}>
+                          <strong>{report.status.toUpperCase()}</strong> {report.reason}
+                          {report.status === "open" ? (
+                            <div className="inline-buttons">
+                              <button
+                                type="button"
+                                className="ghost"
+                                onClick={() => {
+                                  void handleTransitionReport(report.id, "triaged");
+                                }}
+                              >
+                                Triage
+                              </button>
+                              <button
+                                type="button"
+                                className="ghost"
+                                onClick={() => {
+                                  void handleTransitionReport(report.id, "resolved");
+                                }}
+                              >
+                                Resolve
+                              </button>
+                            </div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <h3>Audit Log</h3>
+                    <ul className="audit-list">
+                      {auditLogs.length === 0 ? <li>No audit entries yet.</li> : null}
+                      {auditLogs.slice(0, 8).map((entry) => (
+                        <li key={entry.id}>
+                          <strong>{entry.actionType}</strong> by {entry.actorUserId.slice(0, 10)}... in{" "}
+                          {new Date(entry.createdAt).toLocaleTimeString()}
+                        </li>
+                      ))}
+                    </ul>
                   </>
                 ) : null}
               </>

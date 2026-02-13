@@ -125,6 +125,32 @@ export async function initDb(): Promise<void> {
       created_at timestamptz not null default now()
     );
 
+    create table if not exists channel_read_states (
+      product_user_id text not null,
+      channel_id text not null references channels(id) on delete cascade,
+      last_read_at timestamptz not null,
+      updated_at timestamptz not null default now(),
+      primary key (product_user_id, channel_id)
+    );
+
+    create table if not exists mention_markers (
+      id text primary key,
+      channel_id text not null references channels(id) on delete cascade,
+      message_id text not null references chat_messages(id) on delete cascade,
+      mentioned_user_id text not null,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists voice_presence (
+      channel_id text not null references channels(id) on delete cascade,
+      product_user_id text not null,
+      muted boolean not null default false,
+      deafened boolean not null default false,
+      joined_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (channel_id, product_user_id)
+    );
+
     create table if not exists platform_settings (
       id text primary key,
       bootstrap_completed_at timestamptz,

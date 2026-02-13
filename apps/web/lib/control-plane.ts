@@ -1,4 +1,18 @@
-import type { Category, Channel, ChannelType, ChatMessage, Hub, Server } from "@escapehatch/shared";
+import type {
+  Category,
+  Channel,
+  ChannelReadState,
+  ChannelType,
+  ChatMessage,
+  Hub,
+  MentionMarker,
+  ModerationAction,
+  ModerationReport,
+  ReportStatus,
+  Server,
+  VoicePresenceMember,
+  VoiceTokenGrant
+} from "@escapehatch/shared";
 
 export const controlPlaneBaseUrl =
   process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:4000";
@@ -327,6 +341,148 @@ export async function updateChannelControls(input: {
       ...(typeof input.lock === "boolean" ? { lock: input.lock } : {}),
       ...(typeof input.slowModeSeconds === "number" ? { slowModeSeconds: input.slowModeSeconds } : {})
     })
+  });
+}
+
+export async function listChannelReadStates(serverId: string): Promise<ChannelReadState[]> {
+  const json = await apiFetch<{ items: ChannelReadState[] }>(
+    `/v1/servers/${encodeURIComponent(serverId)}/read-states`
+  );
+  return json.items;
+}
+
+export async function upsertChannelReadState(channelId: string, at?: string): Promise<ChannelReadState> {
+  return apiFetch<ChannelReadState>(`/v1/channels/${encodeURIComponent(channelId)}/read-state`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(at ? { at } : {})
+  });
+}
+
+export async function listMentions(channelId: string, limit = 100): Promise<MentionMarker[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  const json = await apiFetch<{ items: MentionMarker[] }>(
+    `/v1/channels/${encodeURIComponent(channelId)}/mentions?${query.toString()}`
+  );
+  return json.items;
+}
+
+export async function performModerationAction(input: {
+  action: "kick" | "ban" | "unban" | "timeout" | "redact_message";
+  serverId: string;
+  channelId?: string;
+  targetUserId?: string;
+  targetMessageId?: string;
+  timeoutSeconds?: number;
+  reason: string;
+}): Promise<void> {
+  await apiFetch("/v1/moderation/actions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function createReport(input: {
+  serverId: string;
+  channelId?: string;
+  targetUserId?: string;
+  targetMessageId?: string;
+  reason: string;
+}): Promise<ModerationReport> {
+  return apiFetch<ModerationReport>("/v1/reports", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function listReports(serverId: string, status?: ReportStatus): Promise<ModerationReport[]> {
+  const query = new URLSearchParams({ serverId });
+  if (status) {
+    query.set("status", status);
+  }
+  const json = await apiFetch<{ items: ModerationReport[] }>(`/v1/reports?${query.toString()}`);
+  return json.items;
+}
+
+export async function transitionReportStatus(input: {
+  reportId: string;
+  serverId: string;
+  status: Exclude<ReportStatus, "open">;
+  reason: string;
+}): Promise<ModerationReport> {
+  return apiFetch<ModerationReport>(`/v1/reports/${encodeURIComponent(input.reportId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      serverId: input.serverId,
+      status: input.status,
+      reason: input.reason
+    })
+  });
+}
+
+export async function listAuditLogs(serverId: string): Promise<ModerationAction[]> {
+  const query = new URLSearchParams({ serverId });
+  const json = await apiFetch<{ items: ModerationAction[] }>(`/v1/audit-logs?${query.toString()}`);
+  return json.items;
+}
+
+export async function issueVoiceToken(input: { serverId: string; channelId: string }): Promise<VoiceTokenGrant> {
+  return apiFetch<VoiceTokenGrant>("/v1/voice/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function listVoicePresence(input: {
+  serverId: string;
+  channelId: string;
+}): Promise<VoicePresenceMember[]> {
+  const query = new URLSearchParams({
+    serverId: input.serverId,
+    channelId: input.channelId
+  });
+  const json = await apiFetch<{ items: VoicePresenceMember[] }>(`/v1/voice/presence?${query.toString()}`);
+  return json.items;
+}
+
+export async function joinVoicePresence(input: {
+  serverId: string;
+  channelId: string;
+  muted?: boolean;
+  deafened?: boolean;
+}): Promise<void> {
+  await apiFetch("/v1/voice/presence/join", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function updateVoicePresenceState(input: {
+  serverId: string;
+  channelId: string;
+  muted: boolean;
+  deafened: boolean;
+}): Promise<void> {
+  await apiFetch("/v1/voice/presence/state", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function leaveVoicePresence(input: {
+  serverId: string;
+  channelId: string;
+}): Promise<void> {
+  await apiFetch("/v1/voice/presence/leave", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
   });
 }
 

@@ -205,6 +205,49 @@ export async function transitionReportStatus(input: {
   });
 }
 
+export async function listReports(input: {
+  serverId: string;
+  status?: ReportStatus;
+}): Promise<ModerationReport[]> {
+  return withDb(async (db) => {
+    const rows = await db.query<{
+      id: string;
+      server_id: string;
+      channel_id: string | null;
+      reporter_user_id: string;
+      target_user_id: string | null;
+      target_message_id: string | null;
+      reason: string;
+      status: ReportStatus;
+      triaged_by_user_id: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `select *
+       from moderation_reports
+       where server_id = $1
+         and ($2::text is null or status = $2)
+       order by created_at desc
+       limit 200`,
+      [input.serverId, input.status ?? null]
+    );
+
+    return rows.rows.map((value) => ({
+      id: value.id,
+      serverId: value.server_id,
+      channelId: value.channel_id,
+      reporterUserId: value.reporter_user_id,
+      targetUserId: value.target_user_id,
+      targetMessageId: value.target_message_id,
+      reason: value.reason,
+      status: value.status,
+      triagedByUserId: value.triaged_by_user_id,
+      createdAt: value.created_at,
+      updatedAt: value.updated_at
+    }));
+  });
+}
+
 export async function listAuditLogs(serverId: string): Promise<ModerationAction[]> {
   return withDb(async (db) => {
     const rows = await db.query<{

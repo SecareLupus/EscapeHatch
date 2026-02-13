@@ -5,6 +5,7 @@ import { requireAuth, requireInitialized } from "../auth/middleware.js";
 import { createChannelWorkflow, createServerWorkflow } from "../services/provisioning-service.js";
 import {
   createReport,
+  listReports,
   listAuditLogs,
   performModerationAction,
   setChannelControls,
@@ -15,6 +16,7 @@ import {
   canManageHub,
   canManageServer,
   grantRole,
+  isActionAllowed,
   listAllowedActions,
   listRoleBindings
 } from "../services/policy-service.js";
@@ -26,15 +28,24 @@ import {
   listCategories,
   listChannels,
   listMessages,
+  listMentionMarkers,
+  listChannelReadStates,
   listServers,
   moveChannelToCategory,
   renameCategory,
   renameChannel,
-  renameServer
+  renameServer,
+  upsertChannelReadState
 } from "../services/chat-service.js";
 import { getBootstrapStatus } from "../services/bootstrap-service.js";
 import { publishChannelMessage, subscribeToChannelMessages } from "../services/chat-realtime.js";
 import { listHubsForUser } from "../services/hub-service.js";
+import {
+  joinVoicePresence,
+  leaveVoicePresence,
+  listVoicePresence,
+  updateVoicePresenceState
+} from "../services/voice-presence-service.js";
 
 export async function registerDomainRoutes(app: FastifyInstance): Promise<void> {
   const initializedAuthHandlers = { preHandler: [requireAuth, requireInitialized] };
@@ -193,6 +204,43 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       items: await listMessages({
         channelId: params.channelId,
         before: query.before,
+        limit: query.limit
+      })
+    };
+  });
+
+  app.get("/v1/servers/:serverId/read-states", initializedAuthHandlers, async (request) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    return {
+      items: await listChannelReadStates({
+        productUserId: request.auth!.productUserId,
+        serverId: params.serverId
+      })
+    };
+  });
+
+  app.put("/v1/channels/:channelId/read-state", initializedAuthHandlers, async (request) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        at: z.string().datetime().optional()
+      })
+      .parse(request.body ?? {});
+
+    return upsertChannelReadState({
+      productUserId: request.auth!.productUserId,
+      channelId: params.channelId,
+      at: payload.at
+    });
+  });
+
+  app.get("/v1/channels/:channelId/mentions", initializedAuthHandlers, async (request) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(300).optional() }).parse(request.query);
+    return {
+      items: await listMentionMarkers({
+        productUserId: request.auth!.productUserId,
+        channelId: params.channelId,
         limit: query.limit
       })
     };
@@ -517,8 +565,43 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     });
   });
 
-  app.get("/v1/audit-logs", initializedAuthHandlers, async (request) => {
+  app.get("/v1/reports", initializedAuthHandlers, async (request, reply) => {
+    const query = z
+      .object({
+        serverId: z.string().min(1),
+        status: z.enum(["open", "triaged", "resolved", "dismissed"]).optional()
+      })
+      .parse(request.query);
+
+    const allowed = await isActionAllowed({
+      productUserId: request.auth!.productUserId,
+      action: "reports.triage",
+      scope: { serverId: query.serverId }
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: report access is outside assigned scope.", code: "forbidden_scope" });
+      return;
+    }
+
+    return {
+      items: await listReports({
+        serverId: query.serverId,
+        status: query.status
+      })
+    };
+  });
+
+  app.get("/v1/audit-logs", initializedAuthHandlers, async (request, reply) => {
     const query = z.object({ serverId: z.string().min(1) }).parse(request.query);
+    const allowed = await isActionAllowed({
+      productUserId: request.auth!.productUserId,
+      action: "audit.read",
+      scope: { serverId: query.serverId }
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: audit access is outside assigned scope.", code: "forbidden_scope" });
+      return;
+    }
     return { items: await listAuditLogs(query.serverId) };
   });
 
@@ -534,5 +617,67 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       actorUserId: request.auth!.productUserId,
       ...payload
     });
+  });
+
+  app.get("/v1/voice/presence", initializedAuthHandlers, async (request) => {
+    const query = z
+      .object({
+        serverId: z.string().min(1),
+        channelId: z.string().min(1)
+      })
+      .parse(request.query);
+
+    return {
+      items: await listVoicePresence({
+        serverId: query.serverId,
+        channelId: query.channelId
+      })
+    };
+  });
+
+  app.post("/v1/voice/presence/join", initializedAuthHandlers, async (request, reply) => {
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        channelId: z.string().min(1),
+        muted: z.boolean().optional(),
+        deafened: z.boolean().optional()
+      })
+      .parse(request.body);
+    await joinVoicePresence({
+      productUserId: request.auth!.productUserId,
+      ...payload
+    });
+    reply.code(204).send();
+  });
+
+  app.patch("/v1/voice/presence/state", initializedAuthHandlers, async (request, reply) => {
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        channelId: z.string().min(1),
+        muted: z.boolean(),
+        deafened: z.boolean()
+      })
+      .parse(request.body);
+    await updateVoicePresenceState({
+      productUserId: request.auth!.productUserId,
+      ...payload
+    });
+    reply.code(204).send();
+  });
+
+  app.post("/v1/voice/presence/leave", initializedAuthHandlers, async (request, reply) => {
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        channelId: z.string().min(1)
+      })
+      .parse(request.body);
+    await leaveVoicePresence({
+      productUserId: request.auth!.productUserId,
+      ...payload
+    });
+    reply.code(204).send();
   });
 }
