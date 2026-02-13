@@ -9,6 +9,11 @@ export interface ViewerSession {
   } | null;
 }
 
+export interface ModerationDashboardSummary {
+  queueCount: number;
+  latestActions: Array<{ id: string; actionType: string; reason: string; createdAt: string }>;
+}
+
 export async function fetchViewerSession(): Promise<ViewerSession | null> {
   try {
     const response = await fetch(`${controlPlaneBaseUrl}/auth/session/me`, {
@@ -21,6 +26,30 @@ export async function fetchViewerSession(): Promise<ViewerSession | null> {
     }
 
     return (await response.json()) as ViewerSession;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchModerationSummary(serverId: string): Promise<ModerationDashboardSummary | null> {
+  try {
+    const response = await fetch(`${controlPlaneBaseUrl}/v1/audit-logs?serverId=${encodeURIComponent(serverId)}`, {
+      credentials: "include",
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const json = (await response.json()) as {
+      items: Array<{ id: string; actionType: string; reason: string; createdAt: string }>;
+    };
+
+    return {
+      queueCount: 0,
+      latestActions: json.items.slice(0, 3)
+    };
   } catch {
     return null;
   }

@@ -45,3 +45,12 @@ li {
 li:hover {
   background: #1f2937;
 }
+
+button {
+  margin-top: 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+}

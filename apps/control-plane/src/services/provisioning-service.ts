@@ -127,6 +127,7 @@ export async function createChannelWorkflow(input: {
     }
 
     const id = randomId("chn");
+    const voiceRoomId = input.type === "voice" ? `sfu_${id}` : null;
     const created = await db.query<{
       id: string;
       server_id: string;
@@ -134,12 +135,17 @@ export async function createChannelWorkflow(input: {
       name: string;
       type: ChannelType;
       matrix_room_id: string | null;
+      is_locked: boolean;
+      slow_mode_seconds: number;
+      posting_restricted_to_roles: string[];
+      voice_sfu_room_id: string | null;
+      voice_max_participants: number | null;
       created_at: string;
     }>(
-      `insert into channels (id, server_id, category_id, name, type, matrix_room_id)
-       values ($1, $2, $3, $4, $5, $6)
+      `insert into channels (id, server_id, category_id, name, type, matrix_room_id, voice_sfu_room_id, voice_max_participants)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
        returning *`,
-      [id, input.serverId, input.categoryId ?? null, input.name, input.type, matrixRoomId]
+      [id, input.serverId, input.categoryId ?? null, input.name, input.type, matrixRoomId, voiceRoomId, input.type === "voice" ? 25 : null]
     );
 
     const value = created.rows[0];
@@ -159,6 +165,16 @@ export async function createChannelWorkflow(input: {
       name: value.name,
       type: value.type,
       matrixRoomId: value.matrix_room_id,
+      isLocked: value.is_locked,
+      slowModeSeconds: value.slow_mode_seconds,
+      postingRestrictedToRoles: (value.posting_restricted_to_roles ?? []) as Channel["postingRestrictedToRoles"],
+      voiceMetadata:
+        value.voice_sfu_room_id && value.voice_max_participants
+          ? {
+              sfuRoomId: value.voice_sfu_room_id,
+              maxParticipants: value.voice_max_participants
+            }
+          : null,
       createdAt: value.created_at
     };
   });
