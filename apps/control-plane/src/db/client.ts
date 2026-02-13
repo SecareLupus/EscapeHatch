@@ -64,6 +64,11 @@ export async function initDb(): Promise<void> {
       name text not null,
       type text not null,
       matrix_room_id text,
+      is_locked boolean not null default false,
+      slow_mode_seconds integer not null default 0,
+      posting_restricted_to_roles text[] not null default '{}',
+      voice_sfu_room_id text,
+      voice_max_participants integer,
       created_at timestamptz not null default now()
     );
 
@@ -73,5 +78,48 @@ export async function initDb(): Promise<void> {
       response_json jsonb not null,
       created_at timestamptz not null default now()
     );
+
+    create table if not exists role_bindings (
+      id text primary key,
+      product_user_id text not null,
+      role text not null,
+      hub_id text,
+      server_id text,
+      channel_id text,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists moderation_actions (
+      id text primary key,
+      action_type text not null,
+      actor_user_id text not null,
+      server_id text not null,
+      channel_id text,
+      target_user_id text,
+      target_message_id text,
+      reason text not null,
+      metadata jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists moderation_reports (
+      id text primary key,
+      server_id text not null,
+      channel_id text,
+      reporter_user_id text not null,
+      target_user_id text,
+      target_message_id text,
+      reason text not null,
+      status text not null,
+      triaged_by_user_id text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    alter table channels add column if not exists is_locked boolean not null default false;
+    alter table channels add column if not exists slow_mode_seconds integer not null default 0;
+    alter table channels add column if not exists posting_restricted_to_roles text[] not null default '{}';
+    alter table channels add column if not exists voice_sfu_room_id text;
+    alter table channels add column if not exists voice_max_participants integer;
   `);
 }
