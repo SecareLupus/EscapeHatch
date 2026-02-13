@@ -1,4 +1,4 @@
-export type Role = "hub_operator" | "creator_admin" | "creator_moderator" | "member";
+export type Role = "hub_admin" | "space_owner" | "space_moderator" | "user";
 
 export type ChannelType = "text" | "voice" | "announcement";
 
@@ -196,7 +196,7 @@ export interface DiscordBridgeChannelMapping {
 
 export type DelegationAssignmentStatus = "active" | "revoked" | "expired";
 
-export interface SpaceAdminAssignment {
+export interface SpaceOwnerAssignment {
   id: string;
   hubId: string;
   serverId: string;
@@ -211,10 +211,10 @@ export interface SpaceAdminAssignment {
 export interface DelegationAuditEvent {
   id: string;
   actionType:
-    | "space_admin_assigned"
-    | "space_admin_revoked"
-    | "space_admin_transfer_started"
-    | "space_admin_transfer_completed";
+    | "space_owner_assigned"
+    | "space_owner_revoked"
+    | "space_owner_transfer_started"
+    | "space_owner_transfer_completed";
   actorUserId: string;
   targetUserId: string | null;
   assignmentId: string | null;

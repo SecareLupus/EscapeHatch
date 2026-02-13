@@ -194,8 +194,8 @@ test("authenticated bootstrap + provisioning context + permission gate flow", as
     const memberIdentity = await upsertIdentityMapping({
       provider: "dev",
       oidcSubject: "it_member",
-      email: "it-member@dev.local",
-      preferredUsername: "it-member",
+      email: "it-user@dev.local",
+      preferredUsername: "it-user",
       avatarUrl: null
     });
     const memberCookie = createAuthCookie({
@@ -602,8 +602,8 @@ test("role grants are scope-gated and prevent escalation", async (t) => {
     const memberIdentity = await upsertIdentityMapping({
       provider: "dev",
       oidcSubject: "deleg_member",
-      email: "deleg-member@dev.local",
-      preferredUsername: "deleg-member",
+      email: "deleg-user@dev.local",
+      preferredUsername: "deleg-user",
       avatarUrl: null
     });
     const memberCookie = createAuthCookie({
@@ -618,7 +618,7 @@ test("role grants are scope-gated and prevent escalation", async (t) => {
       headers: { cookie: memberCookie },
       payload: {
         productUserId: memberIdentity.productUserId,
-        role: "creator_moderator",
+        role: "space_moderator",
         serverId: bootstrapBody.defaultServerId
       }
     });
@@ -631,7 +631,7 @@ test("role grants are scope-gated and prevent escalation", async (t) => {
       headers: { cookie: adminCookie },
       payload: {
         productUserId: memberIdentity.productUserId,
-        role: "creator_admin",
+        role: "space_owner",
         serverId: bootstrapBody.defaultServerId
       }
     });
@@ -651,7 +651,7 @@ test("role grants are scope-gated and prevent escalation", async (t) => {
       headers: { cookie: memberCookie },
       payload: {
         productUserId: outsiderIdentity.productUserId,
-        role: "hub_operator",
+        role: "hub_admin",
         serverId: bootstrapBody.defaultServerId
       }
     });
@@ -662,7 +662,7 @@ test("role grants are scope-gated and prevent escalation", async (t) => {
   }
 });
 
-test("space admin assignment lifecycle grants and revokes scoped management", async (t) => {
+test("space owner assignment lifecycle grants and revokes scoped management", async (t) => {
   if (!pool) {
     t.skip("DATABASE_URL not configured.");
     return;
@@ -717,7 +717,7 @@ test("space admin assignment lifecycle grants and revokes scoped management", as
 
     const assignResponse = await app.inject({
       method: "POST",
-      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-admins`,
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-owners`,
       headers: { cookie: adminCookie },
       payload: {
         productUserId: delegatedIdentity.productUserId
@@ -741,7 +741,7 @@ test("space admin assignment lifecycle grants and revokes scoped management", as
 
     const listAssignments = await app.inject({
       method: "GET",
-      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-admins`,
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-owners`,
       headers: { cookie: adminCookie }
     });
     assert.equal(listAssignments.statusCode, 200);
@@ -761,12 +761,12 @@ test("space admin assignment lifecycle grants and revokes scoped management", as
     });
     assert.equal(auditEvents.statusCode, 200);
     assert.ok(
-      auditEvents.json().items.some((item: { actionType: string }) => item.actionType === "space_admin_assigned")
+      auditEvents.json().items.some((item: { actionType: string }) => item.actionType === "space_owner_assigned")
     );
 
     const revokeResponse = await app.inject({
       method: "DELETE",
-      url: `/v1/delegation/space-admins/${assignmentId}?serverId=${encodeURIComponent(bootstrapBody.defaultServerId)}`,
+      url: `/v1/delegation/space-owners/${assignmentId}?serverId=${encodeURIComponent(bootstrapBody.defaultServerId)}`,
       headers: { cookie: adminCookie }
     });
     assert.equal(revokeResponse.statusCode, 204);
@@ -787,7 +787,7 @@ test("space admin assignment lifecycle grants and revokes scoped management", as
   }
 });
 
-test("expired space admin assignments no longer grant management scope", async (t) => {
+test("expired space owner assignments no longer grant management scope", async (t) => {
   if (!pool) {
     t.skip("DATABASE_URL not configured.");
     return;
@@ -843,7 +843,7 @@ test("expired space admin assignments no longer grant management scope", async (
     const expiredAt = new Date(Date.now() - 60_000).toISOString();
     const assignmentResponse = await app.inject({
       method: "POST",
-      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-admins`,
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-owners`,
       headers: { cookie: adminCookie },
       payload: {
         productUserId: delegatedIdentity.productUserId,
@@ -1004,7 +1004,7 @@ test("read-state mention markers and voice presence flows work for scoped users"
     const memberIdentity = await upsertIdentityMapping({
       provider: "dev",
       oidcSubject: "flow_member",
-      email: "flow-member@dev.local",
+      email: "flow-user@dev.local",
       preferredUsername: "flowmember",
       avatarUrl: null
     });
@@ -1020,7 +1020,7 @@ test("read-state mention markers and voice presence flows work for scoped users"
       headers: { cookie: adminCookie },
       payload: {
         productUserId: memberIdentity.productUserId,
-        role: "member",
+        role: "user",
         serverId: bootstrapBody.defaultServerId
       }
     });

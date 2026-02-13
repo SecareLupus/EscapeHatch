@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { DelegationAuditEvent, SpaceAdminAssignment } from "@escapehatch/shared";
+import type { DelegationAuditEvent, SpaceOwnerAssignment } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
 
 function randomId(prefix: string): string {
@@ -16,7 +16,7 @@ function mapAssignment(row: {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
-}): SpaceAdminAssignment {
+}): SpaceOwnerAssignment {
   return {
     id: row.id,
     hubId: row.hub_id,
@@ -42,13 +42,13 @@ function mapAudit(row: {
   created_at: string;
 }): DelegationAuditEvent {
   const actionType =
-    row.action_type === "space_admin_revoked"
-      ? "space_admin_revoked"
-      : row.action_type === "space_admin_transfer_started"
-        ? "space_admin_transfer_started"
-        : row.action_type === "space_admin_transfer_completed"
-          ? "space_admin_transfer_completed"
-          : "space_admin_assigned";
+    row.action_type === "space_owner_revoked" || row.action_type === "space_admin_revoked"
+      ? "space_owner_revoked"
+      : row.action_type === "space_owner_transfer_started" || row.action_type === "space_admin_transfer_started"
+        ? "space_owner_transfer_started"
+        : row.action_type === "space_owner_transfer_completed" || row.action_type === "space_admin_transfer_completed"
+          ? "space_owner_transfer_completed"
+          : "space_owner_assigned";
 
   return {
     id: row.id,
@@ -91,12 +91,12 @@ async function insertDelegationAudit(input: {
   });
 }
 
-export async function assignSpaceAdmin(input: {
+export async function assignSpaceOwner(input: {
   actorUserId: string;
   assignedUserId: string;
   serverId: string;
   expiresAt?: string;
-}): Promise<SpaceAdminAssignment> {
+}): Promise<SpaceOwnerAssignment> {
   return withDb(async (db) => {
     const server = await db.query<{ hub_id: string }>("select hub_id from servers where id = $1 limit 1", [
       input.serverId
@@ -139,11 +139,11 @@ export async function assignSpaceAdmin(input: {
 
     const assignment = row.rows[0];
     if (!assignment) {
-      throw new Error("Space admin assignment failed.");
+      throw new Error("Space owner assignment failed.");
     }
 
     await insertDelegationAudit({
-      actionType: "space_admin_assigned",
+      actionType: "space_owner_assigned",
       actorUserId: input.actorUserId,
       targetUserId: input.assignedUserId,
       assignmentId: assignment.id,
@@ -155,8 +155,8 @@ export async function assignSpaceAdmin(input: {
   });
 }
 
-export async function listSpaceAdminAssignments(serverId: string): Promise<SpaceAdminAssignment[]> {
-  await expireSpaceAdminAssignments({ serverId });
+export async function listSpaceOwnerAssignments(serverId: string): Promise<SpaceOwnerAssignment[]> {
+  await expireSpaceOwnerAssignments({ serverId });
   return withDb(async (db) => {
     const rows = await db.query<{
       id: string;
@@ -179,7 +179,7 @@ export async function listSpaceAdminAssignments(serverId: string): Promise<Space
   });
 }
 
-export async function expireSpaceAdminAssignments(input: {
+export async function expireSpaceOwnerAssignments(input: {
   serverId?: string;
   productUserId?: string;
 }): Promise<number> {
@@ -205,7 +205,7 @@ export async function expireSpaceAdminAssignments(input: {
       await db.query(
         `insert into delegation_audit_events
          (id, action_type, actor_user_id, target_user_id, assignment_id, hub_id, server_id, metadata)
-         values ($1, 'space_admin_revoked', $2, $3, $4, $5, $6, $7::jsonb)`,
+         values ($1, 'space_owner_revoked', $2, $3, $4, $5, $6, $7::jsonb)`,
         [
           randomId("dae"),
           "system",
@@ -222,11 +222,11 @@ export async function expireSpaceAdminAssignments(input: {
   });
 }
 
-export async function hasActiveSpaceAdminAssignment(input: {
+export async function hasActiveSpaceOwnerAssignment(input: {
   productUserId: string;
   serverId: string;
 }): Promise<boolean> {
-  await expireSpaceAdminAssignments({ serverId: input.serverId, productUserId: input.productUserId });
+  await expireSpaceOwnerAssignments({ serverId: input.serverId, productUserId: input.productUserId });
   return withDb(async (db) => {
     const row = await db.query<{ active: boolean }>(
       `select exists(
@@ -243,7 +243,7 @@ export async function hasActiveSpaceAdminAssignment(input: {
   });
 }
 
-export async function revokeSpaceAdminAssignment(input: {
+export async function revokeSpaceOwnerAssignment(input: {
   actorUserId: string;
   assignmentId: string;
 }): Promise<{ assignedUserId: string; serverId: string; hubId: string } | null> {
@@ -267,7 +267,7 @@ export async function revokeSpaceAdminAssignment(input: {
     }
 
     await insertDelegationAudit({
-      actionType: "space_admin_revoked",
+      actionType: "space_owner_revoked",
       actorUserId: input.actorUserId,
       targetUserId: assignment.assigned_user_id,
       assignmentId: assignment.id,
@@ -326,7 +326,7 @@ export async function transferSpaceOwnership(input: {
     }
 
     await insertDelegationAudit({
-      actionType: "space_admin_transfer_started",
+      actionType: "space_owner_transfer_started",
       actorUserId: input.actorUserId,
       targetUserId: input.newOwnerUserId,
       hubId: existing.hub_id,
@@ -337,7 +337,7 @@ export async function transferSpaceOwnership(input: {
     await db.query("update servers set owner_user_id = $2 where id = $1", [input.serverId, input.newOwnerUserId]);
 
     await insertDelegationAudit({
-      actionType: "space_admin_transfer_completed",
+      actionType: "space_owner_transfer_completed",
       actorUserId: input.actorUserId,
       targetUserId: input.newOwnerUserId,
       hubId: existing.hub_id,

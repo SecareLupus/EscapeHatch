@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { Role } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
-import { expireSpaceAdminAssignments } from "./delegation-service.js";
+import { expireSpaceOwnerAssignments } from "./delegation-service.js";
 
 export type PrivilegedAction =
   | "moderation.kick"
@@ -18,7 +18,7 @@ export type PrivilegedAction =
   | "audit.read";
 
 const permissionMatrix: Record<Role, PrivilegedAction[]> = {
-  hub_operator: [
+  hub_admin: [
     "moderation.kick",
     "moderation.ban",
     "moderation.unban",
@@ -32,7 +32,7 @@ const permissionMatrix: Record<Role, PrivilegedAction[]> = {
     "reports.triage",
     "audit.read"
   ],
-  creator_admin: [
+  space_owner: [
     "moderation.kick",
     "moderation.ban",
     "moderation.unban",
@@ -46,17 +46,16 @@ const permissionMatrix: Record<Role, PrivilegedAction[]> = {
     "reports.triage",
     "audit.read"
   ],
-  creator_moderator: [
+  space_moderator: [
     "moderation.kick",
+    "moderation.ban",
+    "moderation.unban",
     "moderation.timeout",
     "moderation.redact",
-    "channel.lock",
-    "channel.unlock",
-    "channel.slowmode",
     "reports.triage",
     "audit.read"
   ],
-  member: ["voice.token.issue"]
+  user: ["voice.token.issue"]
 };
 
 export interface Scope {
@@ -72,7 +71,8 @@ interface RoleBinding {
   channel_id: string | null;
 }
 
-const MANAGER_ROLES: Role[] = ["hub_operator", "creator_admin"];
+const HUB_MANAGER_ROLES: Role[] = ["hub_admin"];
+const SERVER_MANAGER_ROLES: Role[] = ["hub_admin", "space_owner"];
 
 async function fetchServerScope(
   db: Parameters<Parameters<typeof withDb>[0]>[0],
@@ -92,7 +92,7 @@ async function fetchServerScope(
   };
 }
 
-async function hasActiveSpaceAdminAssignmentInDb(
+async function hasActiveSpaceOwnerAssignmentInDb(
   db: Parameters<Parameters<typeof withDb>[0]>[0],
   input: { productUserId: string; serverId: string }
 ): Promise<boolean> {
@@ -126,19 +126,19 @@ async function getEffectiveRoleBindings(
     const server = await fetchServerScope(db, input.scope.serverId);
     if (server && server.ownerUserId === input.productUserId) {
       effective.push({
-        role: "hub_operator",
+        role: "space_owner",
         hub_id: server.hubId,
         server_id: input.scope.serverId,
         channel_id: null
       });
     } else {
-      const isDelegated = await hasActiveSpaceAdminAssignmentInDb(db, {
+      const isDelegated = await hasActiveSpaceOwnerAssignmentInDb(db, {
         productUserId: input.productUserId,
         serverId: input.scope.serverId
       });
       if (isDelegated && server) {
         effective.push({
-          role: "creator_admin",
+          role: "space_owner",
           hub_id: server.hubId,
           server_id: input.scope.serverId,
           channel_id: null
@@ -287,7 +287,25 @@ async function authorizeRoleGrant(input: {
     };
   }
 
-  await expireSpaceAdminAssignments({
+  if (input.role === "hub_admin" && (scope.serverId || scope.channelId)) {
+    return {
+      allowed: false,
+      code: "role_escalation_denied",
+      message: "Hub Administrator grants must target hub scope only.",
+      scope
+    };
+  }
+
+  if ((input.role === "space_owner" || input.role === "space_moderator") && !scope.serverId) {
+    return {
+      allowed: false,
+      code: "role_escalation_denied",
+      message: "Space Owner and Space Moderator grants must target a server scope.",
+      scope
+    };
+  }
+
+  await expireSpaceOwnerAssignments({
     serverId: scope.serverId || undefined,
     productUserId: input.actorUserId
   });
@@ -298,8 +316,9 @@ async function authorizeRoleGrant(input: {
     })
   );
 
+  const managerRoleSet = scope.serverId ? SERVER_MANAGER_ROLES : HUB_MANAGER_ROLES;
   const managerBindings = actorBindings.filter(
-    (binding) => MANAGER_ROLES.includes(binding.role) && bindingMatchesScope(binding, scope)
+    (binding) => managerRoleSet.includes(binding.role) && bindingMatchesScope(binding, scope)
   );
   if (managerBindings.length < 1) {
     return {
@@ -312,16 +331,16 @@ async function authorizeRoleGrant(input: {
 
   const actorCanAssign = new Set<Role>();
   for (const binding of managerBindings) {
-    if (binding.role === "hub_operator") {
-      actorCanAssign.add("hub_operator");
-      actorCanAssign.add("creator_admin");
-      actorCanAssign.add("creator_moderator");
-      actorCanAssign.add("member");
+    if (binding.role === "hub_admin") {
+      actorCanAssign.add("hub_admin");
+      actorCanAssign.add("space_owner");
+      actorCanAssign.add("space_moderator");
+      actorCanAssign.add("user");
       continue;
     }
-    if (binding.role === "creator_admin") {
-      actorCanAssign.add("creator_moderator");
-      actorCanAssign.add("member");
+    if (binding.role === "space_owner") {
+      actorCanAssign.add("space_moderator");
+      actorCanAssign.add("user");
     }
   }
 
@@ -377,7 +396,7 @@ export async function isActionAllowed(input: {
   action: PrivilegedAction;
   scope: Scope;
 }): Promise<boolean> {
-  await expireSpaceAdminAssignments({
+  await expireSpaceOwnerAssignments({
     serverId: input.scope.serverId,
     productUserId: input.productUserId
   });
@@ -395,7 +414,7 @@ export async function listAllowedActions(input: {
   productUserId: string;
   scope: Scope;
 }): Promise<PrivilegedAction[]> {
-  await expireSpaceAdminAssignments({
+  await expireSpaceOwnerAssignments({
     serverId: input.scope.serverId,
     productUserId: input.productUserId
   });
@@ -486,7 +505,7 @@ export async function canManageHub(input: {
 
     return rows.rows.some(
       (binding) =>
-        MANAGER_ROLES.includes(binding.role) &&
+        HUB_MANAGER_ROLES.includes(binding.role) &&
         bindingMatchesScope(binding, {
           hubId: input.hubId
         })
@@ -498,7 +517,7 @@ export async function canManageServer(input: {
   productUserId: string;
   serverId: string;
 }): Promise<boolean> {
-  await expireSpaceAdminAssignments({
+  await expireSpaceOwnerAssignments({
     serverId: input.serverId,
     productUserId: input.productUserId
   });
@@ -510,7 +529,7 @@ export async function canManageServer(input: {
     if (serverRow.ownerUserId === input.productUserId) {
       return true;
     }
-    const isDelegated = await hasActiveSpaceAdminAssignmentInDb(db, {
+    const isDelegated = await hasActiveSpaceOwnerAssignmentInDb(db, {
       productUserId: input.productUserId,
       serverId: input.serverId
     });
@@ -528,7 +547,7 @@ export async function canManageServer(input: {
 
     return rows.some(
       (binding) =>
-        MANAGER_ROLES.includes(binding.role) &&
+        SERVER_MANAGER_ROLES.includes(binding.role) &&
         bindingMatchesScope(binding, {
           hubId: serverRow.hubId,
           serverId: input.serverId

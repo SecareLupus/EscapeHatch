@@ -85,9 +85,9 @@ export async function bootstrapAdmin(input: {
 
       const defaultServerId = randomId("srv");
       await db.query(
-        `insert into servers (id, hub_id, name, matrix_space_id, created_by_user_id)
-         values ($1, $2, $3, null, $4)`,
-        [defaultServerId, hubId, "General Server", input.productUserId]
+        `insert into servers (id, hub_id, name, matrix_space_id, created_by_user_id, owner_user_id)
+         values ($1, $2, $3, null, $4, $5)`,
+        [defaultServerId, hubId, "General Server", input.productUserId, input.productUserId]
       );
 
       const defaultChannelId = randomId("chn");
@@ -100,7 +100,7 @@ export async function bootstrapAdmin(input: {
 
       await db.query(
         `insert into role_bindings (id, product_user_id, role, hub_id, server_id, channel_id)
-         values ($1, $2, 'hub_operator', $3, null, null)`,
+         values ($1, $2, 'hub_admin', $3, null, null)`,
         [randomId("rb"), input.productUserId, hubId]
       );
 

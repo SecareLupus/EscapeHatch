@@ -282,5 +282,54 @@ export async function initDb(): Promise<void> {
     alter table platform_settings add column if not exists default_channel_id text;
     alter table servers add column if not exists owner_user_id text;
     update servers set owner_user_id = created_by_user_id where owner_user_id is null;
+    update role_bindings
+    set role = case role
+      when 'hub_operator' then 'hub_admin'
+      when 'creator_admin' then 'space_owner'
+      when 'creator_moderator' then 'space_moderator'
+      when 'member' then 'user'
+      else role
+    end
+    where role in ('hub_operator', 'creator_admin', 'creator_moderator', 'member');
+    update role_assignment_audit_logs
+    set role = case role
+      when 'hub_operator' then 'hub_admin'
+      when 'creator_admin' then 'space_owner'
+      when 'creator_moderator' then 'space_moderator'
+      when 'member' then 'user'
+      else role
+    end
+    where role in ('hub_operator', 'creator_admin', 'creator_moderator', 'member');
+    update channels
+    set posting_restricted_to_roles = (
+      select coalesce(
+        array_agg(
+          case role_name
+            when 'hub_operator' then 'hub_admin'
+            when 'creator_admin' then 'space_owner'
+            when 'creator_moderator' then 'space_moderator'
+            when 'member' then 'user'
+            else role_name
+          end
+        ),
+        '{}'::text[]
+      )
+      from unnest(posting_restricted_to_roles) as role_name
+    )
+    where posting_restricted_to_roles && array['hub_operator', 'creator_admin', 'creator_moderator', 'member']::text[];
+    update delegation_audit_events
+    set action_type = case action_type
+      when 'space_admin_assigned' then 'space_owner_assigned'
+      when 'space_admin_revoked' then 'space_owner_revoked'
+      when 'space_admin_transfer_started' then 'space_owner_transfer_started'
+      when 'space_admin_transfer_completed' then 'space_owner_transfer_completed'
+      else action_type
+    end
+    where action_type in (
+      'space_admin_assigned',
+      'space_admin_revoked',
+      'space_admin_transfer_started',
+      'space_admin_transfer_completed'
+    );
   `);
 }

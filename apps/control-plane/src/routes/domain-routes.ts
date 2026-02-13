@@ -69,12 +69,12 @@ import {
   upsertDiscordChannelMapping
 } from "../services/discord-bridge-service.js";
 import {
-  assignSpaceAdmin,
-  expireSpaceAdminAssignments,
-  hasActiveSpaceAdminAssignment,
+  assignSpaceOwner,
+  expireSpaceOwnerAssignments,
+  hasActiveSpaceOwnerAssignment,
   listDelegationAuditEvents,
-  listSpaceAdminAssignments,
-  revokeSpaceAdminAssignment,
+  listSpaceOwnerAssignments,
+  revokeSpaceOwnerAssignment,
   transferSpaceOwnership
 } from "../services/delegation-service.js";
 
@@ -557,7 +557,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const payload = z
       .object({
         productUserId: z.string().min(1),
-        role: z.enum(["hub_operator", "creator_admin", "creator_moderator", "member"]),
+        role: z.enum(["hub_admin", "space_owner", "space_moderator", "user"]),
         hubId: z.string().optional(),
         serverId: z.string().optional(),
         channelId: z.string().optional()
@@ -571,7 +571,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     reply.code(204).send();
   });
 
-  app.post("/v1/servers/:serverId/delegation/space-admins", initializedAuthHandlers, async (request, reply) => {
+  app.post("/v1/servers/:serverId/delegation/space-owners", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
     const payload = z
       .object({
@@ -592,7 +592,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       return;
     }
 
-    const assignment = await assignSpaceAdmin({
+    const assignment = await assignSpaceOwner({
       actorUserId: request.auth!.productUserId,
       assignedUserId: payload.productUserId,
       serverId: params.serverId,
@@ -603,9 +603,9 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     return assignment;
   });
 
-  app.get("/v1/servers/:serverId/delegation/space-admins", initializedAuthHandlers, async (request, reply) => {
+  app.get("/v1/servers/:serverId/delegation/space-owners", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
-    await expireSpaceAdminAssignments({ serverId: params.serverId });
+    await expireSpaceOwnerAssignments({ serverId: params.serverId });
     const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
       serverId: params.serverId
@@ -618,11 +618,11 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       return;
     }
     return {
-      items: await listSpaceAdminAssignments(params.serverId)
+      items: await listSpaceOwnerAssignments(params.serverId)
     };
   });
 
-  app.delete("/v1/delegation/space-admins/:assignmentId", initializedAuthHandlers, async (request, reply) => {
+  app.delete("/v1/delegation/space-owners/:assignmentId", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ assignmentId: z.string().min(1) }).parse(request.params);
     const query = z.object({ serverId: z.string().min(1) }).parse(request.query);
 
@@ -638,7 +638,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       return;
     }
 
-    await revokeSpaceAdminAssignment({
+    await revokeSpaceOwnerAssignment({
       actorUserId: request.auth!.productUserId,
       assignmentId: params.assignmentId
     });
@@ -679,8 +679,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       newOwnerUserId: payload.newOwnerUserId
     });
 
-    if (!(await hasActiveSpaceAdminAssignment({ productUserId: payload.newOwnerUserId, serverId: params.serverId }))) {
-      await assignSpaceAdmin({
+    if (!(await hasActiveSpaceOwnerAssignment({ productUserId: payload.newOwnerUserId, serverId: params.serverId }))) {
+      await assignSpaceOwner({
         actorUserId: request.auth!.productUserId,
         assignedUserId: payload.newOwnerUserId,
         serverId: params.serverId
@@ -766,7 +766,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         lock: z.boolean().optional(),
         slowModeSeconds: z.number().int().min(0).max(600).optional(),
         postingRestrictedToRoles: z
-          .array(z.enum(["hub_operator", "creator_admin", "creator_moderator", "member"]))
+          .array(z.enum(["hub_admin", "space_owner", "space_moderator", "user"]))
           .optional(),
         reason: z.string().min(3)
       })

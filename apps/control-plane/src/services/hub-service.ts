@@ -1,7 +1,7 @@
 import type { Hub, Role } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
 
-const MANAGER_ROLES: Role[] = ["hub_operator", "creator_admin"];
+const MANAGER_ROLES: Role[] = ["hub_admin", "space_owner"];
 
 export async function listHubsForUser(productUserId: string): Promise<Hub[]> {
   return withDb(async (db) => {
