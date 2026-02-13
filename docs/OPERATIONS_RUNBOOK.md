@@ -32,6 +32,7 @@
 ## Discord Bridge Operations
 - Use mock mode (`DISCORD_BRIDGE_MOCK=true`) for local validation.
 - In production, disable mock mode and provide OAuth credentials.
+- Production OAuth path validates Discord user identity (`/users/@me`) and requires guild owner/admin/manage-server permissions before guild selection is allowed.
 - After guild connect or mapping updates, run bridge sync retry.
 
 ## Load/Concurrency Validation

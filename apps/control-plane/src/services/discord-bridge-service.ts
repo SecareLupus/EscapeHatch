@@ -31,6 +31,33 @@ const pendingGuildSelections = new Map<
   }
 >();
 
+const DISCORD_PERMISSIONS = {
+  ADMINISTRATOR: BigInt(8),
+  MANAGE_GUILD: BigInt(32)
+} as const;
+
+function hasDiscordGuildManagePermissions(input: {
+  owner?: boolean;
+  permissions?: string;
+}): boolean {
+  if (input.owner) {
+    return true;
+  }
+  if (!input.permissions) {
+    return false;
+  }
+  let perms: bigint;
+  try {
+    perms = BigInt(input.permissions);
+  } catch {
+    return false;
+  }
+  return (
+    (perms & DISCORD_PERMISSIONS.ADMINISTRATOR) === DISCORD_PERMISSIONS.ADMINISTRATOR ||
+    (perms & DISCORD_PERMISSIONS.MANAGE_GUILD) === DISCORD_PERMISSIONS.MANAGE_GUILD
+  );
+}
+
 function cleanExpiredState(): void {
   const now = Date.now();
   for (const [key, value] of oauthStateStore.entries()) {
@@ -167,6 +194,19 @@ async function exchangeDiscordOAuthCode(code: string): Promise<{
     refresh_token?: string;
     expires_in?: number;
   };
+  const userInfoResponse = await fetch(config.discordBridge.userInfoUrl, {
+    headers: {
+      Authorization: `Bearer ${token.access_token}`
+    }
+  });
+  if (!userInfoResponse.ok) {
+    throw new Error(`Discord user profile request failed (${userInfoResponse.status}).`);
+  }
+  const userInfo = (await userInfoResponse.json()) as {
+    id: string;
+    username: string;
+    global_name?: string;
+  };
   const guildsResponse = await fetch(config.discordBridge.userGuildsUrl, {
     headers: {
       Authorization: `Bearer ${token.access_token}`
@@ -175,16 +215,32 @@ async function exchangeDiscordOAuthCode(code: string): Promise<{
   if (!guildsResponse.ok) {
     throw new Error(`Discord guild listing failed (${guildsResponse.status}).`);
   }
-  const guilds = (await guildsResponse.json()) as Array<{ id: string; name: string }>;
+  const guilds = (await guildsResponse.json()) as Array<{
+    id: string;
+    name: string;
+    owner?: boolean;
+    permissions?: string;
+  }>;
+  const manageableGuilds = guilds.filter((guild) =>
+    hasDiscordGuildManagePermissions({
+      owner: guild.owner,
+      permissions: guild.permissions
+    })
+  );
+  if (manageableGuilds.length < 1) {
+    throw new Error(
+      "No guilds found where the authenticated Discord account has owner/admin/manage-server permissions."
+    );
+  }
   const expiresAt = token.expires_in ? new Date(Date.now() + token.expires_in * 1000).toISOString() : null;
 
   return {
     accessToken: token.access_token,
     refreshToken: token.refresh_token ?? null,
     expiresAt,
-    discordUserId: null,
-    discordUsername: null,
-    guilds: guilds.map((guild) => ({ id: guild.id, name: guild.name }))
+    discordUserId: userInfo.id,
+    discordUsername: userInfo.global_name ?? userInfo.username,
+    guilds: manageableGuilds.map((guild) => ({ id: guild.id, name: guild.name }))
   };
 }
 

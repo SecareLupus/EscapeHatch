@@ -37,6 +37,7 @@ export const config = {
     clientSecret: process.env.DISCORD_BRIDGE_CLIENT_SECRET,
     authorizeUrl: process.env.DISCORD_BRIDGE_AUTHORIZE_URL ?? "https://discord.com/api/oauth2/authorize",
     tokenUrl: process.env.DISCORD_BRIDGE_TOKEN_URL ?? "https://discord.com/api/oauth2/token",
+    userInfoUrl: process.env.DISCORD_BRIDGE_USERINFO_URL ?? "https://discord.com/api/users/@me",
     userGuildsUrl: process.env.DISCORD_BRIDGE_USER_GUILDS_URL ?? "https://discord.com/api/users/@me/guilds",
     callbackUrl: process.env.DISCORD_BRIDGE_CALLBACK_URL ?? "http://localhost:4000/v1/discord/oauth/callback",
     mockMode: process.env.DISCORD_BRIDGE_MOCK !== "false"
