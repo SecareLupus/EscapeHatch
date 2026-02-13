@@ -11,9 +11,30 @@ import {
   transitionReportStatus
 } from "../services/moderation-service.js";
 import { issueVoiceToken } from "../services/voice-service.js";
-import { grantRole } from "../services/policy-service.js";
-import { createMessage, listChannels, listMessages, listServers } from "../services/chat-service.js";
+import {
+  canManageHub,
+  canManageServer,
+  grantRole,
+  listAllowedActions,
+  listRoleBindings
+} from "../services/policy-service.js";
+import {
+  createCategory,
+  createMessage,
+  deleteChannel,
+  deleteServer,
+  listCategories,
+  listChannels,
+  listMessages,
+  listServers,
+  moveChannelToCategory,
+  renameCategory,
+  renameChannel,
+  renameServer
+} from "../services/chat-service.js";
 import { getBootstrapStatus } from "../services/bootstrap-service.js";
+import { publishChannelMessage, subscribeToChannelMessages } from "../services/chat-realtime.js";
+import { listHubsForUser } from "../services/hub-service.js";
 
 export async function registerDomainRoutes(app: FastifyInstance): Promise<void> {
   const initializedAuthHandlers = { preHandler: [requireInitialized, requireAuth] };
@@ -33,6 +54,15 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         name: z.string().min(2).max(80)
       })
       .parse(request.body);
+
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: payload.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
 
     const idempotencyKey = request.headers["idempotency-key"];
     const server = await createServerWorkflow({
@@ -58,6 +88,10 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     return { items: await listServers() };
   });
 
+  app.get("/v1/hubs", initializedAuthHandlers, async (request) => {
+    return { items: await listHubsForUser(request.auth!.productUserId) };
+  });
+
   app.post("/v1/channels", initializedAuthHandlers, async (request, reply) => {
     const payload = z
       .object({
@@ -67,6 +101,15 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         type: z.enum(["text", "voice", "announcement"])
       })
       .parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: payload.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
 
     const idempotencyKey = request.headers["idempotency-key"];
     const channel = await createChannelWorkflow({
@@ -81,6 +124,60 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
   app.get("/v1/servers/:serverId/channels", initializedAuthHandlers, async (request) => {
     const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
     return { items: await listChannels(params.serverId) };
+  });
+
+  app.get("/v1/servers/:serverId/categories", initializedAuthHandlers, async (request) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    return { items: await listCategories(params.serverId) };
+  });
+
+  app.patch("/v1/servers/:serverId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({ name: z.string().min(2).max(80) }).parse(request.body);
+
+    const serverRows = await listServers();
+    const server = serverRows.find((item) => item.id === params.serverId);
+    if (!server) {
+      reply.code(404).send({ message: "Server not found." });
+      return;
+    }
+
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: server.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+
+    return renameServer({
+      serverId: params.serverId,
+      name: payload.name
+    });
+  });
+
+  app.delete("/v1/servers/:serverId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+
+    const serverRows = await listServers();
+    const server = serverRows.find((item) => item.id === params.serverId);
+    if (!server) {
+      reply.code(404).send({ message: "Server not found." });
+      return;
+    }
+
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: server.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+
+    await deleteServer(params.serverId);
+    reply.code(204).send();
   });
 
   app.get("/v1/channels/:channelId/messages", initializedAuthHandlers, async (request) => {
@@ -114,9 +211,195 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       actorUserId: request.auth!.productUserId,
       content: payload.content
     });
+    publishChannelMessage(message);
 
     reply.code(201);
     return message;
+  });
+
+  app.post("/v1/categories", initializedAuthHandlers, async (request, reply) => {
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        name: z.string().min(2).max(80)
+      })
+      .parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: payload.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    const category = await createCategory(payload);
+    reply.code(201);
+    return category;
+  });
+
+  app.patch("/v1/categories/:categoryId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ categoryId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        name: z.string().min(2).max(80)
+      })
+      .parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: payload.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    try {
+      return await renameCategory({
+        categoryId: params.categoryId,
+        serverId: payload.serverId,
+        name: payload.name
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Category not found.") {
+        reply.code(404).send({ message: error.message });
+        return;
+      }
+      throw error;
+    }
+  });
+
+  app.patch("/v1/channels/:channelId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        name: z.string().min(2).max(80)
+      })
+      .parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: payload.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    const channels = await listChannels(payload.serverId);
+    const existing = channels.find((channel) => channel.id === params.channelId);
+    if (!existing) {
+      reply.code(404).send({ message: "Channel not found." });
+      return;
+    }
+
+    return renameChannel({
+      channelId: params.channelId,
+      serverId: payload.serverId,
+      name: payload.name
+    });
+  });
+
+  app.patch("/v1/channels/:channelId/category", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        categoryId: z.string().min(1).nullable()
+      })
+      .parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: payload.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    try {
+      return await moveChannelToCategory({
+        channelId: params.channelId,
+        serverId: payload.serverId,
+        categoryId: payload.categoryId
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message === "Category not found for server." || error.message === "Channel not found.")
+      ) {
+        reply.code(404).send({ message: error.message });
+        return;
+      }
+      throw error;
+    }
+  });
+
+  app.delete("/v1/channels/:channelId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const query = z.object({ serverId: z.string().min(1) }).parse(request.query);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: query.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    const channels = await listChannels(query.serverId);
+    const existing = channels.find((channel) => channel.id === params.channelId);
+    if (!existing) {
+      reply.code(404).send({ message: "Channel not found." });
+      return;
+    }
+
+    await deleteChannel({
+      channelId: params.channelId,
+      serverId: query.serverId
+    });
+    reply.code(204).send();
+  });
+
+  app.get("/v1/channels/:channelId/stream", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive"
+    });
+
+    const writeEvent = (event: string, payload: unknown) => {
+      reply.raw.write(`event: ${event}\n`);
+      reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    writeEvent("ready", {
+      channelId: params.channelId,
+      connectedAt: new Date().toISOString()
+    });
+
+    const unsubscribe = subscribeToChannelMessages(params.channelId, (message) => {
+      writeEvent("message.created", message);
+    });
+
+    const keepAliveTimer = setInterval(() => {
+      writeEvent("ping", { at: Date.now() });
+    }, 25000);
+
+    request.raw.on("close", () => {
+      clearInterval(keepAliveTimer);
+      unsubscribe();
+      reply.raw.end();
+    });
   });
 
   app.post("/v1/roles/grant", initializedAuthHandlers, async (request, reply) => {
@@ -132,6 +415,33 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
     await grantRole(payload);
     reply.code(204).send();
+  });
+
+  app.get("/v1/me/roles", initializedAuthHandlers, async (request) => {
+    return {
+      items: await listRoleBindings({
+        productUserId: request.auth!.productUserId
+      })
+    };
+  });
+
+  app.get("/v1/permissions", initializedAuthHandlers, async (request) => {
+    const query = z
+      .object({
+        serverId: z.string().min(1),
+        channelId: z.string().min(1).optional()
+      })
+      .parse(request.query);
+
+    return {
+      items: await listAllowedActions({
+        productUserId: request.auth!.productUserId,
+        scope: {
+          serverId: query.serverId,
+          channelId: query.channelId
+        }
+      })
+    };
   });
 
   app.post("/v1/moderation/actions", initializedAuthHandlers, async (request, reply) => {

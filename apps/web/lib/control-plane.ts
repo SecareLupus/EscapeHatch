@@ -1,4 +1,4 @@
-import type { Channel, ChatMessage, Server } from "@escapehatch/shared";
+import type { Category, Channel, ChannelType, ChatMessage, Hub, Server } from "@escapehatch/shared";
 
 export const controlPlaneBaseUrl =
   process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:4000";
@@ -34,6 +34,27 @@ export interface AuthProvidersResponse {
   primaryProvider: string;
   providers: AuthProviderDescriptor[];
 }
+
+export interface ViewerRoleBinding {
+  role: "hub_operator" | "creator_admin" | "creator_moderator" | "member";
+  hubId: string | null;
+  serverId: string | null;
+  channelId: string | null;
+}
+
+export type PrivilegedAction =
+  | "moderation.kick"
+  | "moderation.ban"
+  | "moderation.unban"
+  | "moderation.timeout"
+  | "moderation.redact"
+  | "channel.lock"
+  | "channel.unlock"
+  | "channel.slowmode"
+  | "channel.posting"
+  | "voice.token.issue"
+  | "reports.triage"
+  | "audit.read";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${controlPlaneBaseUrl}${path}`, {
@@ -111,8 +132,25 @@ export async function listServers(): Promise<Server[]> {
   return json.items;
 }
 
+export async function listHubs(): Promise<Hub[]> {
+  const json = await apiFetch<{ items: Hub[] }>("/v1/hubs");
+  return json.items;
+}
+
+export async function listViewerRoleBindings(): Promise<ViewerRoleBinding[]> {
+  const json = await apiFetch<{ items: ViewerRoleBinding[] }>("/v1/me/roles");
+  return json.items;
+}
+
 export async function listChannels(serverId: string): Promise<Channel[]> {
   const json = await apiFetch<{ items: Channel[] }>(`/v1/servers/${encodeURIComponent(serverId)}/channels`);
+  return json.items;
+}
+
+export async function listCategories(serverId: string): Promise<Category[]> {
+  const json = await apiFetch<{ items: Category[] }>(
+    `/v1/servers/${encodeURIComponent(serverId)}/categories`
+  );
   return json.items;
 }
 
@@ -129,6 +167,162 @@ export async function sendMessage(channelId: string, content: string): Promise<C
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content })
   });
+}
+
+export async function createServer(input: { hubId: string; name: string }): Promise<Server> {
+  return apiFetch<Server>("/v1/servers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function createChannel(input: {
+  serverId: string;
+  name: string;
+  type: ChannelType;
+  categoryId?: string;
+}): Promise<Channel> {
+  return apiFetch<Channel>("/v1/channels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function createCategory(input: {
+  serverId: string;
+  name: string;
+}): Promise<Category> {
+  return apiFetch<Category>("/v1/categories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function renameCategory(input: {
+  categoryId: string;
+  serverId: string;
+  name: string;
+}): Promise<Category> {
+  return apiFetch<Category>(`/v1/categories/${encodeURIComponent(input.categoryId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      serverId: input.serverId,
+      name: input.name
+    })
+  });
+}
+
+export async function moveChannelCategory(input: {
+  channelId: string;
+  serverId: string;
+  categoryId: string | null;
+}): Promise<Channel> {
+  return apiFetch<Channel>(`/v1/channels/${encodeURIComponent(input.channelId)}/category`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      serverId: input.serverId,
+      categoryId: input.categoryId
+    })
+  });
+}
+
+export async function renameServer(input: { serverId: string; name: string }): Promise<Server> {
+  return apiFetch<Server>(`/v1/servers/${encodeURIComponent(input.serverId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: input.name })
+  });
+}
+
+export async function deleteServer(serverId: string): Promise<void> {
+  await apiFetch(`/v1/servers/${encodeURIComponent(serverId)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function renameChannel(input: {
+  channelId: string;
+  serverId: string;
+  name: string;
+}): Promise<Channel> {
+  return apiFetch<Channel>(`/v1/channels/${encodeURIComponent(input.channelId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      serverId: input.serverId,
+      name: input.name
+    })
+  });
+}
+
+export async function deleteChannel(input: { channelId: string; serverId: string }): Promise<void> {
+  const query = new URLSearchParams({ serverId: input.serverId });
+  await apiFetch(`/v1/channels/${encodeURIComponent(input.channelId)}?${query.toString()}`, {
+    method: "DELETE"
+  });
+}
+
+export async function fetchAllowedActions(serverId: string, channelId?: string): Promise<PrivilegedAction[]> {
+  const query = new URLSearchParams({ serverId });
+  if (channelId) {
+    query.set("channelId", channelId);
+  }
+
+  const json = await apiFetch<{ items: PrivilegedAction[] }>(`/v1/permissions?${query.toString()}`);
+  return json.items;
+}
+
+export async function updateChannelControls(input: {
+  channelId: string;
+  serverId: string;
+  reason: string;
+  lock?: boolean;
+  slowModeSeconds?: number;
+}): Promise<void> {
+  await apiFetch(`/v1/channels/${encodeURIComponent(input.channelId)}/controls`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      serverId: input.serverId,
+      reason: input.reason,
+      ...(typeof input.lock === "boolean" ? { lock: input.lock } : {}),
+      ...(typeof input.slowModeSeconds === "number" ? { slowModeSeconds: input.slowModeSeconds } : {})
+    })
+  });
+}
+
+export function connectMessageStream(
+  channelId: string,
+  handlers: {
+    onOpen?: () => void;
+    onError?: () => void;
+    onMessageCreated: (message: ChatMessage) => void;
+  }
+): () => void {
+  const streamUrl = `${controlPlaneBaseUrl}/v1/channels/${encodeURIComponent(channelId)}/stream`;
+  const source = new EventSource(streamUrl, { withCredentials: true });
+
+  source.onopen = () => {
+    handlers.onOpen?.();
+  };
+
+  source.onerror = () => {
+    handlers.onError?.();
+  };
+
+  source.addEventListener("message.created", (event) => {
+    const payload = JSON.parse((event as MessageEvent<string>).data) as ChatMessage;
+    handlers.onMessageCreated(payload);
+  });
+
+  return () => {
+    source.close();
+  };
 }
 
 export function providerLoginUrl(provider: string, username?: string): string {

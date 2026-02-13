@@ -20,6 +20,7 @@ export const config = {
   },
   synapse: {
     baseUrl: process.env.SYNAPSE_BASE_URL,
-    accessToken: process.env.SYNAPSE_ACCESS_TOKEN
+    accessToken: process.env.SYNAPSE_ACCESS_TOKEN,
+    strictProvisioning: process.env.SYNAPSE_STRICT_PROVISIONING === "true"
   }
 };

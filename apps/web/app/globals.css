@@ -52,6 +52,33 @@ body {
   align-items: center;
 }
 
+.status-pill {
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.status-pill[data-state="live"] {
+  background: #d4efdf;
+  border-color: #83b79a;
+  color: #114d36;
+}
+
+.status-pill[data-state="polling"] {
+  background: #ffeac2;
+  border-color: #d6b066;
+  color: #614411;
+}
+
+.status-pill[data-state="disconnected"] {
+  background: #ffe4e4;
+  border-color: #e6a5a5;
+  color: #7a2121;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -68,6 +95,44 @@ body {
   padding: 0.75rem;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 17, 13, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+  padding: 1rem;
+}
+
+.modal-panel {
+  width: min(1100px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  padding: 1rem;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.modal-header h2 {
+  margin: 0;
+}
+
+.modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
 .stack {
   display: grid;
   gap: 0.5rem;
@@ -82,6 +147,15 @@ input {
   border: 1px solid var(--border);
   border-radius: 0.6rem;
   padding: 0.65rem 0.8rem;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+}
+
+select {
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.7rem;
   font: inherit;
   color: inherit;
   background: #fff;
@@ -124,7 +198,7 @@ button:disabled {
 
 .chat-shell {
   display: grid;
-  grid-template-columns: 230px 250px minmax(0, 1fr);
+  grid-template-columns: 220px 240px minmax(0, 1fr) 260px;
   gap: 1rem;
 }
 
@@ -137,6 +211,22 @@ button:disabled {
   gap: 0.35rem;
 }
 
+.category-heading {
+  margin: 0.35rem 0 0.2rem;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.nested-channel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
 .list-item {
   width: 100%;
   text-align: left;
@@ -144,6 +234,10 @@ button:disabled {
   color: var(--text);
   border: 1px solid transparent;
   padding: 0.6rem 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .list-item:hover {
@@ -162,8 +256,72 @@ button:disabled {
   gap: 0.75rem;
 }
 
+.unread-pill {
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #d74343;
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1.2rem;
+  text-align: center;
+}
+
 .timeline h2 {
   margin: 0;
+}
+
+.channel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid #eadbc4;
+  padding-bottom: 0.65rem;
+}
+
+.channel-header p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.channel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.channel-badge {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.channel-controls {
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  padding: 0.75rem;
+  background: #fff7ea;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.controls-form label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .messages {
@@ -204,10 +362,160 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+.date-divider {
+  position: relative;
+  text-align: center;
+  margin: 0.2rem 0 0.35rem;
+}
+
+.date-divider::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid #eadbc4;
+}
+
+.date-divider span {
+  position: relative;
+  padding: 0 0.45rem;
+  background: #fff;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.message-meta {
+  display: inline-block;
+  margin-top: 0.3rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.message-meta-error {
+  color: #8f1e1e;
+}
+
+.inline-action {
+  margin-left: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.75rem;
+  background: #fff2f2;
+  color: #7d1f1f;
+}
+
+.inline-action:hover {
+  background: #ffe1e1;
+}
+
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.55rem;
+}
+
+.jump-latest {
+  display: flex;
+  justify-content: center;
+  margin-top: -0.2rem;
+}
+
+.jump-latest button {
+  background: #2f4b8f;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.jump-latest button:hover {
+  background: #20396f;
+}
+
+.composer textarea {
+  min-height: 44px;
+  max-height: 180px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.8rem;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+}
+
+.composer-actions {
+  display: grid;
+  gap: 0.4rem;
+  align-content: end;
+  justify-items: end;
+}
+
+.char-count {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.context {
+  align-self: start;
+  position: sticky;
+  top: 1rem;
+}
+
+.context h2 {
+  margin-top: 0;
+}
+
+.context h3 {
+  margin: 0.75rem 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.context-line {
+  margin: 0.4rem 0;
+  color: var(--text-muted);
+}
+
+.manager-form {
+  margin-top: 0.65rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #e3cfae;
+}
+
+.manager-form-danger {
+  border-top-color: #e3b3b3;
+}
+
+.manager-form-danger button {
+  background: #9a2b2b;
+}
+
+.manager-form-danger button:hover {
+  background: #7e2020;
+}
+
+.member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.member-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0;
+}
+
+.member-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: #2d9c73;
+  display: inline-block;
 }
 
 .sr-only {
@@ -224,6 +532,10 @@ button:disabled {
 
 @media (max-width: 980px) {
   .chat-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-grid {
     grid-template-columns: 1fr;
   }
 

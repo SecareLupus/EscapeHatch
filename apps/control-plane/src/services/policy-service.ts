@@ -71,6 +71,8 @@ interface RoleBinding {
   channel_id: string | null;
 }
 
+const MANAGER_ROLES: Role[] = ["hub_operator", "creator_admin"];
+
 export function bindingMatchesScope(binding: RoleBinding, scope: Scope): boolean {
   const hubMatches = !binding.hub_id || !scope.hubId || binding.hub_id === scope.hubId;
   const serverMatches = !binding.server_id || !scope.serverId || binding.server_id === scope.serverId;
@@ -119,5 +121,110 @@ export async function isActionAllowed(input: {
     );
 
     return rows.rows.some((binding) => bindingAllowsAction(binding, input.action) && bindingMatchesScope(binding, input.scope));
+  });
+}
+
+export async function listAllowedActions(input: {
+  productUserId: string;
+  scope: Scope;
+}): Promise<PrivilegedAction[]> {
+  return withDb(async (db) => {
+    const rows = await db.query<RoleBinding>(
+      `select role, hub_id, server_id, channel_id
+       from role_bindings
+       where product_user_id = $1`,
+      [input.productUserId]
+    );
+
+    const actions = new Set<PrivilegedAction>();
+    for (const binding of rows.rows) {
+      if (!bindingMatchesScope(binding, input.scope)) {
+        continue;
+      }
+
+      for (const action of permissionMatrix[binding.role]) {
+        actions.add(action);
+      }
+    }
+
+    return [...actions];
+  });
+}
+
+export async function listRoleBindings(input: { productUserId: string }): Promise<
+  Array<{
+    role: Role;
+    hubId: string | null;
+    serverId: string | null;
+    channelId: string | null;
+  }>
+> {
+  return withDb(async (db) => {
+    const rows = await db.query<RoleBinding>(
+      `select role, hub_id, server_id, channel_id
+       from role_bindings
+       where product_user_id = $1`,
+      [input.productUserId]
+    );
+
+    return rows.rows.map((row) => ({
+      role: row.role,
+      hubId: row.hub_id,
+      serverId: row.server_id,
+      channelId: row.channel_id
+    }));
+  });
+}
+
+export async function canManageHub(input: {
+  productUserId: string;
+  hubId: string;
+}): Promise<boolean> {
+  return withDb(async (db) => {
+    const rows = await db.query<RoleBinding>(
+      `select role, hub_id, server_id, channel_id
+       from role_bindings
+       where product_user_id = $1`,
+      [input.productUserId]
+    );
+
+    return rows.rows.some(
+      (binding) =>
+        MANAGER_ROLES.includes(binding.role) &&
+        bindingMatchesScope(binding, {
+          hubId: input.hubId
+        })
+    );
+  });
+}
+
+export async function canManageServer(input: {
+  productUserId: string;
+  serverId: string;
+}): Promise<boolean> {
+  return withDb(async (db) => {
+    const server = await db.query<{ hub_id: string }>("select hub_id from servers where id = $1 limit 1", [
+      input.serverId
+    ]);
+    const serverRow = server.rows[0];
+    if (!serverRow) {
+      return false;
+    }
+
+    const rows = await db.query<RoleBinding>(
+      `select role, hub_id, server_id, channel_id
+       from role_bindings
+       where product_user_id = $1`,
+      [input.productUserId]
+    );
+
+    return rows.rows.some(
+      (binding) =>
+        MANAGER_ROLES.includes(binding.role) &&
+        bindingMatchesScope(binding, {
+          hubId: serverRow.hub_id,
+          serverId: input.serverId
+        })
+    );
   });
 }

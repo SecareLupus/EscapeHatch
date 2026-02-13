@@ -15,17 +15,34 @@ async function synapseRequest<T>(path: string, body: Record<string, unknown>): P
     return null;
   }
 
-  const response = await fetch(`${config.synapse.baseUrl}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.synapse.accessToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${config.synapse.baseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.synapse.accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    const message = `Synapse request network failure: ${
+      error instanceof Error ? error.message : "unknown error"
+    }`;
+    if (config.synapse.strictProvisioning) {
+      throw new Error(message);
+    }
+    console.warn(`${message}; continuing without Synapse provisioning.`);
+    return null;
+  }
 
   if (!response.ok) {
-    throw new Error(`Synapse request failed: ${response.status}`);
+    const message = `Synapse request failed: ${response.status}`;
+    if (config.synapse.strictProvisioning) {
+      throw new Error(message);
+    }
+    console.warn(`${message}; continuing without Synapse provisioning.`);
+    return null;
   }
 
   return (await response.json()) as T;
@@ -81,21 +98,37 @@ export async function attachChildRoom(spaceId: string, childRoomId: string): Pro
     return;
   }
 
-  const response = await fetch(
-    `${config.synapse.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(
-      spaceId
-    )}/state/m.space.child/${encodeURIComponent(childRoomId)}`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${config.synapse.accessToken}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ via: [new URL(config.synapse.baseUrl).hostname] })
+  let response: Response;
+  try {
+    response = await fetch(
+      `${config.synapse.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(
+        spaceId
+      )}/state/m.space.child/${encodeURIComponent(childRoomId)}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${config.synapse.accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ via: [new URL(config.synapse.baseUrl).hostname] })
+      }
+    );
+  } catch (error) {
+    const message = `Synapse linkage network failure: ${
+      error instanceof Error ? error.message : "unknown error"
+    }`;
+    if (config.synapse.strictProvisioning) {
+      throw new Error(message);
     }
-  );
+    console.warn(`${message}; continuing without Synapse linkage.`);
+    return;
+  }
 
   if (!response.ok) {
-    throw new Error(`Failed to attach child room to space (${response.status})`);
+    const message = `Failed to attach child room to space (${response.status})`;
+    if (config.synapse.strictProvisioning) {
+      throw new Error(message);
+    }
+    console.warn(`${message}; continuing without Synapse linkage.`);
   }
 }
