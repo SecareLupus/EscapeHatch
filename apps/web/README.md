@@ -3,13 +3,14 @@
 ## Ownership boundary
 - Hosted product shell and UX for creator co-op collaboration.
 - Presents auth entrypoints and viewer session state from control-plane.
-- Remains free of privileged direct Synapse admin operations.
+- Provides accessible local chat experience for bootstrap + messaging validation.
 
 ## Extension points
-- `app/`: route-level composition and data loading.
-- `components/`: Discord-like shell, future timeline/moderation widgets.
+- `app/`: route-level composition.
+- `components/chat-client.tsx`: interactive auth/bootstrap/chat UI state machine.
 - `lib/`: control-plane API client helpers and typed DTO adapters.
 
-## Milestone alignment
-- Milestone 0: social-login-first UX (`Sign in with Discord`).
-- Milestone 1: consume server/channel domain APIs when channel management UI lands.
+## Current local UX
+- Sign in with dev login (or configured OAuth provider).
+- Complete one-time admin bootstrap.
+- Browse servers/channels and exchange persisted messages.

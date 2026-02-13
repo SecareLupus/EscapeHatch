@@ -121,6 +121,15 @@ export interface VoiceTokenGrant {
   expiresAt: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  authorUserId: string;
+  authorDisplayName: string;
+  content: string;
+  createdAt: string;
+}
+
 export const DEFAULT_SERVER_BLUEPRINT: ServerBlueprint = {
   serverName: "New Creator Server",
   defaultChannels: [

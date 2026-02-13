@@ -116,10 +116,34 @@ export async function initDb(): Promise<void> {
       updated_at timestamptz not null default now()
     );
 
+    create table if not exists chat_messages (
+      id text primary key,
+      channel_id text not null references channels(id) on delete cascade,
+      author_user_id text not null,
+      author_display_name text not null,
+      content text not null,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists platform_settings (
+      id text primary key,
+      bootstrap_completed_at timestamptz,
+      bootstrap_admin_user_id text,
+      bootstrap_hub_id text,
+      default_server_id text,
+      default_channel_id text
+    );
+
     alter table channels add column if not exists is_locked boolean not null default false;
     alter table channels add column if not exists slow_mode_seconds integer not null default 0;
     alter table channels add column if not exists posting_restricted_to_roles text[] not null default '{}';
     alter table channels add column if not exists voice_sfu_room_id text;
     alter table channels add column if not exists voice_max_participants integer;
+    alter table chat_messages add column if not exists author_display_name text not null default 'Unknown';
+    alter table platform_settings add column if not exists bootstrap_completed_at timestamptz;
+    alter table platform_settings add column if not exists bootstrap_admin_user_id text;
+    alter table platform_settings add column if not exists bootstrap_hub_id text;
+    alter table platform_settings add column if not exists default_server_id text;
+    alter table platform_settings add column if not exists default_channel_id text;
   `);
 }

@@ -1,9 +1,5 @@
-import { AppShell } from "../components/app-shell";
-import { discordLoginUrl, fetchModerationSummary, fetchViewerSession } from "../lib/control-plane";
+import { ChatClient } from "../components/chat-client";
 
-export default async function HomePage() {
-  const viewer = await fetchViewerSession();
-  const moderationSummary = viewer ? await fetchModerationSummary("dev-server") : null;
-
-  return <AppShell viewer={viewer} loginUrl={discordLoginUrl()} moderationSummary={moderationSummary} />;
+export default function HomePage() {
+  return <ChatClient />;
 }

@@ -4,6 +4,9 @@ export const config = {
   webBaseUrl: process.env.WEB_BASE_URL ?? "http://localhost:3000",
   databaseUrl: process.env.DATABASE_URL,
   sessionSecret: process.env.SESSION_SECRET ?? "dev-insecure-session-secret",
+  devAuthBypass: process.env.DEV_AUTH_BYPASS === "true",
+  setupBootstrapEnabled: process.env.SETUP_BOOTSTRAP_ENABLED !== "false",
+  setupBootstrapToken: process.env.SETUP_BOOTSTRAP_TOKEN ?? "",
   oidc: {
     keycloakIssuer: process.env.OIDC_KEYCLOAK_ISSUER,
     keycloakClientId: process.env.OIDC_KEYCLOAK_CLIENT_ID,

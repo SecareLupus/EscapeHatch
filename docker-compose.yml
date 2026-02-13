@@ -1,8 +1,8 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -14,6 +14,8 @@ services:
 
   synapse:
     image: matrixdotorg/synapse:latest
+    env_file:
+      - .env
     depends_on:
       - postgres
     environment:
@@ -26,6 +28,8 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
+    env_file:
+      - .env
     command: ["start-dev"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
@@ -35,6 +39,8 @@ services:
 
   livekit:
     image: livekit/livekit-server:v1.8
+    env_file:
+      - .env
     command: ["--dev", "--bind", "0.0.0.0"]
     ports:
       - "7880:7880"
@@ -42,6 +48,8 @@ services:
 
   coturn:
     image: coturn/coturn:4.6
+    env_file:
+      - .env
     command: ["-n", "--log-file=stdout", "--realm=localhost", "--fingerprint"]
     ports:
       - "3478:3478"
