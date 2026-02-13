@@ -1,0 +1,487 @@
+import crypto from "node:crypto";
+import type { DiscordBridgeChannelMapping, DiscordBridgeConnection } from "@escapehatch/shared";
+import { config } from "../config.js";
+import { withDb } from "../db/client.js";
+import { createMessage } from "./chat-service.js";
+
+function randomId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
+}
+
+const oauthStateStore = new Map<
+  string,
+  {
+    hubId: string;
+    productUserId: string;
+    createdAt: number;
+  }
+>();
+
+const pendingGuildSelections = new Map<
+  string,
+  {
+    hubId: string;
+    productUserId: string;
+    accessToken: string;
+    refreshToken: string | null;
+    expiresAt: string | null;
+    discordUserId: string | null;
+    discordUsername: string | null;
+    guilds: Array<{ id: string; name: string }>;
+  }
+>();
+
+function cleanExpiredState(): void {
+  const now = Date.now();
+  for (const [key, value] of oauthStateStore.entries()) {
+    if (now - value.createdAt > 10 * 60 * 1000) {
+      oauthStateStore.delete(key);
+    }
+  }
+}
+
+function mapConnection(row: {
+  id: string;
+  hub_id: string;
+  connected_by_user_id: string;
+  guild_id: string | null;
+  guild_name: string | null;
+  status: string;
+  last_sync_at: string | null;
+  last_error: string | null;
+  updated_at: string;
+}): DiscordBridgeConnection {
+  return {
+    id: row.id,
+    hubId: row.hub_id,
+    connectedByUserId: row.connected_by_user_id,
+    guildId: row.guild_id,
+    guildName: row.guild_name,
+    status: row.status === "syncing" || row.status === "degraded" || row.status === "connected" ? row.status : "disconnected",
+    lastSyncAt: row.last_sync_at,
+    lastError: row.last_error,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapMapping(row: {
+  id: string;
+  hub_id: string;
+  guild_id: string;
+  discord_channel_id: string;
+  discord_channel_name: string;
+  matrix_channel_id: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}): DiscordBridgeChannelMapping {
+  return {
+    id: row.id,
+    hubId: row.hub_id,
+    guildId: row.guild_id,
+    discordChannelId: row.discord_channel_id,
+    discordChannelName: row.discord_channel_name,
+    matrixChannelId: row.matrix_channel_id,
+    enabled: row.enabled,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+export function createDiscordConnectUrl(input: { hubId: string; productUserId: string }): string {
+  cleanExpiredState();
+  const state = randomId("dboauth");
+  oauthStateStore.set(state, {
+    hubId: input.hubId,
+    productUserId: input.productUserId,
+    createdAt: Date.now()
+  });
+
+  const query = new URLSearchParams({
+    client_id: config.discordBridge.clientId ?? "",
+    redirect_uri: config.discordBridge.callbackUrl,
+    response_type: "code",
+    scope: "identify guilds",
+    state,
+    prompt: "consent"
+  });
+  return `${config.discordBridge.authorizeUrl}?${query.toString()}`;
+}
+
+export function consumeDiscordOauthState(state: string): { hubId: string; productUserId: string } | null {
+  cleanExpiredState();
+  const value = oauthStateStore.get(state);
+  if (!value) {
+    return null;
+  }
+  oauthStateStore.delete(state);
+  return {
+    hubId: value.hubId,
+    productUserId: value.productUserId
+  };
+}
+
+async function exchangeDiscordOAuthCode(code: string): Promise<{
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: string | null;
+  discordUserId: string | null;
+  discordUsername: string | null;
+  guilds: Array<{ id: string; name: string }>;
+}> {
+  if (config.discordBridge.mockMode) {
+    return {
+      accessToken: "mock_access_token",
+      refreshToken: "mock_refresh_token",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      discordUserId: "mock_user_1",
+      discordUsername: "MockDiscordUser",
+      guilds: [
+        { id: "mock_guild_1", name: "Mock Creator Guild" },
+        { id: "mock_guild_2", name: "Backup Guild" }
+      ]
+    };
+  }
+
+  if (!config.discordBridge.clientId || !config.discordBridge.clientSecret) {
+    throw new Error("Discord bridge OAuth credentials are not configured.");
+  }
+
+  const tokenResponse = await fetch(config.discordBridge.tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.discordBridge.clientId,
+      client_secret: config.discordBridge.clientSecret,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: config.discordBridge.callbackUrl
+    })
+  });
+  if (!tokenResponse.ok) {
+    throw new Error(`Discord bridge token exchange failed (${tokenResponse.status}).`);
+  }
+
+  const token = (await tokenResponse.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+  const guildsResponse = await fetch(config.discordBridge.userGuildsUrl, {
+    headers: {
+      Authorization: `Bearer ${token.access_token}`
+    }
+  });
+  if (!guildsResponse.ok) {
+    throw new Error(`Discord guild listing failed (${guildsResponse.status}).`);
+  }
+  const guilds = (await guildsResponse.json()) as Array<{ id: string; name: string }>;
+  const expiresAt = token.expires_in ? new Date(Date.now() + token.expires_in * 1000).toISOString() : null;
+
+  return {
+    accessToken: token.access_token,
+    refreshToken: token.refresh_token ?? null,
+    expiresAt,
+    discordUserId: null,
+    discordUsername: null,
+    guilds: guilds.map((guild) => ({ id: guild.id, name: guild.name }))
+  };
+}
+
+export async function completeDiscordOauthAndListGuilds(input: {
+  hubId: string;
+  productUserId: string;
+  code: string;
+}): Promise<{ pendingSelectionId: string; guilds: Array<{ id: string; name: string }> }> {
+  const exchanged = await exchangeDiscordOAuthCode(input.code);
+  const pendingSelectionId = randomId("dbpending");
+  pendingGuildSelections.set(pendingSelectionId, {
+    hubId: input.hubId,
+    productUserId: input.productUserId,
+    accessToken: exchanged.accessToken,
+    refreshToken: exchanged.refreshToken,
+    expiresAt: exchanged.expiresAt,
+    discordUserId: exchanged.discordUserId,
+    discordUsername: exchanged.discordUsername,
+    guilds: exchanged.guilds
+  });
+
+  return {
+    pendingSelectionId,
+    guilds: exchanged.guilds
+  };
+}
+
+export function getPendingDiscordGuildSelection(input: {
+  pendingSelectionId: string;
+  productUserId: string;
+}): { hubId: string; guilds: Array<{ id: string; name: string }> } | null {
+  const pending = pendingGuildSelections.get(input.pendingSelectionId);
+  if (!pending || pending.productUserId !== input.productUserId) {
+    return null;
+  }
+  return {
+    hubId: pending.hubId,
+    guilds: pending.guilds
+  };
+}
+
+export async function selectDiscordGuild(input: {
+  pendingSelectionId: string;
+  productUserId: string;
+  guildId: string;
+}): Promise<DiscordBridgeConnection> {
+  const pending = pendingGuildSelections.get(input.pendingSelectionId);
+  if (!pending || pending.productUserId !== input.productUserId) {
+    throw new Error("Pending Discord selection not found.");
+  }
+
+  const guild = pending.guilds.find((item) => item.id === input.guildId);
+  if (!guild) {
+    throw new Error("Selected guild not found in OAuth result.");
+  }
+
+  pendingGuildSelections.delete(input.pendingSelectionId);
+
+  return withDb(async (db) => {
+    const row = await db.query<{
+      id: string;
+      hub_id: string;
+      connected_by_user_id: string;
+      guild_id: string | null;
+      guild_name: string | null;
+      status: string;
+      last_sync_at: string | null;
+      last_error: string | null;
+      updated_at: string;
+    }>(
+      `insert into discord_bridge_connections
+       (id, hub_id, connected_by_user_id, discord_user_id, discord_username, access_token, refresh_token, token_expires_at, guild_id, guild_name, status, last_sync_at, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'connected', now(), now())
+       on conflict (hub_id)
+       do update set
+         connected_by_user_id = excluded.connected_by_user_id,
+         discord_user_id = excluded.discord_user_id,
+         discord_username = excluded.discord_username,
+         access_token = excluded.access_token,
+         refresh_token = excluded.refresh_token,
+         token_expires_at = excluded.token_expires_at,
+         guild_id = excluded.guild_id,
+         guild_name = excluded.guild_name,
+         status = 'connected',
+         last_error = null,
+         last_sync_at = now(),
+         updated_at = now()
+       returning id, hub_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at`,
+      [
+        randomId("dbconn"),
+        pending.hubId,
+        input.productUserId,
+        pending.discordUserId,
+        pending.discordUsername,
+        pending.accessToken,
+        pending.refreshToken,
+        pending.expiresAt,
+        guild.id,
+        guild.name
+      ]
+    );
+    const saved = row.rows[0];
+    if (!saved) {
+      throw new Error("Discord bridge connection save failed.");
+    }
+    return mapConnection(saved);
+  });
+}
+
+export async function getDiscordBridgeConnection(hubId: string): Promise<DiscordBridgeConnection | null> {
+  return withDb(async (db) => {
+    const row = await db.query<{
+      id: string;
+      hub_id: string;
+      connected_by_user_id: string;
+      guild_id: string | null;
+      guild_name: string | null;
+      status: string;
+      last_sync_at: string | null;
+      last_error: string | null;
+      updated_at: string;
+    }>(
+      `select id, hub_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at
+       from discord_bridge_connections where hub_id = $1`,
+      [hubId]
+    );
+    const connection = row.rows[0];
+    return connection ? mapConnection(connection) : null;
+  });
+}
+
+export async function listDiscordChannelMappings(hubId: string): Promise<DiscordBridgeChannelMapping[]> {
+  return withDb(async (db) => {
+    const row = await db.query<{
+      id: string;
+      hub_id: string;
+      guild_id: string;
+      discord_channel_id: string;
+      discord_channel_name: string;
+      matrix_channel_id: string;
+      enabled: boolean;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `select id, hub_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled, created_at, updated_at
+       from discord_bridge_channel_mappings
+       where hub_id = $1
+       order by created_at asc`,
+      [hubId]
+    );
+    return row.rows.map(mapMapping);
+  });
+}
+
+export async function upsertDiscordChannelMapping(input: {
+  hubId: string;
+  guildId: string;
+  discordChannelId: string;
+  discordChannelName: string;
+  matrixChannelId: string;
+  enabled: boolean;
+}): Promise<DiscordBridgeChannelMapping> {
+  return withDb(async (db) => {
+    const row = await db.query<{
+      id: string;
+      hub_id: string;
+      guild_id: string;
+      discord_channel_id: string;
+      discord_channel_name: string;
+      matrix_channel_id: string;
+      enabled: boolean;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `insert into discord_bridge_channel_mappings
+       (id, hub_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       on conflict (hub_id, discord_channel_id)
+       do update set
+         guild_id = excluded.guild_id,
+         discord_channel_name = excluded.discord_channel_name,
+         matrix_channel_id = excluded.matrix_channel_id,
+         enabled = excluded.enabled,
+         updated_at = now()
+       returning id, hub_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled, created_at, updated_at`,
+      [
+        randomId("dbmap"),
+        input.hubId,
+        input.guildId,
+        input.discordChannelId,
+        input.discordChannelName,
+        input.matrixChannelId,
+        input.enabled
+      ]
+    );
+    const mapping = row.rows[0];
+    if (!mapping) {
+      throw new Error("Bridge mapping upsert failed.");
+    }
+    return mapMapping(mapping);
+  });
+}
+
+export async function deleteDiscordChannelMapping(input: { hubId: string; mappingId: string }): Promise<void> {
+  await withDb(async (db) => {
+    await db.query("delete from discord_bridge_channel_mappings where id = $1 and hub_id = $2", [
+      input.mappingId,
+      input.hubId
+    ]);
+  });
+}
+
+export async function retryDiscordBridgeSync(hubId: string): Promise<DiscordBridgeConnection> {
+  return withDb(async (db) => {
+    const row = await db.query<{
+      id: string;
+      hub_id: string;
+      connected_by_user_id: string;
+      guild_id: string | null;
+      guild_name: string | null;
+      status: string;
+      last_sync_at: string | null;
+      last_error: string | null;
+      updated_at: string;
+    }>(
+      `update discord_bridge_connections
+       set status = 'syncing', last_error = null, updated_at = now()
+       where hub_id = $1
+       returning id, hub_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at`,
+      [hubId]
+    );
+    const updated = row.rows[0];
+    if (!updated) {
+      throw new Error("Discord bridge connection not found.");
+    }
+
+    await db.query(
+      `update discord_bridge_connections
+       set status = 'connected', last_sync_at = now(), updated_at = now()
+       where hub_id = $1`,
+      [hubId]
+    );
+    const refreshed = await getDiscordBridgeConnection(hubId);
+    if (!refreshed) {
+      throw new Error("Discord bridge connection not found after sync.");
+    }
+    return refreshed;
+  });
+}
+
+export async function relayDiscordMessageToMappedChannel(input: {
+  hubId: string;
+  discordChannelId: string;
+  authorName: string;
+  content: string;
+  mediaUrls?: string[];
+}): Promise<{ relayed: boolean; matrixChannelId?: string; limitation?: string }> {
+  const mappings = await listDiscordChannelMappings(input.hubId);
+  const mapping = mappings.find((item) => item.discordChannelId === input.discordChannelId && item.enabled);
+  if (!mapping) {
+    return { relayed: false, limitation: "No active mapping for Discord channel." };
+  }
+
+  const connection = await getDiscordBridgeConnection(input.hubId);
+  if (!connection) {
+    return { relayed: false, limitation: "Bridge not connected for hub." };
+  }
+
+  const mappedChannelExists = await withDb(async (db) => {
+    const row = await db.query<{ exists: boolean }>(
+      `select exists(
+         select 1
+         from channels ch
+         join servers s on s.id = ch.server_id
+         where ch.id = $1 and s.hub_id = $2
+       ) as exists`,
+      [mapping.matrixChannelId, input.hubId]
+    );
+    return Boolean(row.rows[0]?.exists);
+  });
+  if (!mappedChannelExists) {
+    return { relayed: false, limitation: "Mapped Matrix channel no longer exists." };
+  }
+
+  const body = [`[Discord] ${input.authorName}: ${input.content.trim()}`];
+  if (input.mediaUrls?.length) {
+    body.push(`Media relay is URL-only in MVP: ${input.mediaUrls.join(", ")}`);
+  }
+  await createMessage({
+    channelId: mapping.matrixChannelId,
+    actorUserId: connection.connectedByUserId,
+    content: body.join("\n")
+  });
+
+  return {
+    relayed: true,
+    matrixChannelId: mapping.matrixChannelId,
+    limitation: "Formatting is text-first; rich embeds are not mirrored in this MVP."
+  };
+}

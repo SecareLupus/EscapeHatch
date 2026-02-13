@@ -4,6 +4,10 @@ import type {
   ChannelReadState,
   ChannelType,
   ChatMessage,
+  DiscordBridgeChannelMapping,
+  DiscordBridgeConnection,
+  FederationPolicyEvent,
+  FederationPolicyStatus,
   Hub,
   MentionMarker,
   ModerationAction,
@@ -58,6 +62,24 @@ export interface AuthProviderDescriptor {
 export interface AuthProvidersResponse {
   primaryProvider: string;
   providers: AuthProviderDescriptor[];
+}
+
+export interface FederationPolicySnapshot {
+  policy: {
+    hubId: string;
+    allowlist: string[];
+    updatedByUserId: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  status: {
+    totalRooms: number;
+    appliedRooms: number;
+    errorRooms: number;
+    skippedRooms: number;
+  };
+  rooms: FederationPolicyStatus[];
+  recentChanges: FederationPolicyEvent[];
 }
 
 export interface ViewerRoleBinding {
@@ -244,6 +266,34 @@ export async function createServer(input: { hubId: string; name: string }): Prom
   });
 }
 
+export async function fetchFederationPolicy(hubId: string): Promise<FederationPolicySnapshot> {
+  return apiFetch<FederationPolicySnapshot>(`/v1/hubs/${encodeURIComponent(hubId)}/federation-policy`);
+}
+
+export async function updateFederationPolicy(input: {
+  hubId: string;
+  allowlist: string[];
+}): Promise<FederationPolicySnapshot["policy"]> {
+  return apiFetch<FederationPolicySnapshot["policy"]>(
+    `/v1/hubs/${encodeURIComponent(input.hubId)}/federation-policy`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ allowlist: input.allowlist })
+    }
+  );
+}
+
+export async function reconcileFederationPolicy(hubId: string): Promise<{
+  checkedRooms: number;
+  appliedRooms: number;
+  failedRooms: number;
+}> {
+  return apiFetch(`/v1/hubs/${encodeURIComponent(hubId)}/federation-policy/reconcile`, {
+    method: "POST"
+  });
+}
+
 export async function createChannel(input: {
   serverId: string;
   name: string;
@@ -363,6 +413,19 @@ export async function updateChannelControls(input: {
   });
 }
 
+export async function updateChannelVideoControls(input: {
+  channelId: string;
+  serverId: string;
+  videoEnabled: boolean;
+  maxVideoParticipants?: number;
+}): Promise<Channel> {
+  return apiFetch<Channel>(`/v1/channels/${encodeURIComponent(input.channelId)}/video-controls`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
 export async function listChannelReadStates(serverId: string): Promise<ChannelReadState[]> {
   const json = await apiFetch<{ items: ChannelReadState[] }>(
     `/v1/servers/${encodeURIComponent(serverId)}/read-states`
@@ -456,6 +519,18 @@ export async function issueVoiceToken(input: { serverId: string; channelId: stri
   });
 }
 
+export async function issueVoiceTokenWithVideo(input: {
+  serverId: string;
+  channelId: string;
+  videoQuality?: "low" | "medium" | "high";
+}): Promise<VoiceTokenGrant> {
+  return apiFetch<VoiceTokenGrant>("/v1/voice/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
 export async function listVoicePresence(input: {
   serverId: string;
   channelId: string;
@@ -473,6 +548,8 @@ export async function joinVoicePresence(input: {
   channelId: string;
   muted?: boolean;
   deafened?: boolean;
+  videoEnabled?: boolean;
+  videoQuality?: "low" | "medium" | "high";
 }): Promise<void> {
   await apiFetch("/v1/voice/presence/join", {
     method: "POST",
@@ -486,6 +563,8 @@ export async function updateVoicePresenceState(input: {
   channelId: string;
   muted: boolean;
   deafened: boolean;
+  videoEnabled?: boolean;
+  videoQuality?: "low" | "medium" | "high";
 }): Promise<void> {
   await apiFetch("/v1/voice/presence/state", {
     method: "PATCH",
@@ -545,4 +624,89 @@ export function providerLoginUrl(provider: string, username?: string): string {
 
 export function providerLinkUrl(provider: string): string {
   return `${controlPlaneBaseUrl}/auth/link/${encodeURIComponent(provider)}`;
+}
+
+export function discordBridgeStartUrl(hubId: string): string {
+  const query = new URLSearchParams({ hubId });
+  return `${controlPlaneBaseUrl}/v1/discord/oauth/start?${query.toString()}`;
+}
+
+export async function fetchDiscordBridgePendingSelection(
+  pendingSelectionId: string
+): Promise<{ hubId: string; guilds: Array<{ id: string; name: string }> }> {
+  return apiFetch(`/v1/discord/bridge/pending/${encodeURIComponent(pendingSelectionId)}`);
+}
+
+export async function selectDiscordBridgeGuild(input: {
+  pendingSelectionId: string;
+  guildId: string;
+}): Promise<DiscordBridgeConnection> {
+  return apiFetch(`/v1/discord/bridge/pending/${encodeURIComponent(input.pendingSelectionId)}/select`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ guildId: input.guildId })
+  });
+}
+
+export async function fetchDiscordBridgeHealth(hubId: string): Promise<{
+  connection: DiscordBridgeConnection | null;
+  mappingCount: number;
+  activeMappingCount: number;
+}> {
+  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(hubId)}/health`);
+}
+
+export async function retryDiscordBridgeSyncAction(hubId: string): Promise<DiscordBridgeConnection> {
+  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(hubId)}/retry-sync`, {
+    method: "POST"
+  });
+}
+
+export async function listDiscordBridgeMappings(hubId: string): Promise<DiscordBridgeChannelMapping[]> {
+  const json = await apiFetch<{ items: DiscordBridgeChannelMapping[] }>(
+    `/v1/discord/bridge/${encodeURIComponent(hubId)}/mappings`
+  );
+  return json.items;
+}
+
+export async function upsertDiscordBridgeMapping(input: {
+  hubId: string;
+  guildId: string;
+  discordChannelId: string;
+  discordChannelName: string;
+  matrixChannelId: string;
+  enabled: boolean;
+}): Promise<DiscordBridgeChannelMapping> {
+  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(input.hubId)}/mappings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      guildId: input.guildId,
+      discordChannelId: input.discordChannelId,
+      discordChannelName: input.discordChannelName,
+      matrixChannelId: input.matrixChannelId,
+      enabled: input.enabled
+    })
+  });
+}
+
+export async function deleteDiscordBridgeMapping(input: { hubId: string; mappingId: string }): Promise<void> {
+  await apiFetch(
+    `/v1/discord/bridge/${encodeURIComponent(input.hubId)}/mappings/${encodeURIComponent(input.mappingId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function relayDiscordBridgeMessage(input: {
+  hubId: string;
+  discordChannelId: string;
+  authorName: string;
+  content: string;
+  mediaUrls?: string[];
+}): Promise<{ relayed: boolean; matrixChannelId?: string; limitation?: string }> {
+  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(input.hubId)}/relay`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
 }

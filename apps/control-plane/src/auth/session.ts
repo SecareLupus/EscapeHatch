@@ -42,11 +42,12 @@ function verify(token: string): SessionPayload | null {
 }
 
 export function setSessionCookie(reply: FastifyReply, payload: Omit<SessionPayload, "expiresAt">): void {
-  const expiresAt = Date.now() + 1000 * 60 * 60;
+  const ttlSeconds = Math.max(60, config.sessionTtlSeconds);
+  const expiresAt = Date.now() + ttlSeconds * 1000;
   const token = createSessionToken({ ...payload, expiresAt });
   reply.header(
     "Set-Cookie",
-    `escapehatch_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`
+    `escapehatch_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}`
   );
 }
 

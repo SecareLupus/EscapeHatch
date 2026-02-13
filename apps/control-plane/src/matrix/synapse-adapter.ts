@@ -132,3 +132,51 @@ export async function attachChildRoom(spaceId: string, childRoomId: string): Pro
     console.warn(`${message}; continuing without Synapse linkage.`);
   }
 }
+
+export async function setRoomServerAcl(
+  roomId: string,
+  allowlist: string[]
+): Promise<{ ok: boolean; applied: boolean; error?: string }> {
+  if (!config.synapse.baseUrl || !config.synapse.accessToken) {
+    return { ok: true, applied: false };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${config.synapse.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(
+        roomId
+      )}/state/m.room.server_acl/`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${config.synapse.accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          allow: [...new Set(allowlist.filter(Boolean))],
+          deny: ["*"],
+          allow_ip_literals: false
+        })
+      }
+    );
+  } catch (error) {
+    const message = `Failed to apply room ACL: ${error instanceof Error ? error.message : "unknown error"}`;
+    if (config.synapse.strictProvisioning) {
+      throw new Error(message);
+    }
+    console.warn(`${message}; continuing without ACL application.`);
+    return { ok: false, applied: false, error: message };
+  }
+
+  if (!response.ok) {
+    const message = `Failed to apply room ACL (${response.status})`;
+    if (config.synapse.strictProvisioning) {
+      throw new Error(message);
+    }
+    console.warn(`${message}; continuing without ACL application.`);
+    return { ok: false, applied: false, error: message };
+  }
+
+  return { ok: true, applied: true };
+}

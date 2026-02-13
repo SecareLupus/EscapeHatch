@@ -29,15 +29,30 @@ export async function joinVoicePresence(input: {
   channelId: string;
   muted?: boolean;
   deafened?: boolean;
+  videoEnabled?: boolean;
+  videoQuality?: "low" | "medium" | "high";
 }): Promise<void> {
   await ensureVoiceJoinAllowed(input);
   await withDb(async (db) => {
     await db.query(
-      `insert into voice_presence (channel_id, product_user_id, muted, deafened, joined_at, updated_at)
-       values ($1, $2, $3, $4, now(), now())
+      `insert into voice_presence
+       (channel_id, product_user_id, muted, deafened, video_enabled, video_quality, joined_at, updated_at)
+       values ($1, $2, $3, $4, $5, $6, now(), now())
        on conflict (channel_id, product_user_id)
-       do update set muted = excluded.muted, deafened = excluded.deafened, updated_at = now()`,
-      [input.channelId, input.productUserId, input.muted ?? false, input.deafened ?? false]
+       do update set
+         muted = excluded.muted,
+         deafened = excluded.deafened,
+         video_enabled = excluded.video_enabled,
+         video_quality = excluded.video_quality,
+         updated_at = now()`,
+      [
+        input.channelId,
+        input.productUserId,
+        input.muted ?? false,
+        input.deafened ?? false,
+        input.videoEnabled ?? false,
+        input.videoQuality ?? "medium"
+      ]
     );
   });
 }
@@ -48,14 +63,23 @@ export async function updateVoicePresenceState(input: {
   channelId: string;
   muted: boolean;
   deafened: boolean;
+  videoEnabled?: boolean;
+  videoQuality?: "low" | "medium" | "high";
 }): Promise<void> {
   await ensureVoiceJoinAllowed(input);
   await withDb(async (db) => {
     await db.query(
       `update voice_presence
-       set muted = $1, deafened = $2, updated_at = now()
-       where channel_id = $3 and product_user_id = $4`,
-      [input.muted, input.deafened, input.channelId, input.productUserId]
+       set muted = $1, deafened = $2, video_enabled = $3, video_quality = $4, updated_at = now()
+       where channel_id = $5 and product_user_id = $6`,
+      [
+        input.muted,
+        input.deafened,
+        input.videoEnabled ?? false,
+        input.videoQuality ?? "medium",
+        input.channelId,
+        input.productUserId
+      ]
     );
   });
 }
@@ -81,6 +105,8 @@ export async function listVoicePresence(input: { channelId: string; serverId: st
       product_user_id: string;
       muted: boolean;
       deafened: boolean;
+      video_enabled: boolean;
+      video_quality: "low" | "medium" | "high";
       joined_at: string;
       updated_at: string;
       preferred_username: string | null;
@@ -92,6 +118,8 @@ export async function listVoicePresence(input: { channelId: string; serverId: st
          vp.product_user_id,
          vp.muted,
          vp.deafened,
+         vp.video_enabled,
+         vp.video_quality,
          vp.joined_at,
          vp.updated_at,
          profile.preferred_username,
@@ -119,6 +147,8 @@ export async function listVoicePresence(input: { channelId: string; serverId: st
       displayName: row.preferred_username ?? row.email ?? `user-${row.product_user_id.slice(0, 8)}`,
       muted: row.muted,
       deafened: row.deafened,
+      videoEnabled: row.video_enabled,
+      videoQuality: row.video_quality,
       joinedAt: row.joined_at,
       updatedAt: row.updated_at
     }));

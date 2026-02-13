@@ -5,14 +5,55 @@ import sensible from "@fastify/sensible";
 import { ZodError } from "zod";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { registerDomainRoutes } from "./routes/domain-routes.js";
+import { config } from "./config.js";
+import { logEvent } from "./services/observability-service.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: false });
   await app.register(cors, { origin: true, credentials: true });
   await app.register(sensible);
 
+  const requestBuckets = new Map<string, { count: number; windowStartedAt: number }>();
+
   app.addHook("onSend", async (request, reply) => {
     reply.header("x-request-id", request.id);
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    const now = Date.now();
+    const forwardedFor = request.headers["x-forwarded-for"];
+    const ip = typeof forwardedFor === "string" ? forwardedFor.split(",")[0]?.trim() : request.ip;
+    const route = request.routeOptions?.url ?? request.url;
+    const key = `${ip}:${route}`;
+    const current = requestBuckets.get(key);
+    if (!current || now - current.windowStartedAt >= 60_000) {
+      requestBuckets.set(key, { count: 1, windowStartedAt: now });
+      return;
+    }
+    current.count += 1;
+    if (current.count > config.rateLimitPerMinute) {
+      logEvent("warn", "rate_limit_triggered", {
+        requestId: request.id,
+        ip,
+        route
+      });
+      reply.code(429).send({
+        statusCode: 429,
+        error: "Too Many Requests",
+        code: "rate_limited",
+        message: "Rate limit exceeded. Retry shortly.",
+        requestId: request.id
+      });
+    }
+  });
+
+  app.addHook("onResponse", async (request, reply) => {
+    logEvent("info", "request_completed", {
+      requestId: request.id,
+      method: request.method,
+      route: request.routeOptions?.url ?? request.url,
+      statusCode: reply.statusCode
+    });
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -38,6 +79,15 @@ export async function buildApp() {
         ? "Request validation failed."
         : parsedError.message || STATUS_CODES[statusCode] || "Internal Server Error";
     const errorLabel = STATUS_CODES[statusCode] ?? "Error";
+
+    logEvent("error", "request_failed", {
+      requestId: request.id,
+      method: request.method,
+      route: request.routeOptions?.url ?? request.url,
+      statusCode,
+      code,
+      message
+    });
 
     reply.code(statusCode).send({
       statusCode,

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ControlPlaneApiError,
+  discordBridgeStartUrl,
   fetchAllowedActions,
   providerLinkUrl,
   providerLoginUrl
@@ -17,6 +18,13 @@ test("providerLoginUrl builds developer login route", () => {
 
 test("providerLinkUrl builds OAuth linking route", () => {
   assert.equal(providerLinkUrl("google"), "http://localhost:4000/auth/link/google");
+});
+
+test("discordBridgeStartUrl builds bridge OAuth route", () => {
+  assert.equal(
+    discordBridgeStartUrl("hub_123"),
+    "http://localhost:4000/v1/discord/oauth/start?hubId=hub_123"
+  );
 });
 
 test("api errors include correlation request id when available", async () => {

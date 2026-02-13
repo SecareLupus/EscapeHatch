@@ -11,9 +11,14 @@ import {
   createCategory,
   createChannel,
   createServer,
+  deleteDiscordBridgeMapping,
   deleteChannel,
   deleteServer,
-  issueVoiceToken,
+  discordBridgeStartUrl,
+  fetchDiscordBridgeHealth,
+  fetchDiscordBridgePendingSelection,
+  fetchFederationPolicy,
+  issueVoiceTokenWithVideo,
   fetchAllowedActions,
   fetchAuthProviders,
   fetchBootstrapStatus,
@@ -21,6 +26,7 @@ import {
   listHubs,
   listMentions,
   listAuditLogs,
+  listDiscordBridgeMappings,
   listReports,
   listChannelReadStates,
   listCategories,
@@ -36,16 +42,24 @@ import {
   logout,
   providerLinkUrl,
   providerLoginUrl,
+  reconcileFederationPolicy,
   renameCategory,
   renameChannel,
   renameServer,
+  relayDiscordBridgeMessage,
+  retryDiscordBridgeSyncAction,
+  selectDiscordBridgeGuild,
   sendMessage,
   transitionReportStatus,
+  updateChannelVideoControls,
   upsertChannelReadState,
   updateChannelControls,
+  updateFederationPolicy,
+  upsertDiscordBridgeMapping,
   updateVoicePresenceState,
   type AuthProvidersResponse,
   type BootstrapStatus,
+  type FederationPolicySnapshot,
   type ViewerRoleBinding,
   type PrivilegedAction,
   type ViewerSession
@@ -123,8 +137,47 @@ export function ChatClient() {
   const [voiceConnected, setVoiceConnected] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [voiceDeafened, setVoiceDeafened] = useState(false);
+  const [voiceVideoEnabled, setVoiceVideoEnabled] = useState(false);
+  const [voiceVideoQuality, setVoiceVideoQuality] = useState<"low" | "medium" | "high">("medium");
   const [voiceGrant, setVoiceGrant] = useState<VoiceTokenGrant | null>(null);
   const [voiceMembers, setVoiceMembers] = useState<VoicePresenceMember[]>([]);
+  const [federationSnapshot, setFederationSnapshot] = useState<FederationPolicySnapshot | null>(null);
+  const [federationAllowlist, setFederationAllowlist] = useState("");
+  const [reconcilingFederation, setReconcilingFederation] = useState(false);
+  const [savingFederation, setSavingFederation] = useState(false);
+  const [discordPendingSelectionId, setDiscordPendingSelectionId] = useState<string | null>(null);
+  const [discordPendingGuilds, setDiscordPendingGuilds] = useState<Array<{ id: string; name: string }>>([]);
+  const [discordSelectedGuildId, setDiscordSelectedGuildId] = useState("");
+  const [discordBridgeHealth, setDiscordBridgeHealth] = useState<{
+    connection: {
+      id: string;
+      hubId: string;
+      connectedByUserId: string;
+      guildId: string | null;
+      guildName: string | null;
+      status: "disconnected" | "connected" | "degraded" | "syncing";
+      lastSyncAt: string | null;
+      lastError: string | null;
+      updatedAt: string;
+    } | null;
+    mappingCount: number;
+    activeMappingCount: number;
+  } | null>(null);
+  const [discordMappingChannelId, setDiscordMappingChannelId] = useState("");
+  const [discordMappingChannelName, setDiscordMappingChannelName] = useState("");
+  const [discordMappedMatrixChannelId, setDiscordMappedMatrixChannelId] = useState("");
+  const [discordMappings, setDiscordMappings] = useState<
+    Array<{
+      id: string;
+      discordChannelId: string;
+      discordChannelName: string;
+      matrixChannelId: string;
+      enabled: boolean;
+    }>
+  >([]);
+  const [discordRelayChannelId, setDiscordRelayChannelId] = useState("");
+  const [discordRelayAuthor, setDiscordRelayAuthor] = useState("DiscordUser");
+  const [discordRelayContent, setDiscordRelayContent] = useState("Bridge test message");
   const [modActionType, setModActionType] = useState<"kick" | "ban" | "unban" | "timeout" | "redact_message">("kick");
   const [modReason, setModReason] = useState("Moderator action");
   const [modTargetUserId, setModTargetUserId] = useState("");
@@ -143,6 +196,7 @@ export function ChatClient() {
     [providers]
   );
   const canAccessWorkspace = Boolean(viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized);
+  const managedHubId = useMemo(() => selectedHubIdForCreate ?? hubs[0]?.id ?? null, [selectedHubIdForCreate, hubs]);
   const activeChannel = channels.find((channel) => channel.id === selectedChannelId) ?? null;
   const canManageChannel = useMemo(
     () =>
@@ -405,6 +459,14 @@ export function ChatClient() {
   }, [viewer, bootstrapStatus?.initialized, bootstrapStatus?.defaultServerId, bootstrapStatus?.defaultChannelId, refreshChatState]);
 
   useEffect(() => {
+    const pendingSelection = searchParams.get("discordPendingSelection");
+    if (!pendingSelection) {
+      return;
+    }
+    setDiscordPendingSelectionId(pendingSelection);
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!canAccessWorkspace || !selectedServerId) {
       setAllowedActions([]);
       return;
@@ -435,6 +497,45 @@ export function ChatClient() {
         // Keep local map if read-state fetch fails.
       });
   }, [canAccessWorkspace, selectedServerId]);
+
+  useEffect(() => {
+    if (!viewer || !managedHubId || !canManageHubOrSpace) {
+      setFederationSnapshot(null);
+      setDiscordBridgeHealth(null);
+      setDiscordMappings([]);
+      return;
+    }
+
+    void Promise.all([
+      fetchFederationPolicy(managedHubId).catch(() => null),
+      fetchDiscordBridgeHealth(managedHubId).catch(() => null),
+      listDiscordBridgeMappings(managedHubId).catch(() => [])
+    ]).then(([policy, bridge, mappings]) => {
+      setFederationSnapshot(policy);
+      setDiscordBridgeHealth(bridge);
+      setDiscordMappings(mappings);
+      if (policy?.policy) {
+        setFederationAllowlist(policy.policy.allowlist.join(", "));
+      }
+    });
+  }, [viewer, managedHubId, canManageHubOrSpace]);
+
+  useEffect(() => {
+    if (!discordPendingSelectionId) {
+      setDiscordPendingGuilds([]);
+      return;
+    }
+
+    void fetchDiscordBridgePendingSelection(discordPendingSelectionId)
+      .then((pending) => {
+        setDiscordPendingGuilds(pending.guilds);
+        setDiscordSelectedGuildId((current) => current || pending.guilds[0]?.id || "");
+      })
+      .catch(() => {
+        setDiscordPendingSelectionId(null);
+        setDiscordPendingGuilds([]);
+      });
+  }, [discordPendingSelectionId]);
 
   useEffect(() => {
     if (!canAccessWorkspace || !selectedServerId) {
@@ -1180,15 +1281,18 @@ export function ChatClient() {
 
     setError(null);
     try {
-      const grant = await issueVoiceToken({
+      const grant = await issueVoiceTokenWithVideo({
         serverId: selectedServerId,
-        channelId: selectedChannelId
+        channelId: selectedChannelId,
+        videoQuality: voiceVideoQuality
       });
       await joinVoicePresence({
         serverId: selectedServerId,
         channelId: selectedChannelId,
         muted: voiceMuted,
-        deafened: voiceDeafened
+        deafened: voiceDeafened,
+        videoEnabled: voiceVideoEnabled,
+        videoQuality: voiceVideoQuality
       });
       setVoiceGrant(grant);
       setVoiceConnected(true);
@@ -1235,12 +1339,188 @@ export function ChatClient() {
         serverId: selectedServerId,
         channelId: selectedChannelId,
         muted: nextMuted,
-        deafened: nextDeafened
+        deafened: nextDeafened,
+        videoEnabled: voiceVideoEnabled,
+        videoQuality: voiceVideoQuality
       });
       setVoiceMuted(nextMuted);
       setVoiceDeafened(nextDeafened);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to update voice state.");
+    }
+  }
+
+  async function handleToggleVideo(nextVideoEnabled: boolean): Promise<void> {
+    setVoiceVideoEnabled(nextVideoEnabled);
+    if (!selectedServerId || !selectedChannelId || !voiceConnected) {
+      return;
+    }
+    setError(null);
+    try {
+      await updateVoicePresenceState({
+        serverId: selectedServerId,
+        channelId: selectedChannelId,
+        muted: voiceMuted,
+        deafened: voiceDeafened,
+        videoEnabled: nextVideoEnabled,
+        videoQuality: voiceVideoQuality
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to update video state.");
+    }
+  }
+
+  async function handleSetVoiceChannelVideoDefaults(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedServerId || !selectedChannelId || activeChannel?.type !== "voice") {
+      return;
+    }
+    setError(null);
+    try {
+      await updateChannelVideoControls({
+        channelId: selectedChannelId,
+        serverId: selectedServerId,
+        videoEnabled: voiceVideoEnabled,
+        maxVideoParticipants: 4
+      });
+      await refreshChatState(selectedServerId, selectedChannelId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to update voice defaults.");
+    }
+  }
+
+  async function handleSaveFederationPolicy(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!managedHubId) {
+      return;
+    }
+    setSavingFederation(true);
+    setError(null);
+    try {
+      const allowlist = federationAllowlist
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      await updateFederationPolicy({
+        hubId: managedHubId,
+        allowlist
+      });
+      const snapshot = await fetchFederationPolicy(managedHubId);
+      setFederationSnapshot(snapshot);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to save federation policy.");
+    } finally {
+      setSavingFederation(false);
+    }
+  }
+
+  async function handleReconcileFederation(): Promise<void> {
+    if (!managedHubId) {
+      return;
+    }
+    setReconcilingFederation(true);
+    setError(null);
+    try {
+      await reconcileFederationPolicy(managedHubId);
+      const snapshot = await fetchFederationPolicy(managedHubId);
+      setFederationSnapshot(snapshot);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to reconcile federation policy.");
+    } finally {
+      setReconcilingFederation(false);
+    }
+  }
+
+  async function handleSelectDiscordGuild(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!discordPendingSelectionId || !discordSelectedGuildId || !managedHubId) {
+      return;
+    }
+    setError(null);
+    try {
+      await selectDiscordBridgeGuild({
+        pendingSelectionId: discordPendingSelectionId,
+        guildId: discordSelectedGuildId
+      });
+      setDiscordPendingSelectionId(null);
+      setDiscordPendingGuilds([]);
+      setDiscordBridgeHealth(await fetchDiscordBridgeHealth(managedHubId));
+      setDiscordMappings(await listDiscordBridgeMappings(managedHubId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to select Discord guild.");
+    }
+  }
+
+  async function handleRetryDiscordSync(): Promise<void> {
+    if (!managedHubId) {
+      return;
+    }
+    setError(null);
+    try {
+      await retryDiscordBridgeSyncAction(managedHubId);
+      setDiscordBridgeHealth(await fetchDiscordBridgeHealth(managedHubId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to retry bridge sync.");
+    }
+  }
+
+  async function handleUpsertDiscordMapping(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!managedHubId || !discordBridgeHealth?.connection?.guildId) {
+      return;
+    }
+    setError(null);
+    try {
+      await upsertDiscordBridgeMapping({
+        hubId: managedHubId,
+        guildId: discordBridgeHealth.connection.guildId,
+        discordChannelId: discordMappingChannelId,
+        discordChannelName: discordMappingChannelName,
+        matrixChannelId: discordMappedMatrixChannelId,
+        enabled: true
+      });
+      setDiscordBridgeHealth(await fetchDiscordBridgeHealth(managedHubId));
+      setDiscordMappings(await listDiscordBridgeMappings(managedHubId));
+      setDiscordMappingChannelId("");
+      setDiscordMappingChannelName("");
+      setDiscordMappedMatrixChannelId("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to save mapping.");
+    }
+  }
+
+  async function handleDeleteDiscordMapping(mappingId: string): Promise<void> {
+    if (!managedHubId) {
+      return;
+    }
+    setError(null);
+    try {
+      await deleteDiscordBridgeMapping({ hubId: managedHubId, mappingId });
+      setDiscordBridgeHealth(await fetchDiscordBridgeHealth(managedHubId));
+      setDiscordMappings(await listDiscordBridgeMappings(managedHubId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to delete mapping.");
+    }
+  }
+
+  async function handleRelayDiscordMessage(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!managedHubId || !discordRelayChannelId || !discordRelayContent.trim()) {
+      return;
+    }
+    setError(null);
+    try {
+      const result = await relayDiscordBridgeMessage({
+        hubId: managedHubId,
+        discordChannelId: discordRelayChannelId,
+        authorName: discordRelayAuthor,
+        content: discordRelayContent
+      });
+      if (!result.relayed) {
+        setError(result.limitation ?? "Bridge relay failed.");
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to relay Discord message.");
     }
   }
 
@@ -1692,6 +1972,148 @@ export function ChatClient() {
         </section>
       ) : null}
 
+      {viewer && canManageHubOrSpace && managedHubId ? (
+        <section className="panel">
+          <h2>Federation + Bridge Admin</h2>
+          <p>Hub: {hubs.find((hub) => hub.id === managedHubId)?.name ?? managedHubId}</p>
+
+          <form className="stack" onSubmit={handleSaveFederationPolicy}>
+            <label htmlFor="federation-allowlist">Federation Allowlist (comma-separated homeserver domains)</label>
+            <input
+              id="federation-allowlist"
+              value={federationAllowlist}
+              onChange={(event) => setFederationAllowlist(event.target.value)}
+              placeholder="matrix.example.org, synapse.myco.net"
+            />
+            <div className="voice-actions">
+              <button type="submit" disabled={savingFederation}>
+                {savingFederation ? "Saving..." : "Save Policy"}
+              </button>
+              <button type="button" className="ghost" onClick={() => void handleReconcileFederation()} disabled={reconcilingFederation}>
+                {reconcilingFederation ? "Reconciling..." : "Reconcile Existing Rooms"}
+              </button>
+            </div>
+          </form>
+
+          {federationSnapshot ? (
+            <p>
+              ACL status: {federationSnapshot.status.appliedRooms}/{federationSnapshot.status.totalRooms} applied,
+              {" "}
+              {federationSnapshot.status.errorRooms} errors.
+            </p>
+          ) : null}
+
+          <div className="stack">
+            <a className="button-link" href={discordBridgeStartUrl(managedHubId)}>
+              Connect Discord
+            </a>
+            <p>
+              Bridge status: {discordBridgeHealth?.connection?.status ?? "disconnected"}
+              {discordBridgeHealth?.connection?.guildName
+                ? ` (${discordBridgeHealth.connection.guildName})`
+                : ""}
+            </p>
+            <button type="button" className="ghost" onClick={() => void handleRetryDiscordSync()}>
+              Retry Bridge Sync
+            </button>
+          </div>
+
+          {discordPendingSelectionId && discordPendingGuilds.length > 0 ? (
+            <form className="stack" onSubmit={handleSelectDiscordGuild}>
+              <label htmlFor="discord-guild-select">Select Discord Guild</label>
+              <select
+                id="discord-guild-select"
+                value={discordSelectedGuildId}
+                onChange={(event) => setDiscordSelectedGuildId(event.target.value)}
+              >
+                {discordPendingGuilds.map((guild) => (
+                  <option key={guild.id} value={guild.id}>
+                    {guild.name}
+                  </option>
+                ))}
+              </select>
+              <button type="submit">Confirm Guild</button>
+            </form>
+          ) : null}
+
+          <form className="stack" onSubmit={handleUpsertDiscordMapping}>
+            <label htmlFor="discord-channel-id">Discord Channel ID</label>
+            <input
+              id="discord-channel-id"
+              value={discordMappingChannelId}
+              onChange={(event) => setDiscordMappingChannelId(event.target.value)}
+              required
+            />
+            <label htmlFor="discord-channel-name">Discord Channel Name</label>
+            <input
+              id="discord-channel-name"
+              value={discordMappingChannelName}
+              onChange={(event) => setDiscordMappingChannelName(event.target.value)}
+              required
+            />
+            <label htmlFor="matrix-channel-id">Mapped Matrix Channel</label>
+            <select
+              id="matrix-channel-id"
+              value={discordMappedMatrixChannelId}
+              onChange={(event) => setDiscordMappedMatrixChannelId(event.target.value)}
+              required
+            >
+              <option value="">Select channel</option>
+              {channels.map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  {channel.name}
+                </option>
+              ))}
+            </select>
+            <button type="submit">Save Channel Mapping</button>
+          </form>
+
+          {discordMappings.length > 0 ? (
+            <ul>
+              {discordMappings.map((mapping) => (
+                <li key={mapping.id}>
+                  {mapping.discordChannelName} ({mapping.discordChannelId}) → {mapping.matrixChannelId}
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      void handleDeleteDiscordMapping(mapping.id);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <form className="stack" onSubmit={handleRelayDiscordMessage}>
+            <label htmlFor="discord-relay-channel">Relay Discord Channel ID</label>
+            <input
+              id="discord-relay-channel"
+              value={discordRelayChannelId}
+              onChange={(event) => setDiscordRelayChannelId(event.target.value)}
+              required
+            />
+            <label htmlFor="discord-relay-author">Relay Author</label>
+            <input
+              id="discord-relay-author"
+              value={discordRelayAuthor}
+              onChange={(event) => setDiscordRelayAuthor(event.target.value)}
+              required
+            />
+            <label htmlFor="discord-relay-content">Relay Content</label>
+            <input
+              id="discord-relay-content"
+              value={discordRelayContent}
+              onChange={(event) => setDiscordRelayContent(event.target.value)}
+              required
+            />
+            <button type="submit">Relay Test Message</button>
+          </form>
+        </section>
+      ) : null}
+
       {viewer && viewer.needsOnboarding ? (
         <section className="panel">
           <h2>Choose Username</h2>
@@ -2014,7 +2436,31 @@ export function ChatClient() {
                       >
                         {voiceDeafened ? "Undeafen" : "Deafen"}
                       </button>
+                      <button
+                        type="button"
+                        className={voiceVideoEnabled ? "ghost active-toggle" : "ghost"}
+                        onClick={() => {
+                          void handleToggleVideo(!voiceVideoEnabled);
+                        }}
+                      >
+                        {voiceVideoEnabled ? "Disable Video" : "Enable Video"}
+                      </button>
                     </div>
+                    <label htmlFor="voice-video-quality">Video Quality</label>
+                    <select
+                      id="voice-video-quality"
+                      value={voiceVideoQuality}
+                      onChange={(event) => setVoiceVideoQuality(event.target.value as "low" | "medium" | "high")}
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                    {canManageChannel ? (
+                      <form className="stack" onSubmit={handleSetVoiceChannelVideoDefaults}>
+                        <button type="submit">Save Voice Channel Video Defaults</button>
+                      </form>
+                    ) : null}
                     <h3>Voice Roster</h3>
                     <ul className="member-list">
                       {voiceMembers.length === 0 ? <li>No one connected.</li> : null}
@@ -2024,6 +2470,7 @@ export function ChatClient() {
                           {member.displayName}
                           {member.muted ? " (muted)" : ""}
                           {member.deafened ? " (deafened)" : ""}
+                          {member.videoEnabled ? ` (video:${member.videoQuality})` : ""}
                         </li>
                       ))}
                     </ul>

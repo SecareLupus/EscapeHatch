@@ -4,9 +4,12 @@ export const config = {
   webBaseUrl: process.env.WEB_BASE_URL ?? "http://localhost:3000",
   databaseUrl: process.env.DATABASE_URL,
   sessionSecret: process.env.SESSION_SECRET ?? "dev-insecure-session-secret",
+  sessionTtlSeconds: Number(process.env.SESSION_TTL_SECONDS ?? "3600"),
   devAuthBypass: process.env.DEV_AUTH_BYPASS === "true",
   setupBootstrapEnabled: process.env.SETUP_BOOTSTRAP_ENABLED !== "false",
   setupBootstrapToken: process.env.SETUP_BOOTSTRAP_TOKEN ?? "",
+  logFilePath: process.env.LOG_FILE_PATH ?? "",
+  rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE ?? "240"),
   oidc: {
     keycloakIssuer: process.env.OIDC_KEYCLOAK_ISSUER,
     keycloakClientId: process.env.OIDC_KEYCLOAK_CLIENT_ID,
@@ -28,6 +31,18 @@ export const config = {
     twitchAuthorizeUrl: process.env.OIDC_TWITCH_AUTHORIZE_URL ?? "https://id.twitch.tv/oauth2/authorize",
     twitchTokenUrl: process.env.OIDC_TWITCH_TOKEN_URL ?? "https://id.twitch.tv/oauth2/token",
     twitchUserInfoUrl: process.env.OIDC_TWITCH_USERINFO_URL ?? "https://api.twitch.tv/helix/users"
+  },
+  discordBridge: {
+    clientId: process.env.DISCORD_BRIDGE_CLIENT_ID,
+    clientSecret: process.env.DISCORD_BRIDGE_CLIENT_SECRET,
+    authorizeUrl: process.env.DISCORD_BRIDGE_AUTHORIZE_URL ?? "https://discord.com/api/oauth2/authorize",
+    tokenUrl: process.env.DISCORD_BRIDGE_TOKEN_URL ?? "https://discord.com/api/oauth2/token",
+    userGuildsUrl: process.env.DISCORD_BRIDGE_USER_GUILDS_URL ?? "https://discord.com/api/users/@me/guilds",
+    callbackUrl: process.env.DISCORD_BRIDGE_CALLBACK_URL ?? "http://localhost:4000/v1/discord/oauth/callback",
+    mockMode: process.env.DISCORD_BRIDGE_MOCK !== "false"
+  },
+  voice: {
+    tokenTtlSeconds: Number(process.env.SFU_TOKEN_TTL_SECONDS ?? "300")
   },
   synapse: {
     baseUrl: process.env.SYNAPSE_BASE_URL,

@@ -146,9 +146,75 @@ export async function initDb(): Promise<void> {
       product_user_id text not null,
       muted boolean not null default false,
       deafened boolean not null default false,
+      video_enabled boolean not null default false,
+      video_quality text not null default 'medium',
       joined_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       primary key (channel_id, product_user_id)
+    );
+
+    create table if not exists hub_federation_policies (
+      hub_id text primary key references hubs(id) on delete cascade,
+      allowlist text[] not null default '{}',
+      created_by_user_id text not null,
+      updated_by_user_id text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists federation_policy_events (
+      id text primary key,
+      hub_id text not null references hubs(id) on delete cascade,
+      actor_user_id text not null,
+      action_type text not null,
+      policy_json jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now()
+    );
+
+    create table if not exists room_acl_status (
+      room_id text primary key,
+      hub_id text not null references hubs(id) on delete cascade,
+      server_id text references servers(id) on delete cascade,
+      channel_id text references channels(id) on delete cascade,
+      room_kind text not null,
+      allowlist text[] not null default '{}',
+      status text not null,
+      last_error text,
+      applied_at timestamptz,
+      checked_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists discord_bridge_connections (
+      id text primary key,
+      hub_id text not null unique references hubs(id) on delete cascade,
+      connected_by_user_id text not null,
+      discord_user_id text,
+      discord_username text,
+      access_token text,
+      refresh_token text,
+      token_expires_at timestamptz,
+      guild_id text,
+      guild_name text,
+      status text not null default 'disconnected',
+      last_sync_at timestamptz,
+      last_error text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table if not exists discord_bridge_channel_mappings (
+      id text primary key,
+      hub_id text not null references hubs(id) on delete cascade,
+      guild_id text not null,
+      discord_channel_id text not null,
+      discord_channel_name text not null,
+      matrix_channel_id text not null references channels(id) on delete cascade,
+      enabled boolean not null default true,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (hub_id, discord_channel_id),
+      unique (hub_id, matrix_channel_id)
     );
 
     create table if not exists platform_settings (
@@ -165,7 +231,11 @@ export async function initDb(): Promise<void> {
     alter table channels add column if not exists posting_restricted_to_roles text[] not null default '{}';
     alter table channels add column if not exists voice_sfu_room_id text;
     alter table channels add column if not exists voice_max_participants integer;
+    alter table channels add column if not exists video_enabled boolean not null default false;
+    alter table channels add column if not exists video_max_participants integer;
     alter table chat_messages add column if not exists author_display_name text not null default 'Unknown';
+    alter table voice_presence add column if not exists video_enabled boolean not null default false;
+    alter table voice_presence add column if not exists video_quality text not null default 'medium';
     alter table platform_settings add column if not exists bootstrap_completed_at timestamptz;
     alter table platform_settings add column if not exists bootstrap_admin_user_id text;
     alter table platform_settings add column if not exists bootstrap_hub_id text;

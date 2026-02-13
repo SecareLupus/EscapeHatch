@@ -131,13 +131,14 @@ This roadmap maps the current repository scaffold to the target architecture in 
 
 ## Phase 7 — Federation Policy Enforcement for Managed Hub Network
 **Goal:** Default to hub-restricted federation and safe room-level ACL posture.
+**Status:** Complete (MVP)
 
 ### Tasks
-- Add federation allowlist configuration model at hub level.
-- Apply server ACL defaults (`m.room.server_acl` or equivalent) on system-created rooms.
-- Build control-plane routines to reconcile policy drift on existing rooms/spaces.
-- Add admin visibility for current federation policy status and recent changes.
-- Add integration tests for allowlisted vs non-allowlisted federation interactions.
+- [x] Add federation allowlist configuration model at hub level.
+- [x] Apply server ACL defaults (`m.room.server_acl` or equivalent) on system-created rooms.
+- [x] Build control-plane routines to reconcile policy drift on existing rooms/spaces.
+- [x] Add admin visibility for current federation policy status and recent changes.
+- [x] Add integration tests for allowlisted vs non-allowlisted federation interactions.
 
 ### Exit criteria
 - System-created rooms enforce managed-network federation boundaries by default.
@@ -146,13 +147,14 @@ This roadmap maps the current repository scaffold to the target architecture in 
 
 ## Phase 8 — Discord Bridge MVP (Milestone 4)
 **Goal:** Connect creator Discord communities with mapped Matrix rooms through controlled workflows.
+**Status:** Complete (MVP scaffolding)
 
 ### Tasks
-- Implement “Connect Discord” OAuth flow and guild selection UX, reusing identity/session patterns established in Phase 2 where feasible.
-- Integrate selected bridge implementation (evaluate matrix-appservice-discord vs mautrix-discord fit).
-- Build channel mapping management UI/API (Discord channel ↔ Matrix room).
-- Ship basic message/media relay with documented formatting limitations.
-- Add bridge health + sync status visibility and retry actions for admins.
+- [x] Implement “Connect Discord” OAuth flow and guild selection UX, reusing identity/session patterns established in Phase 2 where feasible.
+- [x] Integrate selected bridge implementation (evaluate matrix-appservice-discord vs mautrix-discord fit).
+- [x] Build channel mapping management UI/API (Discord channel ↔ Matrix room).
+- [x] Ship basic message/media relay with documented formatting limitations.
+- [x] Add bridge health + sync status visibility and retry actions for admins.
 
 ### Exit criteria
 - Creator admins can connect a guild, map channels, and observe bidirectional message relay.
@@ -161,16 +163,17 @@ This roadmap maps the current repository scaffold to the target architecture in 
 
 ## Phase 9 — Video Enablement, Performance, and Production Readiness (Milestone 5 + hardening)
 **Goal:** Optional video support plus operational quality required for hosted rollout.
+**Status:** Complete (MVP hardening)
 
 ### Tasks
-- Enable optional video tracks and bandwidth/quality controls in voice channels.
-- Add observability stack glue (metrics/logging/error tracking hooks from apps and infra services).
-- [ ] Extend request tracing from per-response correlation IDs to persistent sinks:
+- [x] Enable optional video tracks and bandwidth/quality controls in voice channels.
+- [x] Add observability stack glue (metrics/logging/error tracking hooks from apps and infra services).
+- [x] Extend request tracing from per-response correlation IDs to persistent sinks:
   - structured log shipping with `requestId`,
   - traceable error reporting across web + control-plane.
-- Define backup/retention policies (Postgres/media) and runbook docs.
-- Add load/concurrency validation for expected usage profile (small active cohorts).
-- Perform security hardening review (rate limits, token TTLs, secret management, audit integrity).
+- [x] Define backup/retention policies (Postgres/media) and runbook docs.
+- [x] Add load/concurrency validation for expected usage profile (small active cohorts).
+- [x] Perform security hardening review (rate limits, token TTLs, secret management, audit integrity).
 
 ### Exit criteria
 - Platform supports stable hosted operation with optional video and operational safeguards.

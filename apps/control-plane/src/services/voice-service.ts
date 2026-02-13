@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { VoiceTokenGrant } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
 import { executePrivilegedAction } from "./privileged-gateway.js";
+import { config } from "../config.js";
 
 function signEphemeralToken(payload: Record<string, unknown>): string {
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
@@ -15,6 +16,7 @@ export async function issueVoiceToken(input: {
   actorUserId: string;
   serverId: string;
   channelId: string;
+  videoQuality?: "low" | "medium" | "high";
 }): Promise<VoiceTokenGrant> {
   return executePrivilegedAction({
     actorUserId: input.actorUserId,
@@ -39,10 +41,12 @@ export async function issueVoiceToken(input: {
         throw new Error("Channel is not configured as a voice channel.");
       }
 
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      const ttlSeconds = Math.max(60, config.voice.tokenTtlSeconds);
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
       const token = signEphemeralToken({
         sub: input.actorUserId,
         room: channel.voice_sfu_room_id,
+        video_quality: input.videoQuality ?? "medium",
         exp: Math.floor(expiresAt.getTime() / 1000)
       });
 

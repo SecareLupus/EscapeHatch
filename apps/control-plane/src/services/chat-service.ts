@@ -14,6 +14,8 @@ interface ChannelRow {
   posting_restricted_to_roles: string[] | null;
   voice_sfu_room_id: string | null;
   voice_max_participants: number | null;
+  video_enabled: boolean;
+  video_max_participants: number | null;
   created_at: string;
 }
 
@@ -40,7 +42,9 @@ function mapChannel(row: ChannelRow): Channel {
       row.voice_sfu_room_id && row.voice_max_participants
         ? {
             sfuRoomId: row.voice_sfu_room_id,
-            maxParticipants: row.voice_max_participants
+            maxParticipants: row.voice_max_participants,
+            videoEnabled: row.video_enabled,
+            maxVideoParticipants: row.video_max_participants
           }
         : null,
     createdAt: row.created_at
@@ -499,6 +503,30 @@ export async function renameChannel(input: {
     }
 
     return mapChannel(value);
+  });
+}
+
+export async function updateChannelVideoControls(input: {
+  channelId: string;
+  serverId: string;
+  videoEnabled: boolean;
+  maxVideoParticipants?: number;
+}): Promise<Channel> {
+  return withDb(async (db) => {
+    const row = await db.query<ChannelRow>(
+      `update channels
+       set video_enabled = $3,
+           video_max_participants = $4
+       where id = $1 and server_id = $2 and type = 'voice'
+       returning *`,
+      [input.channelId, input.serverId, input.videoEnabled, input.maxVideoParticipants ?? null]
+    );
+
+    const updated = row.rows[0];
+    if (!updated) {
+      throw new Error("Voice channel not found.");
+    }
+    return mapChannel(updated);
   });
 }
 

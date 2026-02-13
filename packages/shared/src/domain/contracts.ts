@@ -64,6 +64,8 @@ export interface Channel {
 export interface VoiceMetadata {
   sfuRoomId: string;
   maxParticipants: number;
+  videoEnabled?: boolean;
+  maxVideoParticipants?: number | null;
 }
 
 export interface MatrixProvisioningDefaults {
@@ -128,7 +130,66 @@ export interface VoicePresenceMember {
   displayName: string;
   muted: boolean;
   deafened: boolean;
+  videoEnabled: boolean;
+  videoQuality: "low" | "medium" | "high";
   joinedAt: string;
+  updatedAt: string;
+}
+
+export interface HubFederationPolicy {
+  hubId: string;
+  allowlist: string[];
+  updatedByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FederationPolicyEvent {
+  id: string;
+  hubId: string;
+  actorUserId: string;
+  actionType: "policy_updated" | "policy_reconciled";
+  policy: {
+    allowlist: string[];
+  };
+  createdAt: string;
+}
+
+export interface FederationPolicyStatus {
+  roomId: string;
+  hubId: string;
+  serverId: string | null;
+  channelId: string | null;
+  roomKind: "space" | "room";
+  allowlist: string[];
+  status: "applied" | "skipped" | "error";
+  lastError: string | null;
+  appliedAt: string | null;
+  checkedAt: string;
+  updatedAt: string;
+}
+
+export interface DiscordBridgeConnection {
+  id: string;
+  hubId: string;
+  connectedByUserId: string;
+  guildId: string | null;
+  guildName: string | null;
+  status: "disconnected" | "connected" | "degraded" | "syncing";
+  lastSyncAt: string | null;
+  lastError: string | null;
+  updatedAt: string;
+}
+
+export interface DiscordBridgeChannelMapping {
+  id: string;
+  hubId: string;
+  guildId: string;
+  discordChannelId: string;
+  discordChannelName: string;
+  matrixChannelId: string;
+  enabled: boolean;
+  createdAt: string;
   updatedAt: string;
 }
 

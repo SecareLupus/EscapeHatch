@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { DEFAULT_SERVER_BLUEPRINT } from "@escapehatch/shared";
+import { config } from "../config.js";
 import { requireAuth, requireInitialized } from "../auth/middleware.js";
 import { createChannelWorkflow, createServerWorkflow } from "../services/provisioning-service.js";
 import {
@@ -35,6 +36,7 @@ import {
   renameCategory,
   renameChannel,
   renameServer,
+  updateChannelVideoControls,
   upsertChannelReadState
 } from "../services/chat-service.js";
 import { getBootstrapStatus } from "../services/bootstrap-service.js";
@@ -46,6 +48,26 @@ import {
   listVoicePresence,
   updateVoicePresenceState
 } from "../services/voice-presence-service.js";
+import {
+  getHubFederationPolicy,
+  listFederationPolicyEvents,
+  listFederationPolicyStatuses,
+  reconcileHubFederationPolicy,
+  upsertHubFederationPolicy
+} from "../services/federation-service.js";
+import {
+  completeDiscordOauthAndListGuilds,
+  consumeDiscordOauthState,
+  createDiscordConnectUrl,
+  deleteDiscordChannelMapping,
+  getDiscordBridgeConnection,
+  getPendingDiscordGuildSelection,
+  listDiscordChannelMappings,
+  relayDiscordMessageToMappedChannel,
+  retryDiscordBridgeSync,
+  selectDiscordGuild,
+  upsertDiscordChannelMapping
+} from "../services/discord-bridge-service.js";
 
 export async function registerDomainRoutes(app: FastifyInstance): Promise<void> {
   const initializedAuthHandlers = { preHandler: [requireAuth, requireInitialized] };
@@ -101,6 +123,78 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
   app.get("/v1/hubs", initializedAuthHandlers, async (request) => {
     return { items: await listHubsForUser(request.auth!.productUserId) };
+  });
+
+  app.get("/v1/hubs/:hubId/federation-policy", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+
+    const [policy, statuses, events] = await Promise.all([
+      getHubFederationPolicy(params.hubId),
+      listFederationPolicyStatuses(params.hubId),
+      listFederationPolicyEvents(params.hubId, 20)
+    ]);
+    return {
+      policy,
+      status: {
+        totalRooms: statuses.length,
+        appliedRooms: statuses.filter((item) => item.status === "applied").length,
+        errorRooms: statuses.filter((item) => item.status === "error").length,
+        skippedRooms: statuses.filter((item) => item.status === "skipped").length
+      },
+      rooms: statuses,
+      recentChanges: events
+    };
+  });
+
+  app.put("/v1/hubs/:hubId/federation-policy", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        allowlist: z.array(z.string().min(1)).max(100).default([])
+      })
+      .parse(request.body ?? {});
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+
+    const policy = await upsertHubFederationPolicy({
+      hubId: params.hubId,
+      allowlist: payload.allowlist,
+      actorUserId: request.auth!.productUserId
+    });
+    reply.code(200);
+    return policy;
+  });
+
+  app.post("/v1/hubs/:hubId/federation-policy/reconcile", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+
+    const result = await reconcileHubFederationPolicy({
+      hubId: params.hubId,
+      actorUserId: request.auth!.productUserId
+    });
+    return result;
   });
 
   app.post("/v1/channels", initializedAuthHandlers, async (request, reply) => {
@@ -532,6 +626,41 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     reply.code(204).send();
   });
 
+  app.patch("/v1/channels/:channelId/video-controls", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        videoEnabled: z.boolean(),
+        maxVideoParticipants: z.number().int().min(1).max(16).optional()
+      })
+      .parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: payload.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    try {
+      return await updateChannelVideoControls({
+        channelId: params.channelId,
+        serverId: payload.serverId,
+        videoEnabled: payload.videoEnabled,
+        maxVideoParticipants: payload.maxVideoParticipants
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Voice channel not found.") {
+        reply.code(404).send({ message: error.message });
+        return;
+      }
+      throw error;
+    }
+  });
+
   app.post("/v1/reports", initializedAuthHandlers, async (request, reply) => {
     const payload = z
       .object({
@@ -609,7 +738,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const payload = z
       .object({
         serverId: z.string().min(1),
-        channelId: z.string().min(1)
+        channelId: z.string().min(1),
+        videoQuality: z.enum(["low", "medium", "high"]).optional()
       })
       .parse(request.body);
 
@@ -641,7 +771,9 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         serverId: z.string().min(1),
         channelId: z.string().min(1),
         muted: z.boolean().optional(),
-        deafened: z.boolean().optional()
+        deafened: z.boolean().optional(),
+        videoEnabled: z.boolean().optional(),
+        videoQuality: z.enum(["low", "medium", "high"]).optional()
       })
       .parse(request.body);
     await joinVoicePresence({
@@ -657,7 +789,9 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         serverId: z.string().min(1),
         channelId: z.string().min(1),
         muted: z.boolean(),
-        deafened: z.boolean()
+        deafened: z.boolean(),
+        videoEnabled: z.boolean().optional(),
+        videoQuality: z.enum(["low", "medium", "high"]).optional()
       })
       .parse(request.body);
     await updateVoicePresenceState({
@@ -679,5 +813,192 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       ...payload
     });
     reply.code(204).send();
+  });
+
+  app.get("/v1/discord/oauth/start", initializedAuthHandlers, async (request, reply) => {
+    const query = z.object({ hubId: z.string().min(1) }).parse(request.query);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: query.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+
+    const url = createDiscordConnectUrl({
+      hubId: query.hubId,
+      productUserId: request.auth!.productUserId
+    });
+    reply.redirect(url, 302);
+  });
+
+  app.get("/v1/discord/oauth/callback", initializedAuthHandlers, async (request, reply) => {
+    const query = z.object({ code: z.string(), state: z.string() }).parse(request.query);
+    const state = consumeDiscordOauthState(query.state);
+    if (!state || state.productUserId !== request.auth!.productUserId) {
+      reply.code(400).send({ message: "Invalid Discord bridge OAuth state." });
+      return;
+    }
+
+    const completed = await completeDiscordOauthAndListGuilds({
+      hubId: state.hubId,
+      productUserId: request.auth!.productUserId,
+      code: query.code
+    });
+    const redirect = new URL(config.webBaseUrl);
+    redirect.searchParams.set("discordPendingSelection", completed.pendingSelectionId);
+    reply.redirect(redirect.toString(), 302);
+  });
+
+  app.get("/v1/discord/bridge/pending/:pendingSelectionId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ pendingSelectionId: z.string().min(1) }).parse(request.params);
+    const pending = getPendingDiscordGuildSelection({
+      pendingSelectionId: params.pendingSelectionId,
+      productUserId: request.auth!.productUserId
+    });
+    if (!pending) {
+      reply.code(404).send({ message: "Pending Discord bridge selection not found." });
+      return;
+    }
+    return pending;
+  });
+
+  app.post("/v1/discord/bridge/pending/:pendingSelectionId/select", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ pendingSelectionId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({ guildId: z.string().min(1) }).parse(request.body);
+    try {
+      const connection = await selectDiscordGuild({
+        pendingSelectionId: params.pendingSelectionId,
+        productUserId: request.auth!.productUserId,
+        guildId: payload.guildId
+      });
+      return connection;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("not found")) {
+        reply.code(404).send({ message: error.message });
+        return;
+      }
+      throw error;
+    }
+  });
+
+  app.get("/v1/discord/bridge/:hubId/health", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+    const connection = await getDiscordBridgeConnection(params.hubId);
+    const mappings = await listDiscordChannelMappings(params.hubId);
+    return {
+      connection,
+      mappingCount: mappings.length,
+      activeMappingCount: mappings.filter((mapping) => mapping.enabled).length
+    };
+  });
+
+  app.post("/v1/discord/bridge/:hubId/retry-sync", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+    try {
+      return await retryDiscordBridgeSync(params.hubId);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("not found")) {
+        reply.code(404).send({ message: error.message });
+        return;
+      }
+      throw error;
+    }
+  });
+
+  app.get("/v1/discord/bridge/:hubId/mappings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+    return { items: await listDiscordChannelMappings(params.hubId) };
+  });
+
+  app.put("/v1/discord/bridge/:hubId/mappings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        guildId: z.string().min(1),
+        discordChannelId: z.string().min(1),
+        discordChannelName: z.string().min(1),
+        matrixChannelId: z.string().min(1),
+        enabled: z.boolean().default(true)
+      })
+      .parse(request.body);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+    return upsertDiscordChannelMapping({
+      hubId: params.hubId,
+      ...payload
+    });
+  });
+
+  app.delete("/v1/discord/bridge/:hubId/mappings/:mappingId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1), mappingId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+    await deleteDiscordChannelMapping({
+      hubId: params.hubId,
+      mappingId: params.mappingId
+    });
+    reply.code(204).send();
+  });
+
+  app.post("/v1/discord/bridge/:hubId/relay", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const payload = z
+      .object({
+        discordChannelId: z.string().min(1),
+        authorName: z.string().min(1),
+        content: z.string().min(1).max(2000),
+        mediaUrls: z.array(z.string().url()).max(8).optional()
+      })
+      .parse(request.body);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+    return relayDiscordMessageToMappedChannel({
+      hubId: params.hubId,
+      ...payload
+    });
   });
 }
