@@ -45,18 +45,18 @@ This roadmap starts after Phases 1-9 MVP completion and focuses on production-re
 
 ## Phase 12 — Admin UX for Delegation Workflows
 **Goal:** Deliver complete management UX for assigning and reviewing delegated space administrators.
-**Status:** In Progress
+**Status:** Completed
 
 ### Tasks
-- [ ] Implement API client methods in `apps/web/lib/control-plane.ts`.
-- [ ] Extend `/admin` with delegation console:
+- [x] Implement API client methods in `apps/web/lib/control-plane.ts`.
+- [x] Extend `/admin` with delegation console:
   - assign/revoke space admins,
   - ownership transfer flow,
   - effective permissions preview.
-- [ ] Add searchable user picker and current-assignment table per hub/space.
-- [ ] Show assignment history/audit timeline in UI.
-- [ ] Add UI safety affordances.
-- [ ] Add E2E happy-path + abuse-path UI tests.
+- [x] Add searchable user picker and current-assignment table per hub/space.
+- [x] Show assignment history/audit timeline in UI.
+- [x] Add UI safety affordances.
+- [x] Add E2E happy-path + abuse-path UI tests.
 
 ---
 

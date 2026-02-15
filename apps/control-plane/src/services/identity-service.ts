@@ -188,3 +188,18 @@ export async function isPreferredUsernameTaken(input: {
     return Boolean(row.rows[0]?.taken);
   });
 }
+
+export async function searchIdentities(query: string): Promise<IdentityMapping[]> {
+  const normalizedQuery = `%${query.trim().toLowerCase()}%`;
+  return withDb(async (db) => {
+    const rows = await db.query<IdentityRow>(
+      `select distinct on (product_user_id) *
+       from identity_mappings
+       where (lower(preferred_username) like $1 or lower(email) like $1)
+       order by product_user_id, (preferred_username is not null) desc, updated_at desc
+       limit 10`,
+      [normalizedQuery]
+    );
+    return rows.rows.map(mapRow);
+  });
+}

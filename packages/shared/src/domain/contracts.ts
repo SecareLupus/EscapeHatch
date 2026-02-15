@@ -14,6 +14,19 @@ export type ModerationActionType =
   | "set_posting_restrictions";
 
 export type ReportStatus = "open" | "triaged" | "resolved" | "dismissed";
+export type PrivilegedAction =
+  | "moderation.kick"
+  | "moderation.ban"
+  | "moderation.unban"
+  | "moderation.timeout"
+  | "moderation.redact"
+  | "channel.lock"
+  | "channel.unlock"
+  | "channel.slowmode"
+  | "channel.posting"
+  | "voice.token.issue"
+  | "reports.triage"
+  | "audit.read";
 
 export interface ServerBlueprint {
   serverName: string;
@@ -211,10 +224,10 @@ export interface SpaceOwnerAssignment {
 export interface DelegationAuditEvent {
   id: string;
   actionType:
-    | "space_owner_assigned"
-    | "space_owner_revoked"
-    | "space_owner_transfer_started"
-    | "space_owner_transfer_completed";
+  | "space_owner_assigned"
+  | "space_owner_revoked"
+  | "space_owner_transfer_started"
+  | "space_owner_transfer_completed";
   actorUserId: string;
   targetUserId: string | null;
   assignmentId: string | null;

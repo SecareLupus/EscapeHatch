@@ -1,23 +1,9 @@
 import crypto from "node:crypto";
-import type { Role } from "@escapehatch/shared";
+import type { Role, PrivilegedAction } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
 import { expireSpaceOwnerAssignments } from "./delegation-service.js";
 
-export type PrivilegedAction =
-  | "moderation.kick"
-  | "moderation.ban"
-  | "moderation.unban"
-  | "moderation.timeout"
-  | "moderation.redact"
-  | "channel.lock"
-  | "channel.unlock"
-  | "channel.slowmode"
-  | "channel.posting"
-  | "voice.token.issue"
-  | "reports.triage"
-  | "audit.read";
-
-const permissionMatrix: Record<Role, PrivilegedAction[]> = {
+export const permissionMatrix: Record<Role, PrivilegedAction[]> = {
   hub_admin: [
     "moderation.kick",
     "moderation.ban",

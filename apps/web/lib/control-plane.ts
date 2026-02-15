@@ -17,6 +17,7 @@ import type {
   Server,
   SpaceOwnerAssignment,
   DelegationAuditEvent,
+  IdentityMapping,
   VoicePresenceMember,
   VoiceTokenGrant
 } from "@escapehatch/shared";
@@ -240,6 +241,12 @@ export async function listChannels(serverId: string): Promise<Channel[]> {
   return json.items;
 }
 
+export async function searchUsers(query: string): Promise<IdentityMapping[]> {
+  const q = new URLSearchParams({ q: query });
+  const json = await apiFetch<{ items: IdentityMapping[] }>(`/v1/users/search?${q.toString()}`);
+  return json.items;
+}
+
 export async function listCategories(serverId: string): Promise<Category[]> {
   const json = await apiFetch<{ items: Category[] }>(
     `/v1/servers/${encodeURIComponent(serverId)}/categories`
@@ -388,10 +395,17 @@ export async function deleteChannel(input: { channelId: string; serverId: string
   });
 }
 
-export async function fetchAllowedActions(serverId: string, channelId?: string): Promise<PrivilegedAction[]> {
+export async function fetchAllowedActions(
+  serverId: string,
+  channelId?: string,
+  productUserId?: string
+): Promise<PrivilegedAction[]> {
   const query = new URLSearchParams({ serverId });
   if (channelId) {
     query.set("channelId", channelId);
+  }
+  if (productUserId) {
+    query.set("productUserId", productUserId);
   }
 
   const json = await apiFetch<{ items: PrivilegedAction[] }>(`/v1/permissions?${query.toString()}`);

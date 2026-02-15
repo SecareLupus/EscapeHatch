@@ -23,10 +23,12 @@ import {
   revokeSpaceOwnerAssignment,
   transferSpaceOwnership,
   listDelegationAuditEvents,
+  searchUsers,
+  fetchAllowedActions,
   grantRole,
   createServer
 } from "../lib/control-plane";
-import { DelegationAuditEvent, SpaceOwnerAssignment, Server } from "@escapehatch/shared";
+import { DelegationAuditEvent, SpaceOwnerAssignment, Server, IdentityMapping, PrivilegedAction } from "@escapehatch/shared";
 
 
 
@@ -77,6 +79,11 @@ export function AdminConsole() {
   const [newSpaceName, setNewSpaceName] = useState("");
   const [newSpaceInitialOwnerId, setNewSpaceInitialOwnerId] = useState("");
 
+  const [userQuery, setUserQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<IdentityMapping[]>([]);
+  const [previewPermissions, setPreviewPermissions] = useState<PrivilegedAction[]>([]);
+  const [previewUserId, setPreviewUserId] = useState<string | null>(null);
+
 
 
   const selectedHubName = useMemo(
@@ -125,6 +132,44 @@ export function AdminConsole() {
   async function loadServerState(serverId: string): Promise<void> {
     const assigned = await listSpaceOwnerAssignments(serverId);
     setDelegations(assigned);
+    if (previewUserId) {
+      await loadPreview(serverId, previewUserId);
+    }
+  }
+
+  async function loadPreview(serverId: string, userId: string): Promise<void> {
+    try {
+      const actions = await fetchAllowedActions(serverId, undefined, userId);
+      setPreviewPermissions(actions);
+    } catch (cause) {
+      console.warn("Failed to load permission preview:", cause);
+      setPreviewPermissions([]);
+    }
+  }
+
+  async function handleUserSearch(query: string): Promise<void> {
+    setUserQuery(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const results = await searchUsers(query);
+      setSearchResults(results);
+    } catch (cause) {
+      console.error("User search failed:", cause);
+    }
+  }
+
+  async function handleSelectUser(user: IdentityMapping): Promise<void> {
+    setNewDelegateUserId(user.productUserId);
+    setNewOwnerUserId(user.productUserId);
+    setPreviewUserId(user.productUserId);
+    setSearchResults([]);
+    setUserQuery(user.preferredUsername || user.email || user.productUserId);
+    if (selectedServerId) {
+      await loadPreview(selectedServerId, user.productUserId);
+    }
   }
 
 
@@ -624,7 +669,15 @@ export function AdminConsole() {
                   <td>{d.expiresAt ? new Date(d.expiresAt).toLocaleString() : "Never"}</td>
                   <td>
                     {d.status === "active" && (
-                      <button type="button" className="ghost" onClick={() => void handleRevokeDelegate(d.id)}>
+                      <button
+                        type="button"
+                        className="ghost danger"
+                        onClick={() => {
+                          if (confirm("Revoke this delegation?")) {
+                            void handleRevokeDelegate(d.id);
+                          }
+                        }}
+                      >
                         Revoke
                       </button>
                     )}
@@ -637,38 +690,83 @@ export function AdminConsole() {
           <p>No delegated admins for this server.</p>
         )}
 
-        <form className="stack" onSubmit={handleAddDelegate}>
-          <label htmlFor="delegate-user-id">Assign New Delegate (Product User ID)</label>
-          <input
-            id="delegate-user-id"
-            value={newDelegateUserId}
-            onChange={(e) => setNewDelegateUserId(e.target.value)}
-            required
-            placeholder="usr_..."
-          />
-          <label htmlFor="delegate-expires-at">Expiration (Optional)</label>
-          <input
-            id="delegate-expires-at"
-            type="datetime-local"
-            value={newDelegateExpiresAt}
-            onChange={(e) => setNewDelegateExpiresAt(e.target.value)}
-          />
-          <button type="submit" disabled={busy || !selectedServerId}>
-            Assign Delegate
-          </button>
-        </form>
+        <div className="panel stack" style={{ border: "1px solid var(--border)", backgroundColor: "rgba(0,0,0,0.1)" }}>
+          <h3>Assign New Delegate</h3>
+          <div className="stack" style={{ position: "relative" }}>
+            <label htmlFor="user-picker">Search User (Username or Email)</label>
+            <input
+              id="user-picker"
+              value={userQuery}
+              onChange={(e) => void handleUserSearch(e.target.value)}
+              placeholder="Search..."
+              autoComplete="off"
+            />
+            {searchResults.length > 0 && (
+              <ul className="search-results-dropdown">
+                {searchResults.map((user) => (
+                  <li key={user.productUserId} onClick={() => void handleSelectUser(user)}>
+                    {user.preferredUsername || "Unknown"} ({user.email || user.productUserId})
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {previewUserId && (
+            <div className="stack" style={{ marginTop: "1rem" }}>
+              <h4>Permissions Preview for {userQuery}</h4>
+              <div className="permissions-grid">
+                {previewPermissions.length > 0 ? (
+                  previewPermissions.map((action) => (
+                    <span key={action} className="pill">
+                      {action}
+                    </span>
+                  ))
+                ) : (
+                  <p>No special permissions assigned in this scope.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <form className="stack" onSubmit={handleAddDelegate} style={{ marginTop: "1rem" }}>
+            <input type="hidden" value={newDelegateUserId} required />
+            <label htmlFor="delegate-expires-at">Expiration (Optional)</label>
+            <input
+              id="delegate-expires-at"
+              type="datetime-local"
+              value={newDelegateExpiresAt}
+              onChange={(e) => setNewDelegateExpiresAt(e.target.value)}
+            />
+            <button type="submit" disabled={busy || !selectedServerId || !newDelegateUserId}>
+              Confirm Assignment
+            </button>
+          </form>
+        </div>
 
         <h3>Transfer Server Ownership</h3>
+        <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>
+          <strong>Warning:</strong> Transferring ownership will remove your owner status for this server.
+        </p>
         <form className="stack" onSubmit={handleTransferOwnership}>
-          <label htmlFor="new-owner-user-id">New Owner (Product User ID)</label>
+          <label htmlFor="new-owner-user-id">New Owner (Search above first)</label>
           <input
             id="new-owner-user-id"
             value={newOwnerUserId}
             onChange={(e) => setNewOwnerUserId(e.target.value)}
             required
-            placeholder="usr_..."
+            placeholder="Assign a user above or paste ID"
           />
-          <button type="submit" disabled={busy || !selectedServerId}>
+          <button
+            type="submit"
+            className="danger"
+            disabled={busy || !selectedServerId}
+            onClick={(e) => {
+              if (!confirm("Are you sure you want to transfer ownership? This cannot be undone easily.")) {
+                e.preventDefault();
+              }
+            }}
+          >
             Transfer Ownership
           </button>
         </form>

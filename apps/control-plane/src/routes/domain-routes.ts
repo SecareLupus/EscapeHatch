@@ -49,6 +49,17 @@ import {
   updateVoicePresenceState
 } from "../services/voice-presence-service.js";
 import {
+  findUniqueProductUserIdByEmail,
+  getIdentityByProductUserId,
+  getIdentityByProviderSubject,
+  isOnboardingComplete,
+  isPreferredUsernameTaken,
+  listIdentitiesByProductUserId,
+  searchIdentities,
+  setPreferredUsernameForProductUser,
+  upsertIdentityMapping
+} from "../services/identity-service.js";
+import {
   getHubFederationPolicy,
   listFederationPolicyEvents,
   listFederationPolicyStatuses,
@@ -124,6 +135,11 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       defaultServerId: status.defaultServerId,
       defaultChannelId: status.defaultChannelId
     };
+  });
+
+  app.get("/v1/users/search", initializedAuthHandlers, async (request) => {
+    const query = z.object({ q: z.string().min(1) }).parse(request.query);
+    return { items: await searchIdentities(query.q) };
   });
 
   app.get("/v1/servers", initializedAuthHandlers, async () => {
@@ -722,17 +738,32 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     };
   });
 
-  app.get("/v1/permissions", initializedAuthHandlers, async (request) => {
+  app.get("/v1/permissions", initializedAuthHandlers, async (request, reply) => {
     const query = z
       .object({
         serverId: z.string().min(1),
-        channelId: z.string().min(1).optional()
+        channelId: z.string().min(1).optional(),
+        productUserId: z.string().min(1).optional()
       })
       .parse(request.query);
 
+    const targetUserId = query.productUserId ?? request.auth!.productUserId;
+
+    if (query.productUserId) {
+      // If previewing someone else, must have manage scope for that context
+      const allowed = await canManageServer({
+        productUserId: request.auth!.productUserId,
+        serverId: query.serverId
+      });
+      if (!allowed) {
+        reply.code(403).send({ message: "Forbidden: insufficient scope to preview permissions." });
+        return;
+      }
+    }
+
     return {
       items: await listAllowedActions({
-        productUserId: request.auth!.productUserId,
+        productUserId: targetUserId,
         scope: {
           serverId: query.serverId,
           channelId: query.channelId
