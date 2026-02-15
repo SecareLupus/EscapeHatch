@@ -35,6 +35,7 @@ export interface ViewerSession {
     email: string | null;
     avatarUrl?: string | null;
     matrixUserId?: string | null;
+    theme?: "light" | "dark" | null;
   } | null;
   linkedIdentities: Array<{
     provider: string;
@@ -42,6 +43,7 @@ export interface ViewerSession {
     preferredUsername: string | null;
     email: string | null;
     avatarUrl: string | null;
+    theme?: "light" | "dark" | null;
   }>;
   needsOnboarding: boolean;
 }
@@ -218,6 +220,14 @@ export async function completeUsernameOnboarding(username: string): Promise<void
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username })
+  });
+}
+
+export async function updateUserTheme(theme: "light" | "dark"): Promise<void> {
+  await apiFetch("/auth/session/me/theme", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ theme })
   });
 }
 

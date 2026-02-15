@@ -45,6 +45,7 @@ import {
   updateChannelVideoControls,
   upsertChannelReadState,
   updateChannelControls,
+  updateUserTheme,
   updateVoicePresenceState,
   type AuthProvidersResponse,
   type BootstrapStatus,
@@ -142,19 +143,21 @@ export function ChatClient() {
   const [activeModal, setActiveModal] = useState<
     "create-space" | "create-category" | "create-room" | "rename-space" | "rename-category" | "rename-room" | null
   >(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(true);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const messagesRef = useRef<HTMLOListElement | null>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
   const chatStateRequestIdRef = useRef(0);
   const initialChatLoadKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    const savedTheme = (viewer?.identity?.theme || localStorage.getItem("theme")) as "light" | "dark" | null;
     if (savedTheme) {
       setTheme(savedTheme);
     } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
       setTheme("dark");
     }
-  }, []);
+  }, [viewer?.identity]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -162,7 +165,11 @@ export function ChatClient() {
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    setTheme((prev) => {
+      const next = prev === "light" ? "dark" : "light";
+      void updateUserTheme(next);
+      return next;
+    });
   }, []);
 
   const enabledLoginProviders = useMemo(
@@ -1434,6 +1441,7 @@ export function ChatClient() {
     const content = draftMessage.trim();
     setDraftMessage("");
     await sendContentWithOptimistic(content);
+    messageInputRef.current?.focus();
   }
 
   async function handleSendMessage(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -1601,7 +1609,7 @@ export function ChatClient() {
       ) : null}
 
       {viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized ? (
-        <section className="chat-shell" aria-label="Chat workspace">
+        <section className={isDetailsOpen ? "chat-shell" : "chat-shell details-collapsed"} aria-label="Chat workspace">
           <nav className="servers panel" aria-label="Servers">
             <div className="category-header">
               <h2>Servers</h2>
@@ -1844,6 +1852,14 @@ export function ChatClient() {
                     {controlsOpen ? "Close Controls" : "Channel Controls"}
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  className="ghost"
+                  title={isDetailsOpen ? "Hide Details" : "Show Details"}
+                  onClick={() => setIsDetailsOpen((prev) => !prev)}
+                >
+                  {isDetailsOpen ? "→" : "←"}
+                </button>
               </div>
             </header>
 
@@ -1936,6 +1952,7 @@ export function ChatClient() {
               </label>
               <textarea
                 id="message-input"
+                ref={messageInputRef}
                 value={draftMessage}
                 onChange={(event) => setDraftMessage(event.target.value)}
                 onKeyDown={(event) => {
@@ -1959,141 +1976,143 @@ export function ChatClient() {
             </form>
           </section>
 
-          <aside className="context panel" aria-label="Channel context">
-            <h2>Channel Details</h2>
-            {activeChannel ? (
-              <>
-                <p className="context-line">
-                  <strong>Name:</strong> #{activeChannel.name}
-                </p>
-                <p className="context-line">
-                  <strong>Type:</strong> {activeChannel.type}
-                </p>
-                <p className="context-line">
-                  <strong>Locked:</strong> {activeChannel.isLocked ? "Yes" : "No"}
-                </p>
-                <p className="context-line">
-                  <strong>Slow mode:</strong> {activeChannel.slowModeSeconds}s
-                </p>
-                {(mentions.length ?? 0) > 0 ? (
+          {isDetailsOpen && (
+            <aside className="context panel" aria-label="Channel context">
+              <h2>Channel Details</h2>
+              {activeChannel ? (
+                <>
                   <p className="context-line">
-                    <strong>Mentions in channel:</strong> {mentions.length}
+                    <strong>Name:</strong> #{activeChannel.name}
                   </p>
-                ) : null}
-                {activeChannel.type === "voice" ? (
-                  <>
-                    <hr />
-                    <h3>Voice Controls</h3>
+                  <p className="context-line">
+                    <strong>Type:</strong> {activeChannel.type}
+                  </p>
+                  <p className="context-line">
+                    <strong>Locked:</strong> {activeChannel.isLocked ? "Yes" : "No"}
+                  </p>
+                  <p className="context-line">
+                    <strong>Slow mode:</strong> {activeChannel.slowModeSeconds}s
+                  </p>
+                  {(mentions.length ?? 0) > 0 ? (
                     <p className="context-line">
-                      <strong>Status:</strong> {voiceConnected ? "Connected" : "Disconnected"}
+                      <strong>Mentions in channel:</strong> {mentions.length}
                     </p>
-                    {voiceGrant ? (
+                  ) : null}
+                  {activeChannel.type === "voice" ? (
+                    <>
+                      <hr />
+                      <h3>Voice Controls</h3>
                       <p className="context-line">
-                        <strong>Voice Room:</strong> {voiceGrant.sfuRoomId}
+                        <strong>Status:</strong> {voiceConnected ? "Connected" : "Disconnected"}
                       </p>
-                    ) : null}
-                    <div className="voice-actions">
-                      {!voiceConnected ? (
+                      {voiceGrant ? (
+                        <p className="context-line">
+                          <strong>Voice Room:</strong> {voiceGrant.sfuRoomId}
+                        </p>
+                      ) : null}
+                      <div className="voice-actions">
+                        {!voiceConnected ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleJoinVoice();
+                            }}
+                          >
+                            Join Voice
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => {
+                              void handleLeaveVoice();
+                            }}
+                          >
+                            Leave Voice
+                          </button>
+                        )}
                         <button
                           type="button"
+                          className={voiceMuted ? "ghost active-toggle" : "ghost"}
                           onClick={() => {
-                            void handleJoinVoice();
+                            void handleToggleMuteDeafen(!voiceMuted, voiceDeafened);
                           }}
                         >
-                          Join Voice
+                          {voiceMuted ? "Unmute" : "Mute"}
                         </button>
-                      ) : (
                         <button
                           type="button"
-                          className="ghost"
+                          className={voiceDeafened ? "ghost active-toggle" : "ghost"}
                           onClick={() => {
-                            void handleLeaveVoice();
+                            void handleToggleMuteDeafen(voiceMuted, !voiceDeafened);
                           }}
                         >
-                          Leave Voice
+                          {voiceDeafened ? "Undeafen" : "Deafen"}
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className={voiceMuted ? "ghost active-toggle" : "ghost"}
-                        onClick={() => {
-                          void handleToggleMuteDeafen(!voiceMuted, voiceDeafened);
-                        }}
+                        <button
+                          type="button"
+                          className={voiceVideoEnabled ? "ghost active-toggle" : "ghost"}
+                          onClick={() => {
+                            void handleToggleVideo(!voiceVideoEnabled);
+                          }}
+                        >
+                          {voiceVideoEnabled ? "Disable Video" : "Enable Video"}
+                        </button>
+                      </div>
+                      <label htmlFor="voice-video-quality">Video Quality</label>
+                      <select
+                        id="voice-video-quality"
+                        value={voiceVideoQuality}
+                        onChange={(event) => setVoiceVideoQuality(event.target.value as "low" | "medium" | "high")}
                       >
-                        {voiceMuted ? "Unmute" : "Mute"}
-                      </button>
-                      <button
-                        type="button"
-                        className={voiceDeafened ? "ghost active-toggle" : "ghost"}
-                        onClick={() => {
-                          void handleToggleMuteDeafen(voiceMuted, !voiceDeafened);
-                        }}
-                      >
-                        {voiceDeafened ? "Undeafen" : "Deafen"}
-                      </button>
-                      <button
-                        type="button"
-                        className={voiceVideoEnabled ? "ghost active-toggle" : "ghost"}
-                        onClick={() => {
-                          void handleToggleVideo(!voiceVideoEnabled);
-                        }}
-                      >
-                        {voiceVideoEnabled ? "Disable Video" : "Enable Video"}
-                      </button>
-                    </div>
-                    <label htmlFor="voice-video-quality">Video Quality</label>
-                    <select
-                      id="voice-video-quality"
-                      value={voiceVideoQuality}
-                      onChange={(event) => setVoiceVideoQuality(event.target.value as "low" | "medium" | "high")}
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
-                    {canManageChannel ? (
-                      <form className="stack" onSubmit={handleSetVoiceChannelVideoDefaults}>
-                        <button type="submit">Save Voice Channel Video Defaults</button>
-                      </form>
-                    ) : null}
-                    <h3>Voice Roster</h3>
-                    <ul className="member-list">
-                      {voiceMembers.length === 0 ? <li>No one connected.</li> : null}
-                      {voiceMembers.map((member) => (
-                        <li key={member.userId}>
-                          <span className="member-dot" />
-                          {member.displayName}
-                          {member.muted ? " (muted)" : ""}
-                          {member.deafened ? " (deafened)" : ""}
-                          {member.videoEnabled ? ` (video:${member.videoQuality})` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                ) : null}
-                <hr />
-                <h3>Members in View</h3>
-                <ul className="member-list">
-                  {memberRoster.length === 0 ? <li>No active members yet.</li> : null}
-                  {memberRoster.map((member) => (
-                    <li key={member.id}>
-                      <span className="member-dot" />
-                      {member.displayName}
-                    </li>
-                  ))}
-                </ul>
-                {canManageCurrentSpace ? (
-                  <>
-                    <hr />
-                    <h3>Manager Console</h3>
-                    <p className="context-line">Open the manager dialog from the account area.</p>
-                  </>
-                ) : null}
-              </>
-            ) : (
-              <p>Select a channel to see context.</p>
-            )}
-          </aside>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                      {canManageChannel ? (
+                        <form className="stack" onSubmit={handleSetVoiceChannelVideoDefaults}>
+                          <button type="submit">Save Voice Channel Video Defaults</button>
+                        </form>
+                      ) : null}
+                      <h3>Voice Roster</h3>
+                      <ul className="member-list">
+                        {voiceMembers.length === 0 ? <li>No one connected.</li> : null}
+                        {voiceMembers.map((member) => (
+                          <li key={member.userId}>
+                            <span className="member-dot" />
+                            {member.displayName}
+                            {member.muted ? " (muted)" : ""}
+                            {member.deafened ? " (deafened)" : ""}
+                            {member.videoEnabled ? ` (video:${member.videoQuality})` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  <hr />
+                  <h3>Members in View</h3>
+                  <ul className="member-list">
+                    {memberRoster.length === 0 ? <li>No active members yet.</li> : null}
+                    {memberRoster.map((member) => (
+                      <li key={member.id}>
+                        <span className="member-dot" />
+                        {member.displayName}
+                      </li>
+                    ))}
+                  </ul>
+                  {canManageCurrentSpace ? (
+                    <>
+                      <hr />
+                      <h3>Manager Console</h3>
+                      <p className="context-line">Open the manager dialog from the account area.</p>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <p>Select a channel to see context.</p>
+              )}
+            </aside>
+          )}
         </section>
       ) : null}
 

@@ -9,6 +9,7 @@ export interface IdentityMapping {
   avatarUrl: string | null;
   matrixUserId: string | null;
   productUserId: string;
+  theme?: "light" | "dark" | null;
   createdAt: string;
   updatedAt: string;
 }

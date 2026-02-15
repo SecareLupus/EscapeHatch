@@ -15,6 +15,7 @@ interface IdentityRow {
   avatar_url: string | null;
   matrix_user_id: string | null;
   product_user_id: string;
+  theme: "light" | "dark" | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +30,7 @@ function mapRow(result: IdentityRow): IdentityMapping {
     avatarUrl: result.avatar_url,
     matrixUserId: result.matrix_user_id,
     productUserId: result.product_user_id,
+    theme: result.theme as "light" | "dark" | null,
     createdAt: result.created_at,
     updatedAt: result.updated_at
   };
@@ -201,5 +203,19 @@ export async function searchIdentities(query: string): Promise<IdentityMapping[]
       [normalizedQuery]
     );
     return rows.rows.map(mapRow);
+  });
+}
+
+export async function updateUserTheme(productUserId: string, theme: string): Promise<void> {
+  await withDb(async (db) => {
+    const result = await db.query(
+      `update identity_mappings
+       set theme = $2, updated_at = now()
+       where product_user_id = $1`,
+      [productUserId, theme]
+    );
+    if ((result.rowCount ?? 0) < 1) {
+      throw new Error("No identities found for user.");
+    }
   });
 }

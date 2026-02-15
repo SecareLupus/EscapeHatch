@@ -10,7 +10,8 @@ import {
   isPreferredUsernameTaken,
   listIdentitiesByProductUserId,
   setPreferredUsernameForProductUser,
-  upsertIdentityMapping
+  upsertIdentityMapping,
+  updateUserTheme
 } from "../services/identity-service.js";
 import { requireAuth } from "../auth/middleware.js";
 import type { AccountLinkingRequirement, IdentityProvider } from "@escapehatch/shared";
@@ -282,23 +283,31 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       productUserId: auth.productUserId,
       identity: resolvedIdentity
         ? {
-            provider: resolvedIdentity.provider,
-            oidcSubject: resolvedIdentity.oidcSubject,
-            email: resolvedIdentity.email,
-            preferredUsername: resolvedIdentity.preferredUsername,
-            avatarUrl: resolvedIdentity.avatarUrl,
-            matrixUserId: resolvedIdentity.matrixUserId
-          }
+          provider: resolvedIdentity.provider,
+          oidcSubject: resolvedIdentity.oidcSubject,
+          email: resolvedIdentity.email,
+          preferredUsername: resolvedIdentity.preferredUsername,
+          avatarUrl: resolvedIdentity.avatarUrl,
+          matrixUserId: resolvedIdentity.matrixUserId,
+          theme: resolvedIdentity.theme
+        }
         : null,
       linkedIdentities: identities.map((identity) => ({
         provider: identity.provider,
         oidcSubject: identity.oidcSubject,
         email: identity.email,
         preferredUsername: identity.preferredUsername,
-        avatarUrl: identity.avatarUrl
+        avatarUrl: identity.avatarUrl,
+        theme: identity.theme
       })),
       needsOnboarding: !onboardingComplete
     };
+  });
+
+  app.patch("/auth/session/me/theme", { preHandler: requireAuth }, async (request, reply) => {
+    const { theme } = z.object({ theme: z.enum(["light", "dark"]) }).parse(request.body);
+    await updateUserTheme(request.auth!.productUserId, theme);
+    reply.code(204).send();
   });
 
   app.post("/auth/onboarding/username", { preHandler: requireAuth }, async (request, reply) => {

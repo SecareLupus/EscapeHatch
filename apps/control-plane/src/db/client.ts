@@ -28,6 +28,7 @@ export async function initDb(): Promise<void> {
       avatar_url text,
       matrix_user_id text,
       product_user_id text not null,
+      theme text,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       unique(provider, oidc_subject)
@@ -335,5 +336,6 @@ export async function initDb(): Promise<void> {
     );
     alter table channels add column if not exists position integer not null default 0;
     alter table categories add column if not exists position integer not null default 0;
+    alter table identity_mappings add column if not exists theme text;
   `);
 }
