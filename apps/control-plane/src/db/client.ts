@@ -55,6 +55,7 @@ export async function initDb(): Promise<void> {
       server_id text not null references servers(id),
       name text not null,
       matrix_subspace_id text,
+      position integer not null default 0,
       created_at timestamptz not null default now()
     );
 
@@ -65,6 +66,7 @@ export async function initDb(): Promise<void> {
       name text not null,
       type text not null,
       matrix_room_id text,
+      position integer not null default 0,
       is_locked boolean not null default false,
       slow_mode_seconds integer not null default 0,
       posting_restricted_to_roles text[] not null default '{}',
@@ -331,5 +333,7 @@ export async function initDb(): Promise<void> {
       'space_admin_transfer_started',
       'space_admin_transfer_completed'
     );
+    alter table channels add column if not exists position integer not null default 0;
+    alter table categories add column if not exists position integer not null default 0;
   `);
 }

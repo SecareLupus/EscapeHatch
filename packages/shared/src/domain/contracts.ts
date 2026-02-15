@@ -58,6 +58,7 @@ export interface Category {
   serverId: string;
   name: string;
   matrixSubspaceId: string | null;
+  position: number;
   createdAt: string;
 }
 
@@ -68,6 +69,7 @@ export interface Channel {
   name: string;
   type: ChannelType;
   matrixRoomId: string | null;
+  position: number;
   isLocked: boolean;
   slowModeSeconds: number;
   postingRestrictedToRoles: Role[];

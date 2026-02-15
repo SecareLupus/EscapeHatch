@@ -16,6 +16,7 @@ interface ChannelRow {
   voice_max_participants: number | null;
   video_enabled: boolean;
   video_max_participants: number | null;
+  position: number;
   created_at: string;
 }
 
@@ -24,6 +25,7 @@ interface CategoryRow {
   server_id: string;
   name: string;
   matrix_subspace_id: string | null;
+  position: number;
   created_at: string;
 }
 
@@ -41,12 +43,13 @@ function mapChannel(row: ChannelRow): Channel {
     voiceMetadata:
       row.voice_sfu_room_id && row.voice_max_participants
         ? {
-            sfuRoomId: row.voice_sfu_room_id,
-            maxParticipants: row.voice_max_participants,
-            videoEnabled: row.video_enabled,
-            maxVideoParticipants: row.video_max_participants
-          }
+          sfuRoomId: row.voice_sfu_room_id,
+          maxParticipants: row.voice_max_participants,
+          videoEnabled: row.video_enabled,
+          maxVideoParticipants: row.video_max_participants
+        }
         : null,
+    position: row.position,
     createdAt: row.created_at
   };
 }
@@ -57,6 +60,7 @@ function mapCategory(row: CategoryRow): Category {
     serverId: row.server_id,
     name: row.name,
     matrixSubspaceId: row.matrix_subspace_id,
+    position: row.position,
     createdAt: row.created_at
   };
 }
@@ -88,7 +92,7 @@ export async function listServers(): Promise<Server[]> {
 export async function listChannels(serverId: string): Promise<Channel[]> {
   return withDb(async (db) => {
     const rows = await db.query<ChannelRow>(
-      "select * from channels where server_id = $1 order by created_at asc",
+      "select * from channels where server_id = $1 order by position asc, created_at asc",
       [serverId]
     );
     return rows.rows.map(mapChannel);
@@ -98,7 +102,7 @@ export async function listChannels(serverId: string): Promise<Channel[]> {
 export async function listCategories(serverId: string): Promise<Category[]> {
   return withDb(async (db) => {
     const rows = await db.query<CategoryRow>(
-      "select * from categories where server_id = $1 order by created_at asc",
+      "select * from categories where server_id = $1 order by position asc, created_at asc",
       [serverId]
     );
     return rows.rows.map(mapCategory);
@@ -364,18 +368,20 @@ export async function createCategory(input: {
   });
 }
 
-export async function renameCategory(input: {
+export async function updateCategory(input: {
   categoryId: string;
   serverId: string;
-  name: string;
+  name?: string;
+  position?: number;
 }): Promise<Category> {
   return withDb(async (db) => {
     const row = await db.query<CategoryRow>(
       `update categories
-       set name = $1
-       where id = $2 and server_id = $3
+       set name = coalesce($1, name),
+           position = coalesce($2, position)
+       where id = $3 and server_id = $4
        returning *`,
-      [input.name, input.categoryId, input.serverId]
+      [input.name ?? null, input.position ?? null, input.categoryId, input.serverId]
     );
 
     const value = row.rows[0];
@@ -387,10 +393,21 @@ export async function renameCategory(input: {
   });
 }
 
-export async function moveChannelToCategory(input: {
+export async function renameCategory(input: {
+  categoryId: string;
+  serverId: string;
+  name: string;
+}): Promise<Category> {
+  return updateCategory(input);
+}
+
+export async function updateChannel(input: {
   channelId: string;
   serverId: string;
-  categoryId: string | null;
+  name?: string;
+  type?: Channel["type"];
+  categoryId?: string | null;
+  position?: number;
 }): Promise<Channel> {
   return withDb(async (db) => {
     if (input.categoryId) {
@@ -405,10 +422,21 @@ export async function moveChannelToCategory(input: {
 
     const row = await db.query<ChannelRow>(
       `update channels
-       set category_id = $1
-       where id = $2 and server_id = $3
+       set name = coalesce($1, name),
+           type = coalesce($2, type),
+           category_id = case when $3 = 'REMOVED_VAL' then null else coalesce($4, category_id) end,
+           position = coalesce($5, position)
+       where id = $6 and server_id = $7
        returning *`,
-      [input.categoryId, input.channelId, input.serverId]
+      [
+        input.name ?? null,
+        input.type ?? null,
+        input.categoryId === null ? "REMOVED_VAL" : "NORMAL",
+        input.categoryId ?? null,
+        input.position ?? null,
+        input.channelId,
+        input.serverId
+      ]
     );
 
     const value = row.rows[0];
@@ -418,6 +446,14 @@ export async function moveChannelToCategory(input: {
 
     return mapChannel(value);
   });
+}
+
+export async function moveChannelToCategory(input: {
+  channelId: string;
+  serverId: string;
+  categoryId: string | null;
+}): Promise<Channel> {
+  return updateChannel(input);
 }
 
 export async function renameServer(input: { serverId: string; name: string }): Promise<Server> {
@@ -492,22 +528,7 @@ export async function renameChannel(input: {
   serverId: string;
   name: string;
 }): Promise<Channel> {
-  return withDb(async (db) => {
-    const row = await db.query<ChannelRow>(
-      `update channels
-       set name = $1
-       where id = $2 and server_id = $3
-       returning *`,
-      [input.name, input.channelId, input.serverId]
-    );
-
-    const value = row.rows[0];
-    if (!value) {
-      throw new Error("Channel not found.");
-    }
-
-    return mapChannel(value);
-  });
+  return updateChannel(input);
 }
 
 export async function updateChannelVideoControls(input: {

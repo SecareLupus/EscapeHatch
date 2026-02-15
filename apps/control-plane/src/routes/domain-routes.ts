@@ -36,6 +36,8 @@ import {
   renameCategory,
   renameChannel,
   renameServer,
+  updateCategory,
+  updateChannel,
   updateChannelVideoControls,
   upsertChannelReadState
 } from "../services/chat-service.js";
@@ -411,7 +413,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const payload = z
       .object({
         serverId: z.string().min(1),
-        name: z.string().min(2).max(80)
+        name: z.string().min(2).max(80).optional(),
+        position: z.number().int().min(0).optional()
       })
       .parse(request.body);
 
@@ -425,10 +428,11 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     }
 
     try {
-      return await renameCategory({
+      return await updateCategory({
         categoryId: params.categoryId,
         serverId: payload.serverId,
-        name: payload.name
+        name: payload.name,
+        position: payload.position
       });
     } catch (error) {
       if (error instanceof Error && error.message === "Category not found.") {
@@ -444,7 +448,10 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const payload = z
       .object({
         serverId: z.string().min(1),
-        name: z.string().min(2).max(80)
+        name: z.string().min(2).max(80).optional(),
+        type: z.enum(["text", "voice", "announcement"]).optional(),
+        categoryId: z.string().min(1).nullable().optional(),
+        position: z.number().int().min(0).optional()
       })
       .parse(request.body);
 
@@ -464,10 +471,13 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       return;
     }
 
-    return renameChannel({
+    return updateChannel({
       channelId: params.channelId,
       serverId: payload.serverId,
-      name: payload.name
+      name: payload.name,
+      type: payload.type,
+      categoryId: payload.categoryId,
+      position: payload.position
     });
   });
 

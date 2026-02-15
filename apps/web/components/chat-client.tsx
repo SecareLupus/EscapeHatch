@@ -117,6 +117,8 @@ export function ChatClient() {
   const [renameCategoryName, setRenameCategoryName] = useState("");
   const [renameRoomId, setRenameRoomId] = useState<string>("");
   const [renameRoomName, setRenameRoomName] = useState("");
+  const [renameRoomType, setRenameRoomType] = useState<Channel["type"]>("text");
+  const [renameRoomCategoryId, setRenameRoomCategoryId] = useState<string | null>(null);
   const [deleteSpaceConfirm, setDeleteSpaceConfirm] = useState("");
   const [deleteTargetSpaceId, setDeleteTargetSpaceId] = useState<string>("");
   const [deleteRoomConfirm, setDeleteRoomConfirm] = useState("");
@@ -137,12 +139,10 @@ export function ChatClient() {
   const [auditLogs, setAuditLogs] = useState<ModerationAction[]>([]);
   const [mentions, setMentions] = useState<MentionMarker[]>([]);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [inlineServerId, setInlineServerId] = useState<string | null>(null);
-  const [inlineCategoryId, setInlineCategoryId] = useState<string | null>(null);
-  const [inlineRoomId, setInlineRoomId] = useState<string | null>(null);
-  const [isCreatingServer, setIsCreatingServer] = useState(false);
-  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
-  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [activeModal, setActiveModal] = useState<
+    "create-space" | "create-category" | "create-room" | "rename-space" | "rename-category" | "rename-room" | null
+  >(null);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const messagesRef = useRef<HTMLOListElement | null>(null);
   const chatStateRequestIdRef = useRef(0);
   const initialChatLoadKeyRef = useRef<string | null>(null);
@@ -233,8 +233,8 @@ export function ChatClient() {
 
     const groups: Array<{ id: string | null; name: string; channels: Channel[] }> = [];
     const uncategorized = byCategory.get(null) ?? [];
-    if (uncategorized.length > 0) {
-      groups.push({ id: null, name: "Uncategorized", channels: uncategorized });
+    if (uncategorized.length > 0 || canManageCurrentSpace) {
+      groups.push({ id: null, name: "", channels: uncategorized });
     }
 
     for (const category of categories) {
@@ -960,6 +960,33 @@ export function ChatClient() {
     }
   }
 
+  async function moveCategoryPosition(categoryId: string, direction: "up" | "down"): Promise<void> {
+    if (!selectedServerId) return;
+    const index = categories.findIndex(c => c.id === categoryId);
+    if (index === -1) return;
+
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    const neighbor = categories[targetIndex];
+    if (!neighbor) return;
+
+    const current = categories[index];
+    if (!current) return;
+
+    setMutatingStructure(true);
+    try {
+      // Swap positions
+      await Promise.all([
+        renameCategory({ categoryId: current.id, serverId: selectedServerId, position: neighbor.position }),
+        renameCategory({ categoryId: neighbor.id, serverId: selectedServerId, position: current.position })
+      ]);
+      await refreshChatState(selectedServerId, selectedChannelId ?? undefined);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to reorder category.");
+    } finally {
+      setMutatingStructure(false);
+    }
+  }
+
   async function handleMoveSelectedRoomCategory(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!selectedServerId || !selectedChannelId) {
@@ -1042,12 +1069,43 @@ export function ChatClient() {
       await renameChannel({
         channelId: renameRoomId,
         serverId: selectedServerId,
-        name: renameRoomName.trim()
+        name: renameRoomName.trim(),
+        type: renameRoomType,
+        categoryId: renameRoomCategoryId
       });
       setRenameRoomName("");
       await refreshChatState(selectedServerId, renameRoomId);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to rename room.");
+      setError(cause instanceof Error ? cause.message : "Failed to update room.");
+    } finally {
+      setMutatingStructure(false);
+    }
+  }
+
+  async function moveChannelPosition(channelId: string, direction: "up" | "down"): Promise<void> {
+    if (!selectedServerId) return;
+    const channel = channels.find(c => c.id === channelId);
+    if (!channel) return;
+
+    // Reordering happens WITHIN the same category (or within Uncategorized)
+    const peers = channels
+      .filter(c => c.categoryId === channel.categoryId)
+      .sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
+
+    const index = peers.findIndex(c => c.id === channelId);
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    const neighbor = peers[targetIndex];
+    if (!neighbor) return;
+
+    setMutatingStructure(true);
+    try {
+      await Promise.all([
+        renameChannel({ channelId: channel.id, serverId: selectedServerId, position: neighbor.position }),
+        renameChannel({ channelId: neighbor.id, serverId: selectedServerId, position: channel.position })
+      ]);
+      await refreshChatState(selectedServerId, channelId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to reorder room.");
     } finally {
       setMutatingStructure(false);
     }
@@ -1552,100 +1610,62 @@ export function ChatClient() {
                   type="button"
                   className="icon-button"
                   aria-label="Create Space"
-                  onClick={() => setIsCreatingServer((prev) => !prev)}
+                  onClick={() => setActiveModal("create-space")}
                 >
                   +
                 </button>
               )}
             </div>
 
-            {isCreatingServer && (
-              <form className="inline-form" onSubmit={(e) => {
-                void handleCreateSpace(e);
-                setIsCreatingServer(false);
-              }}>
-                <input
-                  autoFocus
-                  value={spaceName}
-                  onChange={(e) => setSpaceName(e.target.value)}
-                  placeholder="Space name"
-                  minLength={2}
-                  maxLength={80}
-                  required
-                />
-                <button type="submit" disabled={creatingSpace}>
-                  ✓
-                </button>
-              </form>
-            )}
-
             <ul>
               {servers.map((server) => (
                 <li key={server.id}>
-                  {inlineServerId === server.id ? (
-                    <form className="inline-form" onSubmit={(e) => {
-                      void handleRenameSpace(e);
-                      setInlineServerId(null);
-                    }}>
-                      <input
-                        autoFocus
-                        value={renameSpaceName}
-                        onChange={(e) => setRenameSpaceName(e.target.value)}
-                        minLength={2}
-                        maxLength={80}
-                        required
-                      />
-                      <button type="submit" disabled={mutatingStructure}>✓</button>
-                      <button type="button" className="ghost" onClick={() => setInlineServerId(null)}>×</button>
-                    </form>
-                  ) : (
-                    <div className="list-item-container">
-                      <button
-                        type="button"
-                        className={selectedServerId === server.id ? "list-item active" : "list-item"}
-                        aria-current={selectedServerId === server.id ? "true" : undefined}
-                        onClick={() => {
-                          void handleServerChange(server.id);
-                        }}
-                        onKeyDown={(event) => {
-                          handleServerKeyboardNavigation(event, server.id);
-                        }}
-                      >
-                        {server.name}
-                        {canManageCurrentSpace && selectedServerId === server.id && (
-                          <div className="inline-mgmt">
-                            <button
-                              type="button"
-                              className="icon-button"
-                              title="Edit Server"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRenameSpaceId(server.id);
-                                setRenameSpaceName(server.name);
-                                setInlineServerId(server.id);
-                              }}
-                            >
-                              ✎
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-button danger"
-                              title="Delete Server"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`Are you sure you want to delete "${server.name}"? This cannot be undone.`)) {
-                                  setDeleteSpaceConfirm("DELETE SPACE");
-                                  void performDeleteSpace(server.id);
-                                }
-                              }}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        )}
-                      </button>
-                    </div>
-                  )}
+                  <div className="list-item-container">
+                    <button
+                      type="button"
+                      className={selectedServerId === server.id ? "list-item active" : "list-item"}
+                      aria-current={selectedServerId === server.id ? "true" : undefined}
+                      onClick={() => {
+                        void handleServerChange(server.id);
+                      }}
+                      onKeyDown={(event) => {
+                        handleServerKeyboardNavigation(event, server.id);
+                      }}
+                    >
+                      {server.name}
+                      {canManageCurrentSpace && selectedServerId === server.id && (
+                        <div className="inline-mgmt persistent">
+                          <button
+                            type="button"
+                            className="icon-button"
+                            title="Edit Server"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenameSpaceId(server.id);
+                              setRenameSpaceName(server.name);
+                              setActiveModal("rename-space");
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-button danger"
+                            title="Delete Server"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Are you sure you want to delete "${server.name}"? This cannot be undone.`)) {
+                                setDeleteSpaceConfirm("DELETE SPACE");
+                                void performDeleteSpace(server.id);
+                              }
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -1660,37 +1680,38 @@ export function ChatClient() {
           </nav>
 
           <nav className="channels panel" aria-label="Channels">
-            <div className="category-header">
+            <div className="category-header" style={{ position: 'relative' }}>
               <h2>Channels</h2>
               {canManageCurrentSpace && (
-                <button
-                  type="button"
-                  className="icon-button"
-                  title="Create Category"
-                  onClick={() => setIsCreatingCategory((prev) => !prev)}
-                >
-                  +
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title="Add..."
+                    onClick={() => setIsAddMenuOpen((prev) => !prev)}
+                  >
+                    +
+                  </button>
+                  {isAddMenuOpen && (
+                    <div className="add-menu-dropdown">
+                      <button type="button" onClick={() => {
+                        setSelectedCategoryIdForCreate("");
+                        setActiveModal("create-room");
+                        setIsAddMenuOpen(false);
+                      }}>
+                        New Room
+                      </button>
+                      <button type="button" onClick={() => {
+                        setActiveModal("create-category");
+                        setIsAddMenuOpen(false);
+                      }}>
+                        New Category
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
-
-            {isCreatingCategory && (
-              <form className="inline-form" onSubmit={(e) => {
-                void handleCreateCategory(e);
-                setIsCreatingCategory(false);
-              }}>
-                <input
-                  autoFocus
-                  value={categoryName}
-                  onChange={(e) => setCategoryName(e.target.value)}
-                  placeholder="Category name"
-                  minLength={2}
-                  maxLength={80}
-                  required
-                />
-                <button type="submit" disabled={creatingCategory}>✓</button>
-              </form>
-            )}
 
             <input
               aria-label="Filter channels"
@@ -1703,163 +1724,101 @@ export function ChatClient() {
             <ul>
               {groupedChannels.map((group) => (
                 <li key={group.id ?? "uncategorized"}>
-                  <div className="category-header">
-                    {inlineCategoryId === group.id && group.id !== null ? (
-                      <form className="inline-form" onSubmit={(e) => {
-                        void handleRenameCategory(e);
-                        setInlineCategoryId(null);
-                      }}>
-                        <input
-                          autoFocus
-                          value={renameCategoryName}
-                          onChange={(e) => setRenameCategoryName(e.target.value)}
-                          minLength={2}
-                          maxLength={80}
-                          required
-                        />
-                        <button type="submit" disabled={mutatingStructure}>✓</button>
-                        <button type="button" className="ghost" onClick={() => setInlineCategoryId(null)}>×</button>
-                      </form>
-                    ) : (
-                      <>
-                        <p className="category-heading">{group.name}</p>
-                        {canManageCurrentSpace && (
-                          <div className="inline-mgmt">
-                            <button
-                              type="button"
-                              className="icon-button"
-                              title="Create Room"
-                              onClick={() => {
-                                setSelectedCategoryIdForCreate(group.id ?? "");
-                                setIsCreatingRoom(true);
-                              }}
-                            >
-                              +
-                            </button>
-                            {group.id && (
-                              <button
-                                type="button"
-                                className="icon-button"
-                                title="Rename Category"
-                                onClick={() => {
-                                  setRenameCategoryId(group.id!);
-                                  setRenameCategoryName(group.name);
-                                  setInlineCategoryId(group.id!);
-                                }}
-                              >
-                                ✎
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {isCreatingRoom && selectedCategoryIdForCreate === (group.id ?? "") && (
-                    <form className="inline-form" onSubmit={(e) => {
-                      void handleCreateRoom(e);
-                      setIsCreatingRoom(false);
-                    }}>
-                      <input
-                        autoFocus
-                        value={roomName}
-                        onChange={(e) => setRoomName(e.target.value)}
-                        placeholder="Room name"
-                        minLength={2}
-                        maxLength={80}
-                        required
-                      />
-                      <select
-                        value={roomType}
-                        onChange={(e) => setRoomType(e.target.value as any)}
-                      >
-                        <option value="text">Text</option>
-                        <option value="voice">Voice</option>
-                      </select>
-                      <button type="submit" disabled={creatingRoom}>✓</button>
-                      <button type="button" className="ghost" onClick={() => setIsCreatingRoom(false)}>×</button>
-                    </form>
+                  {group.id && (
+                    <div className="category-header">
+                      <p className="category-heading">{group.name}</p>
+                      {canManageCurrentSpace && (
+                        <div className="inline-mgmt persistent">
+                          <button
+                            type="button"
+                            className="icon-button"
+                            title="Create Room"
+                            onClick={() => {
+                              setSelectedCategoryIdForCreate(group.id ?? "");
+                              setActiveModal("create-room");
+                            }}
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            title="Rename Category"
+                            onClick={() => {
+                              setRenameCategoryId(group.id!);
+                              setRenameCategoryName(group.name);
+                              setActiveModal("rename-category");
+                            }}
+                          >
+                            ✎
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   <ul className="nested-channel-list">
                     {group.channels.map((channel) => (
                       <li key={channel.id}>
-                        {inlineRoomId === channel.id ? (
-                          <form className="inline-form" onSubmit={(e) => {
-                            void handleRenameRoom(e);
-                            setInlineRoomId(null);
-                          }}>
-                            <input
-                              autoFocus
-                              value={renameRoomName}
-                              onChange={(e) => setRenameRoomName(e.target.value)}
-                              minLength={2}
-                              maxLength={80}
-                              required
-                            />
-                            <button type="submit" disabled={mutatingStructure}>✓</button>
-                            <button type="button" className="ghost" onClick={() => setInlineRoomId(null)}>×</button>
-                          </form>
-                        ) : (
-                          <button
-                            type="button"
-                            className={selectedChannelId === channel.id ? "list-item active" : "list-item"}
-                            aria-current={selectedChannelId === channel.id ? "true" : undefined}
-                            onClick={() => {
-                              void handleChannelChange(channel.id);
-                            }}
-                            onKeyDown={(event) => {
-                              handleChannelKeyboardNavigation(event, channel.id);
-                            }}
-                          >
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              {channel.type === 'voice' ? '🔊' : '#'}
-                              {channel.name}
-                            </span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              {(unreadCountByChannel[channel.id] ?? 0) > 0 ? (
-                                <span className="unread-pill">{unreadCountByChannel[channel.id]}</span>
-                              ) : null}
-                              {(mentionCountByChannel[channel.id] ?? 0) > 0 ? (
-                                <span className="mention-pill">@{mentionCountByChannel[channel.id]}</span>
-                              ) : null}
-                              {canManageCurrentSpace && selectedChannelId === channel.id && (
-                                <div className="inline-mgmt">
-                                  <button
-                                    type="button"
-                                    className="icon-button"
-                                    title="Edit Room"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setRenameRoomId(channel.id);
-                                      setRenameRoomName(channel.name);
-                                      setInlineRoomId(channel.id);
-                                    }}
-                                  >
-                                    ✎
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="icon-button danger"
-                                    title="Delete Room"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (confirm(`Are you sure you want to delete "#${channel.name}"?`)) {
-                                        setDeleteRoomConfirm("DELETE ROOM");
-                                        if (selectedServerId) {
-                                          void performDeleteRoom(selectedServerId, channel.id);
-                                        }
+                        <button
+                          type="button"
+                          className={selectedChannelId === channel.id ? "list-item active" : "list-item"}
+                          aria-current={selectedChannelId === channel.id ? "true" : undefined}
+                          onClick={() => {
+                            void handleChannelChange(channel.id);
+                          }}
+                          onKeyDown={(event) => {
+                            handleChannelKeyboardNavigation(event, channel.id);
+                          }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {channel.type === 'voice' ? '🔊' : '#'}
+                            {channel.name}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {(unreadCountByChannel[channel.id] ?? 0) > 0 ? (
+                              <span className="unread-pill">{unreadCountByChannel[channel.id]}</span>
+                            ) : null}
+                            {(mentionCountByChannel[channel.id] ?? 0) > 0 ? (
+                              <span className="mention-pill">@{mentionCountByChannel[channel.id]}</span>
+                            ) : null}
+                            {canManageCurrentSpace && selectedChannelId === channel.id && (
+                              <div className="inline-mgmt">
+                                <button
+                                  type="button"
+                                  className="icon-button"
+                                  title="Edit Room"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRenameRoomId(channel.id);
+                                    setRenameRoomName(channel.name);
+                                    setRenameRoomType(channel.type);
+                                    setRenameRoomCategoryId(channel.categoryId);
+                                    setActiveModal("rename-room");
+                                  }}
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  type="button"
+                                  className="icon-button danger"
+                                  title="Delete Room"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`Are you sure you want to delete "#${channel.name}"?`)) {
+                                      setDeleteRoomConfirm("DELETE ROOM");
+                                      if (selectedServerId) {
+                                        void performDeleteRoom(selectedServerId, channel.id);
                                       }
-                                    }}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                        )}
+                                    }
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -2137,6 +2096,231 @@ export function ChatClient() {
           </aside>
         </section>
       ) : null}
+
+      {activeModal && (
+        <div className="modal-backdrop" onClick={() => setActiveModal(null)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <header className="modal-header">
+              <h2>
+                {activeModal === "create-space" && "Create New Space"}
+                {activeModal === "create-category" && "Create New Category"}
+                {activeModal === "create-room" && "Create New Room"}
+                {activeModal === "rename-space" && "Rename Space"}
+                {activeModal === "rename-category" && "Rename Category"}
+                {activeModal === "rename-room" && "Rename Room"}
+              </h2>
+              <button type="button" className="ghost" onClick={() => setActiveModal(null)}>×</button>
+            </header>
+
+            {activeModal === "create-space" && (
+              <form className="stack" onSubmit={(e) => {
+                void handleCreateSpace(e);
+                setActiveModal(null);
+              }}>
+                <label htmlFor="space-name-modal">Space Name</label>
+                <input
+                  id="space-name-modal"
+                  autoFocus
+                  value={spaceName}
+                  onChange={(e) => setSpaceName(e.target.value)}
+                  minLength={2}
+                  maxLength={80}
+                  required
+                />
+                <button type="submit" disabled={creatingSpace}>Create Space</button>
+              </form>
+            )}
+
+            {activeModal === "rename-space" && (
+              <form className="stack" onSubmit={(e) => {
+                void handleRenameSpace(e);
+                setActiveModal(null);
+              }}>
+                <label htmlFor="rename-space-modal">New Space Name</label>
+                <input
+                  id="rename-space-modal"
+                  autoFocus
+                  value={renameSpaceName}
+                  onChange={(e) => setRenameSpaceName(e.target.value)}
+                  minLength={2}
+                  maxLength={80}
+                  required
+                />
+                <button type="submit" disabled={mutatingStructure}>Save Changes</button>
+              </form>
+            )}
+
+            {activeModal === "create-category" && (
+              <form className="stack" onSubmit={(e) => {
+                void handleCreateCategory(e);
+                setActiveModal(null);
+              }}>
+                <label htmlFor="category-name-modal">Category Name</label>
+                <input
+                  id="category-name-modal"
+                  autoFocus
+                  value={categoryName}
+                  onChange={(e) => setCategoryName(e.target.value)}
+                  minLength={2}
+                  maxLength={80}
+                  required
+                />
+                <button type="submit" disabled={creatingCategory}>Create Category</button>
+              </form>
+            )}
+
+            {activeModal === "rename-category" && (
+              <div className="stack">
+                <form className="stack" onSubmit={(e) => {
+                  void handleRenameCategory(e);
+                  setActiveModal(null);
+                }}>
+                  <p>Editing category: <strong>{categories.find(c => c.id === renameCategoryId)?.name}</strong></p>
+                  <label htmlFor="rename-category-modal">Category Name</label>
+                  <input
+                    id="rename-category-modal"
+                    autoFocus
+                    value={renameCategoryName}
+                    onChange={(e) => setRenameCategoryName(e.target.value)}
+                    minLength={2}
+                    maxLength={80}
+                    required
+                  />
+                  <button type="submit" disabled={mutatingStructure}>Save Name</button>
+                </form>
+
+                <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                  <p>Reorder Category</p>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      disabled={mutatingStructure || categories.findIndex(c => c.id === renameCategoryId) === 0}
+                      onClick={() => moveCategoryPosition(renameCategoryId, "up")}
+                    >
+                      Move Up
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mutatingStructure || categories.findIndex(c => c.id === renameCategoryId) === categories.length - 1}
+                      onClick={() => moveCategoryPosition(renameCategoryId, "down")}
+                    >
+                      Move Down
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeModal === "create-room" && (
+              <form className="stack" onSubmit={(e) => {
+                void handleCreateRoom(e);
+                setActiveModal(null);
+              }}>
+                <p>
+                  Target Category: <strong>
+                    {selectedCategoryIdForCreate ? categories.find(c => c.id === selectedCategoryIdForCreate)?.name : "Uncategorized"}
+                  </strong>
+                </p>
+                <label htmlFor="room-name-modal">Room Name</label>
+                <input
+                  id="room-name-modal"
+                  autoFocus
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  minLength={2}
+                  maxLength={80}
+                  required
+                />
+                <label htmlFor="room-type-modal">Type</label>
+                <select id="room-type-modal" value={roomType} onChange={(e) => setRoomType(e.target.value as any)}>
+                  <option value="text">Text Room</option>
+                  <option value="announcement">Announcement Room</option>
+                  <option value="voice">Voice Room</option>
+                </select>
+                <button type="submit" disabled={creatingRoom}>Create Room</button>
+              </form>
+            )}
+
+            {activeModal === "rename-room" && (
+              <div className="stack">
+                <form className="stack" onSubmit={(e) => {
+                  void handleRenameRoom(e);
+                  setActiveModal(null);
+                }}>
+                  <p>Editing room: <strong>{channels.find(c => c.id === renameRoomId)?.name}</strong></p>
+                  <label htmlFor="rename-room-modal">Room Name</label>
+                  <input
+                    id="rename-room-modal"
+                    autoFocus
+                    value={renameRoomName}
+                    onChange={(e) => setRenameRoomName(e.target.value)}
+                    minLength={2}
+                    maxLength={80}
+                    required
+                  />
+
+                  <label htmlFor="rename-room-type">Type</label>
+                  <select
+                    id="rename-room-type"
+                    value={renameRoomType}
+                    onChange={(e) => setRenameRoomType(e.target.value as any)}
+                  >
+                    <option value="text">Text Room</option>
+                    <option value="announcement">Announcement Room</option>
+                    <option value="voice">Voice Room</option>
+                  </select>
+
+                  <label htmlFor="rename-room-category">Category</label>
+                  <select
+                    id="rename-room-category"
+                    value={renameRoomCategoryId ?? ""}
+                    onChange={(e) => setRenameRoomCategoryId(e.target.value || null)}
+                  >
+                    <option value="">(None)</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+
+                  <button type="submit" disabled={mutatingStructure}>Save Changes</button>
+                </form>
+
+                <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                  <p>Reorder Room</p>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      disabled={mutatingStructure || (() => {
+                        const channel = channels.find(c => c.id === renameRoomId);
+                        if (!channel) return true;
+                        const peers = channels.filter(c => c.categoryId === channel.categoryId)
+                          .sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
+                        return peers.findIndex(c => c.id === renameRoomId) === 0;
+                      })()}
+                      onClick={() => moveChannelPosition(renameRoomId, "up")}
+                    >
+                      Move Up
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mutatingStructure || (() => {
+                        const channel = channels.find(c => c.id === renameRoomId);
+                        if (!channel) return true;
+                        const peers = channels.filter(c => c.categoryId === channel.categoryId)
+                          .sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
+                        return peers.findIndex(c => c.id === renameRoomId) === peers.length - 1;
+                      })()}
+                      onClick={() => moveChannelPosition(renameRoomId, "down")}
+                    >
+                      Move Down
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

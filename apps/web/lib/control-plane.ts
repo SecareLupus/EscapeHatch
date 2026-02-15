@@ -332,14 +332,16 @@ export async function createCategory(input: {
 export async function renameCategory(input: {
   categoryId: string;
   serverId: string;
-  name: string;
+  name?: string;
+  position?: number;
 }): Promise<Category> {
   return apiFetch<Category>(`/v1/categories/${encodeURIComponent(input.categoryId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       serverId: input.serverId,
-      name: input.name
+      name: input.name,
+      position: input.position
     })
   });
 }
@@ -376,14 +378,20 @@ export async function deleteServer(serverId: string): Promise<void> {
 export async function renameChannel(input: {
   channelId: string;
   serverId: string;
-  name: string;
+  name?: string;
+  type?: ChannelType;
+  categoryId?: string | null;
+  position?: number;
 }): Promise<Channel> {
   return apiFetch<Channel>(`/v1/channels/${encodeURIComponent(input.channelId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       serverId: input.serverId,
-      name: input.name
+      name: input.name,
+      type: input.type,
+      categoryId: input.categoryId,
+      position: input.position
     })
   });
 }

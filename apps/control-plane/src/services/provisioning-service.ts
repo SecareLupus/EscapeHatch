@@ -141,6 +141,13 @@ export async function createChannelWorkflow(input: {
 
     const id = randomId("chn");
     const voiceRoomId = input.type === "voice" ? `sfu_${id}` : null;
+
+    const posRow = await db.query<{ max_pos: number }>(
+      "select max(position) as max_pos from channels where server_id = $1",
+      [input.serverId]
+    );
+    const position = (posRow.rows[0]?.max_pos ?? -1) + 1;
+
     const created = await db.query<{
       id: string;
       server_id: string;
@@ -148,6 +155,7 @@ export async function createChannelWorkflow(input: {
       name: string;
       type: ChannelType;
       matrix_room_id: string | null;
+      position: number;
       is_locked: boolean;
       slow_mode_seconds: number;
       posting_restricted_to_roles: string[];
@@ -158,8 +166,8 @@ export async function createChannelWorkflow(input: {
       created_at: string;
     }>(
       `insert into channels
-       (id, server_id, category_id, name, type, matrix_room_id, voice_sfu_room_id, voice_max_participants, video_enabled, video_max_participants)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       (id, server_id, category_id, name, type, matrix_room_id, position, voice_sfu_room_id, voice_max_participants, video_enabled, video_max_participants)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        returning *`,
       [
         id,
@@ -168,6 +176,7 @@ export async function createChannelWorkflow(input: {
         input.name,
         input.type,
         matrixRoomId,
+        position,
         voiceRoomId,
         input.type === "voice" ? 25 : null,
         false,
@@ -192,17 +201,18 @@ export async function createChannelWorkflow(input: {
       name: value.name,
       type: value.type,
       matrixRoomId: value.matrix_room_id,
+      position: value.position,
       isLocked: value.is_locked,
       slowModeSeconds: value.slow_mode_seconds,
       postingRestrictedToRoles: (value.posting_restricted_to_roles ?? []) as Channel["postingRestrictedToRoles"],
       voiceMetadata:
         value.voice_sfu_room_id && value.voice_max_participants
           ? {
-              sfuRoomId: value.voice_sfu_room_id,
-              maxParticipants: value.voice_max_participants,
-              videoEnabled: value.video_enabled,
-              maxVideoParticipants: value.video_max_participants
-            }
+            sfuRoomId: value.voice_sfu_room_id,
+            maxParticipants: value.voice_max_participants,
+            videoEnabled: value.video_enabled,
+            maxVideoParticipants: value.video_max_participants
+          }
           : null,
       createdAt: value.created_at
     };
