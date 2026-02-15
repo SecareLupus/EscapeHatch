@@ -1118,3 +1118,112 @@ test("read-state mention markers and voice presence flows work for scoped users"
     await app.close();
   }
 });
+
+test("space owner can rename their own space and manage categories", async (t) => {
+  if (!pool) {
+    t.skip("DATABASE_URL not configured.");
+    return;
+  }
+  if (!config.setupBootstrapToken) {
+    t.skip("SETUP_BOOTSTRAP_TOKEN not configured.");
+    return;
+  }
+
+  await initDb();
+  await resetDb();
+  const app = await buildApp();
+
+  try {
+    const adminIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "space_perm_admin",
+      email: "space-perm-admin@dev.local",
+      preferredUsername: "space-perm-admin",
+      avatarUrl: null
+    });
+    const adminCookie = createAuthCookie({
+      productUserId: adminIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "space_perm_admin"
+    });
+
+    const bootstrapResponse = await app.inject({
+      method: "POST",
+      url: "/auth/bootstrap-admin",
+      headers: { cookie: adminCookie },
+      payload: {
+        setupToken: config.setupBootstrapToken,
+        hubName: "Permission Hub"
+      }
+    });
+    assert.equal(bootstrapResponse.statusCode, 201);
+    const bootstrapBody = bootstrapResponse.json() as { defaultServerId: string };
+
+    const ownerIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "space_perm_owner",
+      email: "space-perm-owner@dev.local",
+      preferredUsername: "space-perm-owner",
+      avatarUrl: null
+    });
+    const ownerCookie = createAuthCookie({
+      productUserId: ownerIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "space_perm_owner"
+    });
+
+    // Delegate space ownership
+    await app.inject({
+      method: "POST",
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-owners`,
+      headers: { cookie: adminCookie },
+      payload: { productUserId: ownerIdentity.productUserId }
+    });
+
+    // 1. Verify Space Owner can rename the space
+    const renameResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/servers/${bootstrapBody.defaultServerId}`,
+      headers: { cookie: ownerCookie },
+      payload: { name: "Renamed by Space Owner" }
+    });
+    assert.equal(renameResponse.statusCode, 200);
+    assert.equal(renameResponse.json().name, "Renamed by Space Owner");
+
+    // 2. Verify Space Owner can create and delete a category
+    const createCatResponse = await app.inject({
+      method: "POST",
+      url: "/v1/categories",
+      headers: { cookie: ownerCookie },
+      payload: {
+        serverId: bootstrapBody.defaultServerId,
+        name: "Test Category"
+      }
+    });
+    assert.equal(createCatResponse.statusCode, 201);
+    const categoryId = createCatResponse.json().id as string;
+
+    const deleteCatResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/categories/${categoryId}?serverId=${encodeURIComponent(bootstrapBody.defaultServerId)}`,
+      headers: { cookie: ownerCookie }
+    });
+    assert.equal(deleteCatResponse.statusCode, 204);
+
+    // 3. Verify role bindings include the space_owner role
+    const rolesResponse = await app.inject({
+      method: "GET",
+      url: "/v1/me/roles",
+      headers: { cookie: ownerCookie }
+    });
+    assert.equal(rolesResponse.statusCode, 200);
+    const hasOwnerRole = rolesResponse.json().items.some(
+      (item: { role: string; serverId: string }) =>
+        item.role === "space_owner" && item.serverId === bootstrapBody.defaultServerId
+    );
+    assert.ok(hasOwnerRole, "Space Owner role should be present in roles list");
+
+  } finally {
+    await app.close();
+  }
+});

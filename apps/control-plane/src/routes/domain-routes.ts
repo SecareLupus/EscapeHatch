@@ -25,6 +25,7 @@ import {
   createCategory,
   createMessage,
   deleteChannel,
+  deleteCategory,
   deleteServer,
   listCategories,
   listChannels,
@@ -274,12 +275,12 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       return;
     }
 
-    const allowed = await canManageHub({
+    const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
-      hubId: server.hubId
+      serverId: params.serverId
     });
     if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
       return;
     }
 
@@ -299,12 +300,12 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       return;
     }
 
-    const allowed = await canManageHub({
+    const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
-      hubId: server.hubId
+      serverId: params.serverId
     });
     if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
       return;
     }
 
@@ -441,6 +442,26 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       }
       throw error;
     }
+  });
+
+  app.delete("/v1/categories/:categoryId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ categoryId: z.string().min(1) }).parse(request.params);
+    const query = z.object({ serverId: z.string().min(1) }).parse(request.query);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: query.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    await deleteCategory({
+      categoryId: params.categoryId,
+      serverId: query.serverId
+    });
+    reply.code(204).send();
   });
 
   app.patch("/v1/channels/:channelId", initializedAuthHandlers, async (request, reply) => {

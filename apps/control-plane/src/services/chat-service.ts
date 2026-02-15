@@ -401,6 +401,33 @@ export async function renameCategory(input: {
   return updateCategory(input);
 }
 
+export async function deleteCategory(input: { categoryId: string; serverId: string }): Promise<void> {
+  await withDb(async (db) => {
+    await db.query("begin");
+    try {
+      // First, move all channels in this category to null category (uncategorized)
+      await db.query(
+        "update channels set category_id = null where category_id = $1 and server_id = $2",
+        [input.categoryId, input.serverId]
+      );
+
+      const deleted = await db.query(
+        "delete from categories where id = $1 and server_id = $2 returning id",
+        [input.categoryId, input.serverId]
+      );
+
+      if (deleted.rowCount === 0) {
+        throw new Error("Category not found.");
+      }
+
+      await db.query("commit");
+    } catch (error) {
+      await db.query("rollback");
+      throw error;
+    }
+  });
+}
+
 export async function updateChannel(input: {
   channelId: string;
   serverId: string;

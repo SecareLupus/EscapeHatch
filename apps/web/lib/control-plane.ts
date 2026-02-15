@@ -340,8 +340,8 @@ export async function createCategory(input: {
 }
 
 export async function renameCategory(input: {
-  categoryId: string;
   serverId: string;
+  categoryId: string;
   name?: string;
   position?: number;
 }): Promise<Category> {
@@ -353,6 +353,12 @@ export async function renameCategory(input: {
       name: input.name,
       position: input.position
     })
+  });
+}
+
+export async function deleteCategory(input: { serverId: string; categoryId: string }): Promise<void> {
+  await apiFetch(`/v1/categories/${encodeURIComponent(input.categoryId)}?serverId=${encodeURIComponent(input.serverId)}`, {
+    method: "DELETE"
   });
 }
 

@@ -13,6 +13,7 @@ import {
   createChannel,
   createServer,
   deleteChannel,
+  deleteCategory, // Added deleteCategory
   deleteServer,
   issueVoiceTokenWithVideo,
   fetchAllowedActions,
@@ -445,6 +446,9 @@ export function ChatClient() {
     void initialize();
   }, [initialize]);
 
+  // Potential bug trigger: This effect initializes the chat state (server/channel) based on 
+  // bootstrap defaults. If bootstrapStatus or its properties update unexpectedly, this 
+  // could reset the user's manual space selection back to the default space.
   useEffect(() => {
     if (!viewer || viewer.needsOnboarding || !bootstrapStatus?.initialized) {
       initialChatLoadKeyRef.current = null;
@@ -1011,6 +1015,26 @@ export function ChatClient() {
       await refreshChatState(selectedServerId, selectedChannelId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to move room.");
+    } finally {
+      setMutatingStructure(false);
+    }
+  }
+
+  async function handleDeleteCategory(categoryId: string): Promise<void> {
+    if (!selectedServerId) {
+      return;
+    }
+
+    setMutatingStructure(true);
+    setError(null);
+    try {
+      await deleteCategory({
+        serverId: selectedServerId,
+        categoryId: categoryId
+      });
+      await refreshChatState(selectedServerId, selectedChannelId ?? undefined);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to delete category.");
     } finally {
       setMutatingStructure(false);
     }
@@ -2226,6 +2250,24 @@ export function ChatClient() {
                       Move Down
                     </button>
                   </div>
+                </div>
+
+                <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                  <p>Danger Zone</p>
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={mutatingStructure}
+                    onClick={() => {
+                      const cat = categories.find(c => c.id === renameCategoryId);
+                      if (confirm(`Are you sure you want to delete the category "${cat?.name}"? Rooms inside will become uncategorized.`)) {
+                        void handleDeleteCategory(renameCategoryId);
+                        setActiveModal(null);
+                      }
+                    }}
+                  >
+                    Delete Category
+                  </button>
                 </div>
               </div>
             )}

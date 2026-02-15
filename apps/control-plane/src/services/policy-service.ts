@@ -441,7 +441,46 @@ export async function listRoleBindings(input: { productUserId: string }): Promis
       [input.productUserId]
     );
 
-    return rows.rows.map((row) => ({
+    const effective = [...rows.rows];
+
+    // Add dynamic owner roles
+    const owners = await db.query<{ id: string; hub_id: string }>(
+      "select id, hub_id from servers where owner_user_id = $1",
+      [input.productUserId]
+    );
+    for (const row of owners.rows) {
+      if (!effective.some((b) => b.role === "space_owner" && b.server_id === row.id)) {
+        effective.push({
+          role: "space_owner",
+          hub_id: row.hub_id,
+          server_id: row.id,
+          channel_id: null
+        });
+      }
+    }
+
+    // Add delegated assignments
+    const delegated = await db.query<{ server_id: string; hub_id: string }>(
+      `select a.server_id, s.hub_id
+       from space_admin_assignments a
+       join servers s on s.id = a.server_id
+       where a.assigned_user_id = $1
+         and a.status = 'active'
+         and (a.expires_at is null or a.expires_at > now())`,
+      [input.productUserId]
+    );
+    for (const row of delegated.rows) {
+      if (!effective.some((b) => b.role === "space_owner" && b.server_id === row.server_id)) {
+        effective.push({
+          role: "space_owner",
+          hub_id: row.hub_id,
+          server_id: row.server_id,
+          channel_id: null
+        });
+      }
+    }
+
+    return effective.map((row) => ({
       role: row.role,
       hubId: row.hub_id,
       serverId: row.server_id,
