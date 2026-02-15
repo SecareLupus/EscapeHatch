@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "dotenv -e ../../.env -- next dev",
-    "build": "dotenv -e ../../.env -- next build",
-    "start": "dotenv -e ../../.env -- next start",
+    "dev": "npx dotenv-cli -e ../../.env -- next dev",
+    "build": "npx dotenv-cli -e ../../.env -- next build",
+    "start": "npx dotenv-cli -e ../../.env -- next start",
     "lint": "next lint",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "test": "dotenv -e ../../.env -- tsx --test test/*.test.ts"
+    "test": "npx dotenv-cli -e ../../.env -- tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@escapehatch/shared": "workspace:*",

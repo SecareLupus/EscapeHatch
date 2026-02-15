@@ -121,7 +121,6 @@ export function ChatClient() {
   const [deleteTargetSpaceId, setDeleteTargetSpaceId] = useState<string>("");
   const [deleteRoomConfirm, setDeleteRoomConfirm] = useState("");
   const [mutatingStructure, setMutatingStructure] = useState(false);
-  const [managementDialogOpen, setManagementDialogOpen] = useState(false);
   const [voiceConnected, setVoiceConnected] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [voiceDeafened, setVoiceDeafened] = useState(false);
@@ -137,10 +136,34 @@ export function ChatClient() {
   const [reports, setReports] = useState<ModerationReport[]>([]);
   const [auditLogs, setAuditLogs] = useState<ModerationAction[]>([]);
   const [mentions, setMentions] = useState<MentionMarker[]>([]);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [inlineServerId, setInlineServerId] = useState<string | null>(null);
+  const [inlineCategoryId, setInlineCategoryId] = useState<string | null>(null);
+  const [inlineRoomId, setInlineRoomId] = useState<string | null>(null);
+  const [isCreatingServer, setIsCreatingServer] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const messagesRef = useRef<HTMLOListElement | null>(null);
   const chatStateRequestIdRef = useRef(0);
-  const managementDialogRef = useRef<HTMLElement | null>(null);
   const initialChatLoadKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      setTheme("dark");
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  }, []);
 
   const enabledLoginProviders = useMemo(
     () => (providers?.providers ?? []).filter((provider) => provider.isEnabled && provider.provider !== "dev"),
@@ -155,13 +178,20 @@ export function ChatClient() {
       allowedActions.includes("channel.slowmode"),
     [allowedActions]
   );
-  const canManageHubOrSpace = useMemo(
-    () =>
-      viewerRoles.some(
-        (binding) => binding.role === "hub_operator" || binding.role === "creator_admin"
-      ),
+  const canManageHub = useMemo(
+    () => viewerRoles.some((binding) => binding.role === "hub_admin" && !binding.serverId),
     [viewerRoles]
   );
+  const canManageCurrentSpace = useMemo(
+    () =>
+      viewerRoles.some(
+        (binding) =>
+          (binding.role === "hub_admin" || binding.role === "space_owner") &&
+          (binding.serverId === selectedServerId || !binding.serverId)
+      ),
+    [viewerRoles, selectedServerId]
+  );
+
   const memberRoster = useMemo(() => {
     const members = new Map<string, string>();
     for (const message of messages) {
@@ -280,29 +310,52 @@ export function ChatClient() {
   );
 
   const refreshAuthState = useCallback(async (): Promise<void> => {
-    const [providerData, viewerData, bootstrapData, roleBindings, hubItems] = await Promise.all([
-      fetchAuthProviders(),
-      fetchViewerSession(),
-      fetchBootstrapStatus(),
-      listViewerRoleBindings().catch(() => []),
-      listHubs().catch(() => [])
-    ]);
+    // We fetch critical auth meta individually to prevent total failure if one service (like DB) is lagging.
+    try {
+      const providerData = await fetchAuthProviders();
+      setProviders(providerData);
+    } catch (cause) {
+      console.error("Failed to load auth providers:", cause);
+      setError(cause instanceof Error ? cause.message : "Failed to load auth providers.");
+    }
 
-    setProviders(providerData);
+    const viewerData = await fetchViewerSession();
     setViewer(viewerData);
-    setBootstrapStatus(bootstrapData);
-    setViewerRoles(roleBindings);
-    setHubs(hubItems.map((hub) => ({ id: hub.id, name: hub.name })));
-    setSelectedHubIdForCreate((current) => current ?? hubItems[0]?.id ?? null);
+
+    try {
+      const bootstrapData = await fetchBootstrapStatus();
+      setBootstrapStatus(bootstrapData);
+    } catch (cause) {
+      console.error("Failed to load bootstrap status:", cause);
+      // Keep previous status or null on failure.
+    }
+
+    void listViewerRoleBindings()
+      .then(setViewerRoles)
+      .catch(() => setViewerRoles([]));
+
+    void listHubs()
+      .then((items) => {
+        setHubs(items.map((h) => ({ id: h.id, name: h.name })));
+        if (items.length > 0 && items[0]) {
+          setSelectedHubIdForCreate(items[0].id);
+        }
+      })
+      .catch(() => setHubs([]));
   }, []);
 
   const refreshChatState = useCallback(async (preferredServerId?: string, preferredChannelId?: string): Promise<void> => {
     const requestId = ++chatStateRequestIdRef.current;
-    const serverItems = await listServers();
+    const [serverItems, roleBindings] = await Promise.all([
+      listServers(),
+      listViewerRoleBindings()
+    ]);
     if (requestId !== chatStateRequestIdRef.current) {
       return;
     }
     setServers(serverItems);
+    setViewerRoles(roleBindings);
+
 
     const candidateServerId =
       preferredServerId ??
@@ -653,61 +706,6 @@ export function ChatClient() {
     };
   }, [canAccessWorkspace, selectedChannelId]);
 
-  useEffect(() => {
-    if (!managementDialogOpen) {
-      return;
-    }
-
-    const dialog = managementDialogRef.current;
-    if (!dialog) {
-      return;
-    }
-
-    const selectors =
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-    const getFocusableElements = (): HTMLElement[] => {
-      return Array.from(dialog.querySelectorAll<HTMLElement>(selectors)).filter(
-        (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1
-      );
-    };
-
-    const focusables = getFocusableElements();
-    focusables[0]?.focus();
-
-    const handleDialogKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setManagementDialogOpen(false);
-        return;
-      }
-
-      if (event.key !== "Tab") {
-        return;
-      }
-
-      const currentFocusables = getFocusableElements();
-      if (currentFocusables.length === 0) {
-        return;
-      }
-
-      const first = currentFocusables[0]!;
-      const last = currentFocusables[currentFocusables.length - 1]!;
-      const active = document.activeElement;
-
-      if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    dialog.addEventListener("keydown", handleDialogKeyDown);
-    return () => {
-      dialog.removeEventListener("keydown", handleDialogKeyDown);
-    };
-  }, [managementDialogOpen]);
 
   function getAdjacentId(currentId: string, ids: string[], direction: "next" | "previous"): string | null {
     if (ids.length === 0) {
@@ -1009,21 +1007,21 @@ export function ChatClient() {
   async function handleDeleteSpace(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const targetServerId = deleteTargetSpaceId || renameSpaceId || selectedServerId;
-    if (!targetServerId) {
-      return;
-    }
-
+    if (!targetServerId) return;
     if (deleteSpaceConfirm.trim() !== "DELETE SPACE") {
       setError("Type DELETE SPACE to confirm.");
       return;
     }
+    await performDeleteSpace(targetServerId);
+  }
 
+  async function performDeleteSpace(serverId: string): Promise<void> {
     setMutatingStructure(true);
     setError(null);
     try {
-      await deleteServer(targetServerId);
+      await deleteServer(serverId);
       setDeleteSpaceConfirm("");
-      const remainingServers = servers.filter((server) => server.id !== targetServerId);
+      const remainingServers = servers.filter((s) => s.id !== serverId);
       await refreshChatState(remainingServers[0]?.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to delete space.");
@@ -1057,24 +1055,22 @@ export function ChatClient() {
 
   async function handleDeleteRoom(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!selectedChannelId || !selectedServerId) {
-      return;
-    }
-
+    if (!selectedChannelId || !selectedServerId) return;
     if (deleteRoomConfirm.trim() !== "DELETE ROOM") {
       setError("Type DELETE ROOM to confirm.");
       return;
     }
+    await performDeleteRoom(selectedServerId, selectedChannelId);
+  }
 
+  async function performDeleteRoom(serverId: string, channelId: string): Promise<void> {
     setMutatingStructure(true);
     setError(null);
     try {
-      await deleteChannel({
-        channelId: selectedChannelId,
-        serverId: selectedServerId
-      });
+      await deleteChannel({ serverId, channelId });
       setDeleteRoomConfirm("");
-      await refreshChatState(selectedServerId);
+      const remainingChannels = channels.filter((c) => c.id !== channelId);
+      await refreshChatState(serverId, remainingChannels[0]?.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to delete room.");
     } finally {
@@ -1360,9 +1356,9 @@ export function ChatClient() {
         current.map((item) =>
           item.id === tempId
             ? {
-                ...item,
-                clientState: "failed"
-              }
+              ...item,
+              clientState: "failed"
+            }
             : item
         )
       );
@@ -1417,16 +1413,22 @@ export function ChatClient() {
       <header className="topbar">
         <h1>EscapeHatch Local Chat</h1>
         <div className="topbar-meta">
-          {canManageHubOrSpace ? (
-            <>
-              <button type="button" className="ghost" onClick={() => setManagementDialogOpen(true)}>
-                Manage Hub/Space/Room
-              </button>
-              <Link href="/admin" className="ghost">
-                Admin Console
-              </Link>
-            </>
+          <button
+            type="button"
+            className="icon-button"
+            title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
+            onClick={toggleTheme}
+          >
+            {theme === "light" ? "🌙" : "☀️"}
+          </button>
+          {canManageCurrentSpace ? (
+            <Link href="/admin" className="ghost">
+              Admin Console
+            </Link>
           ) : null}
+          <Link href="/settings" className="icon-button" title="User Settings">
+            ⚙️
+          </Link>
           <span className="status-pill" data-state={realtimeState}>
             {realtimeState === "live" ? "Live" : realtimeState === "polling" ? "Polling" : "Offline"}
           </span>
@@ -1445,233 +1447,6 @@ export function ChatClient() {
         <p className="error" role="alert">
           {error}
         </p>
-      ) : null}
-
-      {managementDialogOpen && canManageHubOrSpace ? (
-        <div className="modal-backdrop" role="presentation">
-          <section
-            className="modal-panel"
-            ref={managementDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="management-console-title"
-          >
-            <header className="modal-header">
-              <h2 id="management-console-title">Management Console</h2>
-              <button type="button" className="ghost" onClick={() => setManagementDialogOpen(false)}>
-                Close
-              </button>
-            </header>
-
-            <div className="modal-grid">
-              <form className="stack manager-form" onSubmit={handleCreateSpace}>
-                <label htmlFor="hub-select">Hub</label>
-                <select
-                  id="hub-select"
-                  value={selectedHubIdForCreate ?? ""}
-                  onChange={(event) => setSelectedHubIdForCreate(event.target.value || null)}
-                  required
-                >
-                  {hubs.map((hub) => (
-                    <option key={hub.id} value={hub.id}>
-                      {hub.name}
-                    </option>
-                  ))}
-                </select>
-                <label htmlFor="space-name">Create Space</label>
-                <input
-                  id="space-name"
-                  value={spaceName}
-                  onChange={(event) => setSpaceName(event.target.value)}
-                  minLength={2}
-                  maxLength={80}
-                  required
-                />
-                <button type="submit" disabled={creatingSpace || !selectedHubIdForCreate}>
-                  {creatingSpace ? "Creating..." : "Create Space"}
-                </button>
-              </form>
-
-              <form className="stack manager-form" onSubmit={handleCreateCategory}>
-                <label htmlFor="category-name">Create Category</label>
-                <input
-                  id="category-name"
-                  value={categoryName}
-                  onChange={(event) => setCategoryName(event.target.value)}
-                  minLength={2}
-                  maxLength={80}
-                  required
-                />
-                <button type="submit" disabled={creatingCategory || !selectedServerId}>
-                  {creatingCategory ? "Creating..." : "Create Category"}
-                </button>
-              </form>
-
-              <form className="stack manager-form" onSubmit={handleCreateRoom}>
-                <label htmlFor="room-name">Create Room</label>
-                <input
-                  id="room-name"
-                  value={roomName}
-                  onChange={(event) => setRoomName(event.target.value)}
-                  minLength={2}
-                  maxLength={80}
-                  required
-                />
-                <label htmlFor="room-type">Room Type</label>
-                <select
-                  id="room-type"
-                  value={roomType}
-                  onChange={(event) =>
-                    setRoomType(event.target.value as "text" | "announcement" | "voice")
-                  }
-                >
-                  <option value="text">Text</option>
-                  <option value="announcement">Announcement</option>
-                  <option value="voice">Voice</option>
-                </select>
-                <label htmlFor="room-category">Category</label>
-                <select
-                  id="room-category"
-                  value={selectedCategoryIdForCreate}
-                  onChange={(event) => setSelectedCategoryIdForCreate(event.target.value)}
-                >
-                  <option value="">Uncategorized</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                <button type="submit" disabled={creatingRoom || !selectedServerId}>
-                  {creatingRoom ? "Creating..." : "Create Room"}
-                </button>
-              </form>
-
-              <form className="stack manager-form" onSubmit={handleRenameSpace}>
-                <label htmlFor="rename-space-name">Rename Selected Space</label>
-                <input
-                  id="rename-space-name"
-                  value={renameSpaceName}
-                  onChange={(event) => setRenameSpaceName(event.target.value)}
-                  minLength={2}
-                  maxLength={80}
-                  required
-                />
-                <button type="submit" disabled={mutatingStructure || !renameSpaceId}>
-                  {mutatingStructure ? "Saving..." : "Rename Space"}
-                </button>
-              </form>
-
-              <form className="stack manager-form" onSubmit={handleRenameCategory}>
-                <label htmlFor="rename-category-id">Rename Category</label>
-                <select
-                  id="rename-category-id"
-                  value={renameCategoryId}
-                  onChange={(event) => {
-                    const id = event.target.value;
-                    setRenameCategoryId(id);
-                    const selected = categories.find((category) => category.id === id);
-                    setRenameCategoryName(selected?.name ?? "");
-                  }}
-                  disabled={categories.length === 0}
-                >
-                  {categories.length === 0 ? <option value="">No categories</option> : null}
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={renameCategoryName}
-                  onChange={(event) => setRenameCategoryName(event.target.value)}
-                  minLength={2}
-                  maxLength={80}
-                  required
-                />
-                <button type="submit" disabled={mutatingStructure || !renameCategoryId || !selectedServerId}>
-                  {mutatingStructure ? "Saving..." : "Rename Category"}
-                </button>
-              </form>
-
-              <form className="stack manager-form" onSubmit={handleRenameRoom}>
-                <label htmlFor="rename-room-name">Rename Selected Room</label>
-                <input
-                  id="rename-room-name"
-                  value={renameRoomName}
-                  onChange={(event) => setRenameRoomName(event.target.value)}
-                  minLength={2}
-                  maxLength={80}
-                  required
-                />
-                <button type="submit" disabled={mutatingStructure || !renameRoomId || !selectedServerId}>
-                  {mutatingStructure ? "Saving..." : "Rename Room"}
-                </button>
-              </form>
-
-              <form className="stack manager-form" onSubmit={handleMoveSelectedRoomCategory}>
-                <label htmlFor="move-room-category">Move Selected Room to Category</label>
-                <select
-                  id="move-room-category"
-                  value={selectedCategoryIdForCreate}
-                  onChange={(event) => setSelectedCategoryIdForCreate(event.target.value)}
-                  disabled={!selectedChannelId}
-                >
-                  <option value="">Uncategorized</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                <button type="submit" disabled={mutatingStructure || !selectedServerId || !selectedChannelId}>
-                  {mutatingStructure ? "Moving..." : "Move Room"}
-                </button>
-              </form>
-
-              <form className="stack manager-form manager-form-danger" onSubmit={handleDeleteRoom}>
-                <label htmlFor="delete-room-confirm">Delete Selected Room</label>
-                <input
-                  id="delete-room-confirm"
-                  value={deleteRoomConfirm}
-                  onChange={(event) => setDeleteRoomConfirm(event.target.value)}
-                  placeholder="Type DELETE ROOM"
-                  required
-                />
-                <button type="submit" disabled={mutatingStructure || !selectedChannelId}>
-                  {mutatingStructure ? "Deleting..." : "Delete Room"}
-                </button>
-              </form>
-
-              <form className="stack manager-form manager-form-danger" onSubmit={handleDeleteSpace}>
-                <label htmlFor="delete-space-target">Target Space</label>
-                <select
-                  id="delete-space-target"
-                  value={deleteTargetSpaceId}
-                  onChange={(event) => setDeleteTargetSpaceId(event.target.value)}
-                  required
-                >
-                  {servers.map((server) => (
-                    <option key={server.id} value={server.id}>
-                      {server.name}
-                    </option>
-                  ))}
-                </select>
-                <label htmlFor="delete-space-confirm">Delete Selected Space</label>
-                <input
-                  id="delete-space-confirm"
-                  value={deleteSpaceConfirm}
-                  onChange={(event) => setDeleteSpaceConfirm(event.target.value)}
-                  placeholder="Type DELETE SPACE"
-                  required
-                />
-                <button type="submit" disabled={mutatingStructure || !deleteTargetSpaceId}>
-                  {mutatingStructure ? "Deleting..." : "Delete Space"}
-                </button>
-              </form>
-            </div>
-          </section>
-        </div>
       ) : null}
 
       {!viewer ? (
@@ -1715,45 +1490,6 @@ export function ChatClient() {
         </section>
       ) : null}
 
-      {viewer ? (
-        <section className="panel">
-          <h2>Connected Accounts</h2>
-          <p>
-            {viewer.linkedIdentities.length} linked provider
-            {viewer.linkedIdentities.length === 1 ? "" : "s"}.
-          </p>
-          <ul>
-            {viewer.linkedIdentities.map((identity) => (
-              <li key={`${identity.provider}:${identity.oidcSubject}`}>
-                {identity.provider}
-                {identity.email ? ` (${identity.email})` : ""}
-              </li>
-            ))}
-          </ul>
-          <div className="stack">
-            {enabledLoginProviders
-              .filter(
-                (provider) =>
-                  !viewer.linkedIdentities.some((identity) => identity.provider === provider.provider)
-              )
-              .map((provider) => (
-                <a key={provider.provider} className="button-link" href={providerLinkUrl(provider.provider)}>
-                  Link {provider.displayName}
-                </a>
-              ))}
-          </div>
-        </section>
-      ) : null}
-
-      {viewer && canManageHubOrSpace ? (
-        <section className="panel">
-          <h2>Admin Controls Moved</h2>
-          <p>Federation policy and Discord bridge controls are now in the dedicated admin console.</p>
-          <Link href="/admin" className="button-link">
-            Open Admin Console
-          </Link>
-        </section>
-      ) : null}
 
       {viewer && viewer.needsOnboarding ? (
         <section className="panel">
@@ -1809,62 +1545,321 @@ export function ChatClient() {
       {viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized ? (
         <section className="chat-shell" aria-label="Chat workspace">
           <nav className="servers panel" aria-label="Servers">
-            <h2>Servers</h2>
+            <div className="category-header">
+              <h2>Servers</h2>
+              {canManageHub && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Create Space"
+                  onClick={() => setIsCreatingServer((prev) => !prev)}
+                >
+                  +
+                </button>
+              )}
+            </div>
+
+            {isCreatingServer && (
+              <form className="inline-form" onSubmit={(e) => {
+                void handleCreateSpace(e);
+                setIsCreatingServer(false);
+              }}>
+                <input
+                  autoFocus
+                  value={spaceName}
+                  onChange={(e) => setSpaceName(e.target.value)}
+                  placeholder="Space name"
+                  minLength={2}
+                  maxLength={80}
+                  required
+                />
+                <button type="submit" disabled={creatingSpace}>
+                  ✓
+                </button>
+              </form>
+            )}
+
             <ul>
               {servers.map((server) => (
                 <li key={server.id}>
-                  <button
-                    type="button"
-                    className={selectedServerId === server.id ? "list-item active" : "list-item"}
-                    aria-current={selectedServerId === server.id ? "true" : undefined}
-                    onClick={() => {
-                      void handleServerChange(server.id);
-                    }}
-                    onKeyDown={(event) => {
-                      handleServerKeyboardNavigation(event, server.id);
-                    }}
-                  >
-                    {server.name}
-                  </button>
+                  {inlineServerId === server.id ? (
+                    <form className="inline-form" onSubmit={(e) => {
+                      void handleRenameSpace(e);
+                      setInlineServerId(null);
+                    }}>
+                      <input
+                        autoFocus
+                        value={renameSpaceName}
+                        onChange={(e) => setRenameSpaceName(e.target.value)}
+                        minLength={2}
+                        maxLength={80}
+                        required
+                      />
+                      <button type="submit" disabled={mutatingStructure}>✓</button>
+                      <button type="button" className="ghost" onClick={() => setInlineServerId(null)}>×</button>
+                    </form>
+                  ) : (
+                    <div className="list-item-container">
+                      <button
+                        type="button"
+                        className={selectedServerId === server.id ? "list-item active" : "list-item"}
+                        aria-current={selectedServerId === server.id ? "true" : undefined}
+                        onClick={() => {
+                          void handleServerChange(server.id);
+                        }}
+                        onKeyDown={(event) => {
+                          handleServerKeyboardNavigation(event, server.id);
+                        }}
+                      >
+                        {server.name}
+                        {canManageCurrentSpace && selectedServerId === server.id && (
+                          <div className="inline-mgmt">
+                            <button
+                              type="button"
+                              className="icon-button"
+                              title="Edit Server"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenameSpaceId(server.id);
+                                setRenameSpaceName(server.name);
+                                setInlineServerId(server.id);
+                              }}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button danger"
+                              title="Delete Server"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`Are you sure you want to delete "${server.name}"? This cannot be undone.`)) {
+                                  setDeleteSpaceConfirm("DELETE SPACE");
+                                  void performDeleteSpace(server.id);
+                                }
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
+
+            <div className="sidebar-settings">
+              {canManageCurrentSpace && (
+                <Link href="/admin" className="ghost button-link" style={{ width: '100%' }}>
+                  Admin Console
+                </Link>
+              )}
+            </div>
           </nav>
 
           <nav className="channels panel" aria-label="Channels">
-            <h2>Channels</h2>
+            <div className="category-header">
+              <h2>Channels</h2>
+              {canManageCurrentSpace && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="Create Category"
+                  onClick={() => setIsCreatingCategory((prev) => !prev)}
+                >
+                  +
+                </button>
+              )}
+            </div>
+
+            {isCreatingCategory && (
+              <form className="inline-form" onSubmit={(e) => {
+                void handleCreateCategory(e);
+                setIsCreatingCategory(false);
+              }}>
+                <input
+                  autoFocus
+                  value={categoryName}
+                  onChange={(e) => setCategoryName(e.target.value)}
+                  placeholder="Category name"
+                  minLength={2}
+                  maxLength={80}
+                  required
+                />
+                <button type="submit" disabled={creatingCategory}>✓</button>
+              </form>
+            )}
+
             <input
               aria-label="Filter channels"
               placeholder="Search channels"
               value={channelFilter}
               onChange={(event) => setChannelFilter(event.target.value)}
+              style={{ marginBottom: '0.5rem', width: '100%' }}
             />
+
             <ul>
               {groupedChannels.map((group) => (
                 <li key={group.id ?? "uncategorized"}>
-                  <p className="category-heading">{group.name}</p>
+                  <div className="category-header">
+                    {inlineCategoryId === group.id && group.id !== null ? (
+                      <form className="inline-form" onSubmit={(e) => {
+                        void handleRenameCategory(e);
+                        setInlineCategoryId(null);
+                      }}>
+                        <input
+                          autoFocus
+                          value={renameCategoryName}
+                          onChange={(e) => setRenameCategoryName(e.target.value)}
+                          minLength={2}
+                          maxLength={80}
+                          required
+                        />
+                        <button type="submit" disabled={mutatingStructure}>✓</button>
+                        <button type="button" className="ghost" onClick={() => setInlineCategoryId(null)}>×</button>
+                      </form>
+                    ) : (
+                      <>
+                        <p className="category-heading">{group.name}</p>
+                        {canManageCurrentSpace && (
+                          <div className="inline-mgmt">
+                            <button
+                              type="button"
+                              className="icon-button"
+                              title="Create Room"
+                              onClick={() => {
+                                setSelectedCategoryIdForCreate(group.id ?? "");
+                                setIsCreatingRoom(true);
+                              }}
+                            >
+                              +
+                            </button>
+                            {group.id && (
+                              <button
+                                type="button"
+                                className="icon-button"
+                                title="Rename Category"
+                                onClick={() => {
+                                  setRenameCategoryId(group.id!);
+                                  setRenameCategoryName(group.name);
+                                  setInlineCategoryId(group.id!);
+                                }}
+                              >
+                                ✎
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {isCreatingRoom && selectedCategoryIdForCreate === (group.id ?? "") && (
+                    <form className="inline-form" onSubmit={(e) => {
+                      void handleCreateRoom(e);
+                      setIsCreatingRoom(false);
+                    }}>
+                      <input
+                        autoFocus
+                        value={roomName}
+                        onChange={(e) => setRoomName(e.target.value)}
+                        placeholder="Room name"
+                        minLength={2}
+                        maxLength={80}
+                        required
+                      />
+                      <select
+                        value={roomType}
+                        onChange={(e) => setRoomType(e.target.value as any)}
+                      >
+                        <option value="text">Text</option>
+                        <option value="voice">Voice</option>
+                      </select>
+                      <button type="submit" disabled={creatingRoom}>✓</button>
+                      <button type="button" className="ghost" onClick={() => setIsCreatingRoom(false)}>×</button>
+                    </form>
+                  )}
+
                   <ul className="nested-channel-list">
                     {group.channels.map((channel) => (
                       <li key={channel.id}>
-                        <button
-                          type="button"
-                          className={selectedChannelId === channel.id ? "list-item active" : "list-item"}
-                          aria-current={selectedChannelId === channel.id ? "true" : undefined}
-                          onClick={() => {
-                            void handleChannelChange(channel.id);
-                          }}
-                          onKeyDown={(event) => {
-                            handleChannelKeyboardNavigation(event, channel.id);
-                          }}
-                        >
-                          #{channel.name}
-                          {(unreadCountByChannel[channel.id] ?? 0) > 0 ? (
-                            <span className="unread-pill">{unreadCountByChannel[channel.id]}</span>
-                          ) : null}
-                          {(mentionCountByChannel[channel.id] ?? 0) > 0 ? (
-                            <span className="mention-pill">@{mentionCountByChannel[channel.id]}</span>
-                          ) : null}
-                        </button>
+                        {inlineRoomId === channel.id ? (
+                          <form className="inline-form" onSubmit={(e) => {
+                            void handleRenameRoom(e);
+                            setInlineRoomId(null);
+                          }}>
+                            <input
+                              autoFocus
+                              value={renameRoomName}
+                              onChange={(e) => setRenameRoomName(e.target.value)}
+                              minLength={2}
+                              maxLength={80}
+                              required
+                            />
+                            <button type="submit" disabled={mutatingStructure}>✓</button>
+                            <button type="button" className="ghost" onClick={() => setInlineRoomId(null)}>×</button>
+                          </form>
+                        ) : (
+                          <button
+                            type="button"
+                            className={selectedChannelId === channel.id ? "list-item active" : "list-item"}
+                            aria-current={selectedChannelId === channel.id ? "true" : undefined}
+                            onClick={() => {
+                              void handleChannelChange(channel.id);
+                            }}
+                            onKeyDown={(event) => {
+                              handleChannelKeyboardNavigation(event, channel.id);
+                            }}
+                          >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              {channel.type === 'voice' ? '🔊' : '#'}
+                              {channel.name}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              {(unreadCountByChannel[channel.id] ?? 0) > 0 ? (
+                                <span className="unread-pill">{unreadCountByChannel[channel.id]}</span>
+                              ) : null}
+                              {(mentionCountByChannel[channel.id] ?? 0) > 0 ? (
+                                <span className="mention-pill">@{mentionCountByChannel[channel.id]}</span>
+                              ) : null}
+                              {canManageCurrentSpace && selectedChannelId === channel.id && (
+                                <div className="inline-mgmt">
+                                  <button
+                                    type="button"
+                                    className="icon-button"
+                                    title="Edit Room"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRenameRoomId(channel.id);
+                                      setRenameRoomName(channel.name);
+                                      setInlineRoomId(channel.id);
+                                    }}
+                                  >
+                                    ✎
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="icon-button danger"
+                                    title="Delete Room"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (confirm(`Are you sure you want to delete "#${channel.name}"?`)) {
+                                        setDeleteRoomConfirm("DELETE ROOM");
+                                        if (selectedServerId) {
+                                          void performDeleteRoom(selectedServerId, channel.id);
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -1999,7 +1994,7 @@ export function ChatClient() {
               <div className="composer-actions">
                 <small className="char-count">{draftMessage.length}/2000</small>
                 <button type="submit" disabled={!activeChannel || sending || !draftMessage.trim()}>
-                {sending ? "Sending..." : "Send"}
+                  {sending ? "Sending..." : "Send"}
                 </button>
               </div>
             </form>
@@ -2128,113 +2123,11 @@ export function ChatClient() {
                     </li>
                   ))}
                 </ul>
-                {canManageHubOrSpace ? (
+                {canManageCurrentSpace ? (
                   <>
                     <hr />
                     <h3>Manager Console</h3>
                     <p className="context-line">Open the manager dialog from the account area.</p>
-                  </>
-                ) : null}
-                {(allowedActions.includes("reports.triage") || allowedActions.includes("audit.read")) && selectedServerId ? (
-                  <>
-                    <hr />
-                    <h3>Moderation</h3>
-                    <form className="stack" onSubmit={handleModerationAction}>
-                      <label htmlFor="mod-action">Action</label>
-                      <select
-                        id="mod-action"
-                        value={modActionType}
-                        onChange={(event) =>
-                          setModActionType(
-                            event.target.value as "kick" | "ban" | "unban" | "timeout" | "redact_message"
-                          )
-                        }
-                      >
-                        <option value="kick">Kick</option>
-                        <option value="ban">Ban</option>
-                        <option value="unban">Unban</option>
-                        <option value="timeout">Timeout</option>
-                        <option value="redact_message">Redact Message</option>
-                      </select>
-                      <label htmlFor="mod-target">Target User (optional)</label>
-                      <input
-                        id="mod-target"
-                        value={modTargetUserId}
-                        onChange={(event) => setModTargetUserId(event.target.value)}
-                        placeholder="product user id"
-                      />
-                      <label htmlFor="mod-reason">Reason</label>
-                      <input
-                        id="mod-reason"
-                        value={modReason}
-                        onChange={(event) => setModReason(event.target.value)}
-                        minLength={3}
-                        required
-                      />
-                      <button type="submit">Run Action</button>
-                    </form>
-
-                    <form className="stack" onSubmit={handleCreateReport}>
-                      <label htmlFor="report-target">Report Target User (optional)</label>
-                      <input
-                        id="report-target"
-                        value={reportTargetUserId}
-                        onChange={(event) => setReportTargetUserId(event.target.value)}
-                        placeholder="product user id"
-                      />
-                      <label htmlFor="report-reason">Report Reason</label>
-                      <input
-                        id="report-reason"
-                        value={reportReason}
-                        onChange={(event) => setReportReason(event.target.value)}
-                        minLength={3}
-                        required
-                      />
-                      <button type="submit">Create Report</button>
-                    </form>
-
-                    <h3>Open Reports</h3>
-                    <ul className="audit-list">
-                      {reports.length === 0 ? <li>No reports yet.</li> : null}
-                      {reports.slice(0, 5).map((report) => (
-                        <li key={report.id}>
-                          <strong>{report.status.toUpperCase()}</strong> {report.reason}
-                          {report.status === "open" ? (
-                            <div className="inline-buttons">
-                              <button
-                                type="button"
-                                className="ghost"
-                                onClick={() => {
-                                  void handleTransitionReport(report.id, "triaged");
-                                }}
-                              >
-                                Triage
-                              </button>
-                              <button
-                                type="button"
-                                className="ghost"
-                                onClick={() => {
-                                  void handleTransitionReport(report.id, "resolved");
-                                }}
-                              >
-                                Resolve
-                              </button>
-                            </div>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-
-                    <h3>Audit Log</h3>
-                    <ul className="audit-list">
-                      {auditLogs.length === 0 ? <li>No audit entries yet.</li> : null}
-                      {auditLogs.slice(0, 8).map((entry) => (
-                        <li key={entry.id}>
-                          <strong>{entry.actionType}</strong> by {entry.actorUserId.slice(0, 10)}... in{" "}
-                          {new Date(entry.createdAt).toLocaleTimeString()}
-                        </li>
-                      ))}
-                    </ul>
                   </>
                 ) : null}
               </>

@@ -13,10 +13,14 @@ import type {
   ModerationAction,
   ModerationReport,
   ReportStatus,
+  Role,
   Server,
+  SpaceOwnerAssignment,
+  DelegationAuditEvent,
   VoicePresenceMember,
   VoiceTokenGrant
 } from "@escapehatch/shared";
+
 
 export const controlPlaneBaseUrl =
   process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ?? "http://localhost:4000";
@@ -83,7 +87,7 @@ export interface FederationPolicySnapshot {
 }
 
 export interface ViewerRoleBinding {
-  role: "hub_operator" | "creator_admin" | "creator_moderator" | "member";
+  role: "hub_admin" | "space_owner" | "space_moderator" | "user";
   hubId: string | null;
   serverId: string | null;
   channelId: string | null;
@@ -710,3 +714,79 @@ export async function relayDiscordBridgeMessage(input: {
     body: JSON.stringify(input)
   });
 }
+
+/**
+ * Delegation & Role Management
+ */
+
+export async function grantRole(input: {
+  productUserId: string;
+  role: Role;
+  hubId?: string;
+  serverId?: string;
+  channelId?: string;
+}): Promise<void> {
+  await apiFetch("/v1/roles/grant", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function assignSpaceOwner(input: {
+  serverId: string;
+  productUserId: string;
+  expiresAt?: string;
+}): Promise<SpaceOwnerAssignment> {
+  return apiFetch(`/v1/servers/${encodeURIComponent(input.serverId)}/delegation/space-owners`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      productUserId: input.productUserId,
+      expiresAt: input.expiresAt
+    })
+  });
+}
+
+export async function listSpaceOwnerAssignments(serverId: string): Promise<SpaceOwnerAssignment[]> {
+  const json = await apiFetch<{ items: SpaceOwnerAssignment[] }>(
+    `/v1/servers/${encodeURIComponent(serverId)}/delegation/space-owners`
+  );
+  return json.items;
+}
+
+export async function revokeSpaceOwnerAssignment(input: {
+  serverId: string;
+  assignmentId: string;
+}): Promise<void> {
+  const query = new URLSearchParams({ serverId: input.serverId });
+  await apiFetch(
+    `/v1/delegation/space-owners/${encodeURIComponent(input.assignmentId)}?${query.toString()}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function transferSpaceOwnership(input: {
+  serverId: string;
+  newOwnerUserId: string;
+}): Promise<{
+  serverId: string;
+  hubId: string;
+  previousOwnerUserId: string;
+  newOwnerUserId: string;
+}> {
+  return apiFetch(`/v1/servers/${encodeURIComponent(input.serverId)}/delegation/ownership/transfer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newOwnerUserId: input.newOwnerUserId })
+  });
+}
+
+export async function listDelegationAuditEvents(hubId: string, limit = 50): Promise<DelegationAuditEvent[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  const json = await apiFetch<{ items: DelegationAuditEvent[] }>(
+    `/v1/hubs/${encodeURIComponent(hubId)}/delegation/audit-events?${query.toString()}`
+  );
+  return json.items;
+}
+

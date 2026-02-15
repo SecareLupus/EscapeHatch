@@ -17,8 +17,18 @@ import {
   selectDiscordBridgeGuild,
   updateFederationPolicy,
   upsertDiscordBridgeMapping,
-  deleteDiscordBridgeMapping
+  deleteDiscordBridgeMapping,
+  assignSpaceOwner,
+  listSpaceOwnerAssignments,
+  revokeSpaceOwnerAssignment,
+  transferSpaceOwnership,
+  listDelegationAuditEvents,
+  grantRole,
+  createServer
 } from "../lib/control-plane";
+import { DelegationAuditEvent, SpaceOwnerAssignment, Server } from "@escapehatch/shared";
+
+
 
 export function AdminConsole() {
   const [loading, setLoading] = useState(true);
@@ -56,17 +66,31 @@ export function AdminConsole() {
   const [matrixChannelId, setMatrixChannelId] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const [servers, setServers] = useState<Server[]>([]);
+  const [selectedServerId, setSelectedServerId] = useState<string>("");
+  const [delegations, setDelegations] = useState<SpaceOwnerAssignment[]>([]);
+  const [auditEvents, setAuditEvents] = useState<DelegationAuditEvent[]>([]);
+  const [newDelegateUserId, setNewDelegateUserId] = useState("");
+  const [newDelegateExpiresAt, setNewDelegateExpiresAt] = useState("");
+  const [newOwnerUserId, setNewOwnerUserId] = useState("");
+
+  const [newSpaceName, setNewSpaceName] = useState("");
+  const [newSpaceInitialOwnerId, setNewSpaceInitialOwnerId] = useState("");
+
+
+
   const selectedHubName = useMemo(
     () => hubs.find((hub) => hub.id === selectedHubId)?.name ?? selectedHubId,
     [hubs, selectedHubId]
   );
 
   async function loadHubState(hubId: string): Promise<void> {
-    const [policy, bridge, mappingItems, serverItems] = await Promise.all([
+    const [policy, bridge, mappingItems, serverItems, auditItems] = await Promise.all([
       fetchFederationPolicy(hubId),
       fetchDiscordBridgeHealth(hubId),
       listDiscordBridgeMappings(hubId),
-      listServers()
+      listServers(),
+      listDelegationAuditEvents(hubId)
     ]);
     setFederationAllowlist(policy.policy?.allowlist.join(", ") ?? "");
     setFederationStatus(policy.status);
@@ -79,15 +103,30 @@ export function AdminConsole() {
         matrixChannelId: item.matrixChannelId
       }))
     );
+    setAuditEvents(auditItems);
 
-    const serverIds = new Set(serverItems.filter((server) => server.hubId === hubId).map((server) => server.id));
+    const hubServers = serverItems.filter((server) => server.hubId === hubId);
+    setServers(hubServers);
+    const serverIds = new Set(hubServers.map((server) => server.id));
     const channelsPerServer = await Promise.all([...serverIds].map((serverId) => listChannels(serverId)));
     setChannels(
       channelsPerServer
         .flat()
         .map((channel) => ({ id: channel.id, name: `#${channel.name}` }))
     );
+
+    if (hubServers.length > 0 && hubServers[0]) {
+      const firstServerId = hubServers[0].id;
+      setSelectedServerId(firstServerId);
+      await loadServerState(firstServerId);
+    }
   }
+
+  async function loadServerState(serverId: string): Promise<void> {
+    const assigned = await listSpaceOwnerAssignments(serverId);
+    setDelegations(assigned);
+  }
+
 
   useEffect(() => {
     const pending = new URLSearchParams(window.location.search).get("discordPendingSelection");
@@ -112,7 +151,7 @@ export function AdminConsole() {
           return;
         }
         setCanManage(
-          roleBindings.some((binding) => binding.role === "creator_admin" || binding.role === "hub_operator")
+          roleBindings.some((binding) => binding.role === "hub_admin")
         );
         const mappedHubs = hubItems.map((hub) => ({ id: hub.id, name: hub.name }));
         setHubs(mappedHubs);
@@ -274,6 +313,90 @@ export function AdminConsole() {
     }
   }
 
+  async function handleServerChange(serverId: string): Promise<void> {
+    setSelectedServerId(serverId);
+    await loadServerState(serverId);
+  }
+
+  async function handleAddDelegate(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedServerId || !newDelegateUserId) return;
+    setBusy(true);
+    try {
+      await assignSpaceOwner({
+        serverId: selectedServerId,
+        productUserId: newDelegateUserId,
+        expiresAt: newDelegateExpiresAt || undefined
+      });
+      setNewDelegateUserId("");
+      setNewDelegateExpiresAt("");
+      await loadServerState(selectedServerId);
+      await loadHubState(selectedHubId); // refresh audit
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to add delegate.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRevokeDelegate(assignmentId: string): Promise<void> {
+    if (!selectedServerId) return;
+    setBusy(true);
+    try {
+      await revokeSpaceOwnerAssignment({ serverId: selectedServerId, assignmentId });
+      await loadServerState(selectedServerId);
+      await loadHubState(selectedHubId); // refresh audit
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to revoke delegate.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleTransferOwnership(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedServerId || !newOwnerUserId) return;
+    if (!window.confirm("Are you sure you want to transfer ownership? This action is irreversible.")) return;
+    setBusy(true);
+    try {
+      await transferSpaceOwnership({ serverId: selectedServerId, newOwnerUserId });
+      setNewOwnerUserId("");
+      await loadServerState(selectedServerId);
+      await loadHubState(selectedHubId); // refresh audit and server list
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to transfer ownership.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCreateSpace(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedHubId || !newSpaceName.trim()) return;
+    setBusy(true);
+    try {
+      const server = await createServer({
+        hubId: selectedHubId,
+        name: newSpaceName.trim()
+      });
+      if (newSpaceInitialOwnerId.trim()) {
+        await transferSpaceOwnership({
+          serverId: server.id,
+          newOwnerUserId: newSpaceInitialOwnerId.trim()
+        });
+      }
+      setNewSpaceName("");
+      setNewSpaceInitialOwnerId("");
+      await loadHubState(selectedHubId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to create space.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
+
   if (loading) {
     return (
       <main className="app">
@@ -323,6 +446,28 @@ export function AdminConsole() {
           ))}
         </select>
         <p>Selected hub: {selectedHubName}</p>
+
+        <h3>Create New Space (Server)</h3>
+        <form className="stack" onSubmit={handleCreateSpace}>
+          <label htmlFor="new-space-name">Space Name</label>
+          <input
+            id="new-space-name"
+            value={newSpaceName}
+            onChange={(e) => setNewSpaceName(e.target.value)}
+            required
+            placeholder="e.g. Community A"
+          />
+          <label htmlFor="new-space-owner">Initial Owner ID (Optional)</label>
+          <input
+            id="new-space-owner"
+            value={newSpaceInitialOwnerId}
+            onChange={(e) => setNewSpaceInitialOwnerId(e.target.value)}
+            placeholder="usr_..."
+          />
+          <button type="submit" disabled={busy || !selectedHubId}>
+            Create Space
+          </button>
+        </form>
       </section>
 
       <section className="panel stack">
@@ -440,6 +585,120 @@ export function AdminConsole() {
           </ul>
         ) : (
           <p>No channel mappings configured yet.</p>
+        )}
+      </section>
+
+      <section className="panel stack">
+        <h2>Space Delegation & Ownership</h2>
+        <label htmlFor="server-select-admin">Select Server</label>
+        <select
+          id="server-select-admin"
+          value={selectedServerId}
+          onChange={(event) => {
+            void handleServerChange(event.target.value);
+          }}
+        >
+          {servers.map((server) => (
+            <option key={server.id} value={server.id}>
+              {server.name} ({server.id})
+            </option>
+          ))}
+        </select>
+
+        <h3>Delegated Admins (Space Owners)</h3>
+        {delegations.length > 0 ? (
+          <table className="voice-presence-table">
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Status</th>
+                <th>Expires</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {delegations.map((d) => (
+                <tr key={d.id}>
+                  <td>{d.assignedUserId}</td>
+                  <td>{d.status}</td>
+                  <td>{d.expiresAt ? new Date(d.expiresAt).toLocaleString() : "Never"}</td>
+                  <td>
+                    {d.status === "active" && (
+                      <button type="button" className="ghost" onClick={() => void handleRevokeDelegate(d.id)}>
+                        Revoke
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>No delegated admins for this server.</p>
+        )}
+
+        <form className="stack" onSubmit={handleAddDelegate}>
+          <label htmlFor="delegate-user-id">Assign New Delegate (Product User ID)</label>
+          <input
+            id="delegate-user-id"
+            value={newDelegateUserId}
+            onChange={(e) => setNewDelegateUserId(e.target.value)}
+            required
+            placeholder="usr_..."
+          />
+          <label htmlFor="delegate-expires-at">Expiration (Optional)</label>
+          <input
+            id="delegate-expires-at"
+            type="datetime-local"
+            value={newDelegateExpiresAt}
+            onChange={(e) => setNewDelegateExpiresAt(e.target.value)}
+          />
+          <button type="submit" disabled={busy || !selectedServerId}>
+            Assign Delegate
+          </button>
+        </form>
+
+        <h3>Transfer Server Ownership</h3>
+        <form className="stack" onSubmit={handleTransferOwnership}>
+          <label htmlFor="new-owner-user-id">New Owner (Product User ID)</label>
+          <input
+            id="new-owner-user-id"
+            value={newOwnerUserId}
+            onChange={(e) => setNewOwnerUserId(e.target.value)}
+            required
+            placeholder="usr_..."
+          />
+          <button type="submit" disabled={busy || !selectedServerId}>
+            Transfer Ownership
+          </button>
+        </form>
+      </section>
+
+      <section className="panel stack">
+        <h2>Delegation Audit Log</h2>
+        {auditEvents.length > 0 ? (
+          <table className="voice-presence-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Action</th>
+                <th>Actor</th>
+                <th>Target</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditEvents.map((e) => (
+                <tr key={e.id}>
+                  <td>{new Date(e.createdAt).toLocaleString()}</td>
+                  <td>{e.actionType}</td>
+                  <td>{e.actorUserId}</td>
+                  <td>{e.targetUserId || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>No audit events found.</p>
         )}
       </section>
     </main>

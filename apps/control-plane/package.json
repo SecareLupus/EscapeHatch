@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "dev": "npx dotenv-cli -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc --project tsconfig.json",
-    "start": "dotenv -e ../../.env -- node dist/index.js",
+    "start": "npx dotenv-cli -e ../../.env -- node dist/index.js",
     "lint": "tsc --project tsconfig.json --noEmit",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "test": "dotenv -e ../../.env -- tsx --test src/test/*.test.ts"
+    "test": "npx dotenv-cli -e ../../.env -- tsx --test src/test/*.test.ts"
   },
   "dependencies": {
     "@escapehatch/shared": "workspace:*",
