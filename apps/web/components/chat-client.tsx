@@ -181,7 +181,7 @@ export function ChatClient() {
   }, []);
 
   const enabledLoginProviders = useMemo(
-    () => (providers?.providers ?? []).filter((provider) => provider.isEnabled && provider.provider !== "dev"),
+    () => (providers?.providers ?? []).filter((provider) => provider.isEnabled),
     [providers]
   );
   const canAccessWorkspace = Boolean(viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized);
@@ -1578,6 +1578,7 @@ export function ChatClient() {
                           onChange={(event) => setDevUsername(event.target.value)}
                           minLength={3}
                           maxLength={40}
+                          className="input"
                           placeholder="Dev Username"
                           required
                         />
