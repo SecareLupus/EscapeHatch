@@ -257,8 +257,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       oidcSubject: identity.oidcSubject
     });
 
-    const destination =
-      exchanged.intent === "link" ? `${config.webBaseUrl}?linked=${encodeURIComponent(profile.provider)}` : config.webBaseUrl;
+    const destinationUrl = new URL(config.webBaseUrl);
+    if (exchanged.intent === "link") {
+      destinationUrl.searchParams.set("linked", profile.provider);
+    } else if (profile.username) {
+      destinationUrl.searchParams.set("suggestedUsername", profile.username);
+    }
+    const destination = destinationUrl.toString();
     reply.redirect(destination, 302);
   });
 

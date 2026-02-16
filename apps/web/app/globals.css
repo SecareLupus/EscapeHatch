@@ -797,6 +797,98 @@ textarea:focus-visible,
   width: 100%;
 }
 
+.login-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1rem;
+  background: radial-gradient(circle at 50% 50%, var(--surface-alt), var(--bg));
+}
+
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-card h2 {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+
+.login-card p {
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+}
+
+.provider-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.provider-button.discord {
+  background: #5865F2;
+  color: white;
+}
+
+.provider-button.discord:hover {
+  background: #4752c4;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+}
+
+.provider-button.twitch {
+  background: #9146FF;
+  color: white;
+}
+
+.provider-button.twitch:hover {
+  background: #772ce8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(145, 70, 255, 0.3);
+}
+
+.provider-button.google {
+  background: #fff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+}
+
+.provider-button.google:hover {
+  background: #f8f9fa;
+  border-color: #d2e3fc;
+  transform: translateY(-1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.provider-button.dev {
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.provider-button.dev:hover {
+  background: var(--surface);
+  border-color: var(--text-muted);
+}
+
 .inline-form input {
   flex: 1;
   padding: 0.35rem 0.5rem;

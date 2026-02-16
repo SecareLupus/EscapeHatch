@@ -187,7 +187,7 @@ export interface FederationPolicyStatus {
 
 export interface DiscordBridgeConnection {
   id: string;
-  hubId: string;
+  serverId: string;
   connectedByUserId: string;
   guildId: string | null;
   guildName: string | null;
@@ -199,7 +199,7 @@ export interface DiscordBridgeConnection {
 
 export interface DiscordBridgeChannelMapping {
   id: string;
-  hubId: string;
+  serverId: string;
   guildId: string;
   discordChannelId: string;
   discordChannelName: string;

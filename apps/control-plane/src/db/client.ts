@@ -229,7 +229,7 @@ export async function initDb(): Promise<void> {
 
     create table if not exists discord_bridge_connections (
       id text primary key,
-      hub_id text not null unique references hubs(id) on delete cascade,
+      server_id text not null unique references servers(id) on delete cascade,
       connected_by_user_id text not null,
       discord_user_id text,
       discord_username text,
@@ -247,7 +247,7 @@ export async function initDb(): Promise<void> {
 
     create table if not exists discord_bridge_channel_mappings (
       id text primary key,
-      hub_id text not null references hubs(id) on delete cascade,
+      server_id text not null references servers(id) on delete cascade,
       guild_id text not null,
       discord_channel_id text not null,
       discord_channel_name text not null,
@@ -255,8 +255,8 @@ export async function initDb(): Promise<void> {
       enabled boolean not null default true,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
-      unique (hub_id, discord_channel_id),
-      unique (hub_id, matrix_channel_id)
+      unique (server_id, discord_channel_id),
+      unique (server_id, matrix_channel_id)
     );
 
     create table if not exists platform_settings (

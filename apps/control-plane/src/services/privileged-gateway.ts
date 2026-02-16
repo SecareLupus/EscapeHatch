@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
-import type { ModerationActionType } from "@escapehatch/shared";
+import type { ModerationActionType, PrivilegedAction } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
-import { isActionAllowed, type PrivilegedAction } from "./policy-service.js";
+import { isActionAllowed } from "./policy-service.js";
 
 function toModerationActionType(action: PrivilegedAction): ModerationActionType {
   if (action === "moderation.kick") return "kick";

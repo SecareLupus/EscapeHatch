@@ -171,6 +171,7 @@ export async function createMessage(input: {
   channelId: string;
   actorUserId: string;
   content: string;
+  isRelay?: boolean;
 }): Promise<ChatMessage> {
   return withDb(async (db) => {
     const identity = await db.query<{ preferred_username: string | null; email: string | null }>(
@@ -185,6 +186,37 @@ export async function createMessage(input: {
     const profile = identity.rows[0];
     const fallbackName = profile?.email?.split("@")[0] ?? `user-${input.actorUserId.slice(0, 8)}`;
     const authorDisplayName = profile?.preferred_username ?? fallbackName;
+
+    // Outbound Discord Relay Logic
+    if (!input.isRelay) {
+      try {
+        const { listDiscordChannelMappings } = await import("./discord-bridge-service.js");
+        const { relayMatrixMessageToDiscord } = await import("./discord-bot-client.js");
+
+        // We need to find which server this channel belongs to
+        const channelRow = await db.query<{ server_id: string }>(
+          "select server_id from channels where id = $1 limit 1",
+          [input.channelId]
+        );
+        const serverId = channelRow.rows[0]?.server_id;
+
+        if (serverId) {
+          const mappings = await listDiscordChannelMappings(serverId);
+          const mappedChannels = mappings.filter(m => m.matrixChannelId === input.channelId && m.enabled);
+          for (const m of mappedChannels) {
+            await relayMatrixMessageToDiscord({
+              serverId,
+              discordChannelId: m.discordChannelId,
+              authorName: authorDisplayName,
+              content: input.content
+            });
+          }
+        }
+      } catch (error) {
+        // Don't block message creation if relay fails
+        console.error("Failed to relay message to Discord:", error);
+      }
+    }
 
     const created = await db.query<{
       id: string;

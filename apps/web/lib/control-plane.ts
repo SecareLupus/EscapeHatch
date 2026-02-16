@@ -668,14 +668,17 @@ export function providerLinkUrl(provider: string): string {
   return `${controlPlaneBaseUrl}/auth/link/${encodeURIComponent(provider)}`;
 }
 
-export function discordBridgeStartUrl(hubId: string): string {
-  const query = new URLSearchParams({ hubId });
+export function discordBridgeStartUrl(serverId: string, returnTo?: string): string {
+  const query = new URLSearchParams({ serverId });
+  if (returnTo) {
+    query.set("returnTo", returnTo);
+  }
   return `${controlPlaneBaseUrl}/v1/discord/oauth/start?${query.toString()}`;
 }
 
 export async function fetchDiscordBridgePendingSelection(
   pendingSelectionId: string
-): Promise<{ hubId: string; guilds: Array<{ id: string; name: string }> }> {
+): Promise<{ serverId: string; guilds: Array<{ id: string; name: string }> }> {
   return apiFetch(`/v1/discord/bridge/pending/${encodeURIComponent(pendingSelectionId)}`);
 }
 
@@ -690,36 +693,36 @@ export async function selectDiscordBridgeGuild(input: {
   });
 }
 
-export async function fetchDiscordBridgeHealth(hubId: string): Promise<{
+export async function fetchDiscordBridgeHealth(serverId: string): Promise<{
   connection: DiscordBridgeConnection | null;
   mappingCount: number;
   activeMappingCount: number;
 }> {
-  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(hubId)}/health`);
+  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(serverId)}/health`);
 }
 
-export async function retryDiscordBridgeSyncAction(hubId: string): Promise<DiscordBridgeConnection> {
-  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(hubId)}/retry-sync`, {
+export async function retryDiscordBridgeSyncAction(serverId: string): Promise<DiscordBridgeConnection> {
+  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(serverId)}/retry-sync`, {
     method: "POST"
   });
 }
 
-export async function listDiscordBridgeMappings(hubId: string): Promise<DiscordBridgeChannelMapping[]> {
+export async function listDiscordBridgeMappings(serverId: string): Promise<DiscordBridgeChannelMapping[]> {
   const json = await apiFetch<{ items: DiscordBridgeChannelMapping[] }>(
-    `/v1/discord/bridge/${encodeURIComponent(hubId)}/mappings`
+    `/v1/discord/bridge/${encodeURIComponent(serverId)}/mappings`
   );
   return json.items;
 }
 
 export async function upsertDiscordBridgeMapping(input: {
-  hubId: string;
+  serverId: string;
   guildId: string;
   discordChannelId: string;
   discordChannelName: string;
   matrixChannelId: string;
   enabled: boolean;
 }): Promise<DiscordBridgeChannelMapping> {
-  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(input.hubId)}/mappings`, {
+  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(input.serverId)}/mappings`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -732,21 +735,21 @@ export async function upsertDiscordBridgeMapping(input: {
   });
 }
 
-export async function deleteDiscordBridgeMapping(input: { hubId: string; mappingId: string }): Promise<void> {
+export async function deleteDiscordBridgeMapping(input: { serverId: string; mappingId: string }): Promise<void> {
   await apiFetch(
-    `/v1/discord/bridge/${encodeURIComponent(input.hubId)}/mappings/${encodeURIComponent(input.mappingId)}`,
+    `/v1/discord/bridge/${encodeURIComponent(input.serverId)}/mappings/${encodeURIComponent(input.mappingId)}`,
     { method: "DELETE" }
   );
 }
 
 export async function relayDiscordBridgeMessage(input: {
-  hubId: string;
+  serverId: string;
   discordChannelId: string;
   authorName: string;
   content: string;
   mediaUrls?: string[];
 }): Promise<{ relayed: boolean; matrixChannelId?: string; limitation?: string }> {
-  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(input.hubId)}/relay`, {
+  return apiFetch(`/v1/discord/bridge/${encodeURIComponent(input.serverId)}/relay`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)

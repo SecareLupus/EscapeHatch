@@ -1033,19 +1033,20 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
   });
 
   app.get("/v1/discord/oauth/start", initializedAuthHandlers, async (request, reply) => {
-    const query = z.object({ hubId: z.string().min(1) }).parse(request.query);
-    const allowed = await canManageHub({
+    const query = z.object({ serverId: z.string().min(1), returnTo: z.string().optional() }).parse(request.query);
+    const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
-      hubId: query.hubId
+      serverId: query.serverId
     });
     if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
       return;
     }
 
     const url = createDiscordConnectUrl({
-      hubId: query.hubId,
-      productUserId: request.auth!.productUserId
+      serverId: query.serverId,
+      productUserId: request.auth!.productUserId,
+      returnTo: query.returnTo
     });
     reply.redirect(url, 302);
   });
@@ -1059,11 +1060,11 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     }
 
     const completed = await completeDiscordOauthAndListGuilds({
-      hubId: state.hubId,
+      serverId: state.serverId,
       productUserId: request.auth!.productUserId,
       code: query.code
     });
-    const redirect = new URL(config.webBaseUrl);
+    const redirect = new URL(state.returnTo || "/", config.webBaseUrl);
     redirect.searchParams.set("discordPendingSelection", completed.pendingSelectionId);
     reply.redirect(redirect.toString(), 302);
   });
@@ -1100,18 +1101,18 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     }
   });
 
-  app.get("/v1/discord/bridge/:hubId/health", initializedAuthHandlers, async (request, reply) => {
-    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
-    const allowed = await canManageHub({
+  app.get("/v1/discord/bridge/:serverId/health", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
-      hubId: params.hubId
+      serverId: params.serverId
     });
     if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
       return;
     }
-    const connection = await getDiscordBridgeConnection(params.hubId);
-    const mappings = await listDiscordChannelMappings(params.hubId);
+    const connection = await getDiscordBridgeConnection(params.serverId);
+    const mappings = await listDiscordChannelMappings(params.serverId);
     return {
       connection,
       mappingCount: mappings.length,
@@ -1119,18 +1120,18 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     };
   });
 
-  app.post("/v1/discord/bridge/:hubId/retry-sync", initializedAuthHandlers, async (request, reply) => {
-    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
-    const allowed = await canManageHub({
+  app.post("/v1/discord/bridge/:serverId/retry-sync", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
-      hubId: params.hubId
+      serverId: params.serverId
     });
     if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
       return;
     }
     try {
-      return await retryDiscordBridgeSync(params.hubId);
+      return await retryDiscordBridgeSync(params.serverId);
     } catch (error) {
       if (error instanceof Error && error.message.includes("not found")) {
         reply.code(404).send({ message: error.message });
@@ -1140,21 +1141,21 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     }
   });
 
-  app.get("/v1/discord/bridge/:hubId/mappings", initializedAuthHandlers, async (request, reply) => {
-    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
-    const allowed = await canManageHub({
+  app.get("/v1/discord/bridge/:serverId/mappings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
-      hubId: params.hubId
+      serverId: params.serverId
     });
     if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
       return;
     }
-    return { items: await listDiscordChannelMappings(params.hubId) };
+    return { items: await listDiscordChannelMappings(params.serverId) };
   });
 
-  app.put("/v1/discord/bridge/:hubId/mappings", initializedAuthHandlers, async (request, reply) => {
-    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+  app.put("/v1/discord/bridge/:serverId/mappings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
     const payload = z
       .object({
         guildId: z.string().min(1),
@@ -1164,39 +1165,58 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         enabled: z.boolean().default(true)
       })
       .parse(request.body);
-    const allowed = await canManageHub({
+    const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
-      hubId: params.hubId
+      serverId: params.serverId
     });
     if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
       return;
     }
     return upsertDiscordChannelMapping({
-      hubId: params.hubId,
+      serverId: params.serverId,
       ...payload
     });
   });
 
-  app.delete("/v1/discord/bridge/:hubId/mappings/:mappingId", initializedAuthHandlers, async (request, reply) => {
-    const params = z.object({ hubId: z.string().min(1), mappingId: z.string().min(1) }).parse(request.params);
-    const allowed = await canManageHub({
+  app.delete("/v1/discord/bridge/:serverId/mappings/:mappingId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1), mappingId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageServer({
       productUserId: request.auth!.productUserId,
-      hubId: params.hubId
+      serverId: params.serverId
     });
     if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
       return;
     }
     await deleteDiscordChannelMapping({
-      hubId: params.hubId,
+      serverId: params.serverId,
       mappingId: params.mappingId
     });
     reply.code(204).send();
   });
 
-  app.post("/v1/discord/bridge/:hubId/relay", initializedAuthHandlers, async (request, reply) => {
-    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+  app.post("/v1/discord/bridge/:serverId/relay", async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const secret = request.headers["x-bridge-secret"];
+    const hasSecret = Boolean(config.discordBridge.bridgeSecret && secret === config.discordBridge.bridgeSecret);
+
+    if (!hasSecret) {
+      await requireAuth(request, reply);
+      if (reply.sent) return;
+      await requireInitialized(request, reply);
+      if (reply.sent) return;
+
+      const allowed = await canManageServer({
+        productUserId: request.auth!.productUserId,
+        serverId: params.serverId
+      });
+      if (!allowed) {
+        reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+        return;
+      }
+    }
+
     const payload = z
       .object({
         discordChannelId: z.string().min(1),
@@ -1205,16 +1225,9 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         mediaUrls: z.array(z.string().url()).max(8).optional()
       })
       .parse(request.body);
-    const allowed = await canManageHub({
-      productUserId: request.auth!.productUserId,
-      hubId: params.hubId
-    });
-    if (!allowed) {
-      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
-      return;
-    }
+
     return relayDiscordMessageToMappedChannel({
-      hubId: params.hubId,
+      serverId: params.serverId,
       ...payload
     });
   });

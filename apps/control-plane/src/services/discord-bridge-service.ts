@@ -11,8 +11,9 @@ function randomId(prefix: string): string {
 const oauthStateStore = new Map<
   string,
   {
-    hubId: string;
+    serverId: string;
     productUserId: string;
+    returnTo?: string;
     createdAt: number;
   }
 >();
@@ -20,7 +21,7 @@ const oauthStateStore = new Map<
 const pendingGuildSelections = new Map<
   string,
   {
-    hubId: string;
+    serverId: string;
     productUserId: string;
     accessToken: string;
     refreshToken: string | null;
@@ -69,7 +70,7 @@ function cleanExpiredState(): void {
 
 function mapConnection(row: {
   id: string;
-  hub_id: string;
+  server_id: string;
   connected_by_user_id: string;
   guild_id: string | null;
   guild_name: string | null;
@@ -80,7 +81,7 @@ function mapConnection(row: {
 }): DiscordBridgeConnection {
   return {
     id: row.id,
-    hubId: row.hub_id,
+    serverId: row.server_id,
     connectedByUserId: row.connected_by_user_id,
     guildId: row.guild_id,
     guildName: row.guild_name,
@@ -93,7 +94,7 @@ function mapConnection(row: {
 
 function mapMapping(row: {
   id: string;
-  hub_id: string;
+  server_id: string;
   guild_id: string;
   discord_channel_id: string;
   discord_channel_name: string;
@@ -104,7 +105,7 @@ function mapMapping(row: {
 }): DiscordBridgeChannelMapping {
   return {
     id: row.id,
-    hubId: row.hub_id,
+    serverId: row.server_id,
     guildId: row.guild_id,
     discordChannelId: row.discord_channel_id,
     discordChannelName: row.discord_channel_name,
@@ -115,12 +116,13 @@ function mapMapping(row: {
   };
 }
 
-export function createDiscordConnectUrl(input: { hubId: string; productUserId: string }): string {
+export function createDiscordConnectUrl(input: { serverId: string; productUserId: string; returnTo?: string }): string {
   cleanExpiredState();
   const state = randomId("dboauth");
   oauthStateStore.set(state, {
-    hubId: input.hubId,
+    serverId: input.serverId,
     productUserId: input.productUserId,
+    returnTo: input.returnTo,
     createdAt: Date.now()
   });
 
@@ -128,14 +130,15 @@ export function createDiscordConnectUrl(input: { hubId: string; productUserId: s
     client_id: config.discordBridge.clientId ?? "",
     redirect_uri: config.discordBridge.callbackUrl,
     response_type: "code",
-    scope: "identify guilds",
+    scope: "identify guilds bot",
+    permissions: "536873984", // Read Messages, Send Messages, Manage Webhooks
     state,
     prompt: "consent"
   });
   return `${config.discordBridge.authorizeUrl}?${query.toString()}`;
 }
 
-export function consumeDiscordOauthState(state: string): { hubId: string; productUserId: string } | null {
+export function consumeDiscordOauthState(state: string): { serverId: string; productUserId: string; returnTo?: string } | null {
   cleanExpiredState();
   const value = oauthStateStore.get(state);
   if (!value) {
@@ -143,8 +146,9 @@ export function consumeDiscordOauthState(state: string): { hubId: string; produc
   }
   oauthStateStore.delete(state);
   return {
-    hubId: value.hubId,
-    productUserId: value.productUserId
+    serverId: value.serverId,
+    productUserId: value.productUserId,
+    returnTo: value.returnTo
   };
 }
 
@@ -245,14 +249,14 @@ async function exchangeDiscordOAuthCode(code: string): Promise<{
 }
 
 export async function completeDiscordOauthAndListGuilds(input: {
-  hubId: string;
+  serverId: string;
   productUserId: string;
   code: string;
 }): Promise<{ pendingSelectionId: string; guilds: Array<{ id: string; name: string }> }> {
   const exchanged = await exchangeDiscordOAuthCode(input.code);
   const pendingSelectionId = randomId("dbpending");
   pendingGuildSelections.set(pendingSelectionId, {
-    hubId: input.hubId,
+    serverId: input.serverId,
     productUserId: input.productUserId,
     accessToken: exchanged.accessToken,
     refreshToken: exchanged.refreshToken,
@@ -271,13 +275,13 @@ export async function completeDiscordOauthAndListGuilds(input: {
 export function getPendingDiscordGuildSelection(input: {
   pendingSelectionId: string;
   productUserId: string;
-}): { hubId: string; guilds: Array<{ id: string; name: string }> } | null {
+}): { serverId: string; guilds: Array<{ id: string; name: string }> } | null {
   const pending = pendingGuildSelections.get(input.pendingSelectionId);
   if (!pending || pending.productUserId !== input.productUserId) {
     return null;
   }
   return {
-    hubId: pending.hubId,
+    serverId: pending.serverId,
     guilds: pending.guilds
   };
 }
@@ -302,7 +306,7 @@ export async function selectDiscordGuild(input: {
   return withDb(async (db) => {
     const row = await db.query<{
       id: string;
-      hub_id: string;
+      server_id: string;
       connected_by_user_id: string;
       guild_id: string | null;
       guild_name: string | null;
@@ -312,9 +316,9 @@ export async function selectDiscordGuild(input: {
       updated_at: string;
     }>(
       `insert into discord_bridge_connections
-       (id, hub_id, connected_by_user_id, discord_user_id, discord_username, access_token, refresh_token, token_expires_at, guild_id, guild_name, status, last_sync_at, updated_at)
+       (id, server_id, connected_by_user_id, discord_user_id, discord_username, access_token, refresh_token, token_expires_at, guild_id, guild_name, status, last_sync_at, updated_at)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'connected', now(), now())
-       on conflict (hub_id)
+       on conflict (server_id)
        do update set
          connected_by_user_id = excluded.connected_by_user_id,
          discord_user_id = excluded.discord_user_id,
@@ -328,10 +332,10 @@ export async function selectDiscordGuild(input: {
          last_error = null,
          last_sync_at = now(),
          updated_at = now()
-       returning id, hub_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at`,
+       returning id, server_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at`,
       [
         randomId("dbconn"),
-        pending.hubId,
+        pending.serverId,
         input.productUserId,
         pending.discordUserId,
         pending.discordUsername,
@@ -350,11 +354,11 @@ export async function selectDiscordGuild(input: {
   });
 }
 
-export async function getDiscordBridgeConnection(hubId: string): Promise<DiscordBridgeConnection | null> {
+export async function getDiscordBridgeConnection(serverId: string): Promise<DiscordBridgeConnection | null> {
   return withDb(async (db) => {
     const row = await db.query<{
       id: string;
-      hub_id: string;
+      server_id: string;
       connected_by_user_id: string;
       guild_id: string | null;
       guild_name: string | null;
@@ -363,20 +367,20 @@ export async function getDiscordBridgeConnection(hubId: string): Promise<Discord
       last_error: string | null;
       updated_at: string;
     }>(
-      `select id, hub_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at
-       from discord_bridge_connections where hub_id = $1`,
-      [hubId]
+      `select id, server_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at
+       from discord_bridge_connections where server_id = $1`,
+      [serverId]
     );
     const connection = row.rows[0];
     return connection ? mapConnection(connection) : null;
   });
 }
 
-export async function listDiscordChannelMappings(hubId: string): Promise<DiscordBridgeChannelMapping[]> {
+export async function listDiscordChannelMappings(serverId: string): Promise<DiscordBridgeChannelMapping[]> {
   return withDb(async (db) => {
     const row = await db.query<{
       id: string;
-      hub_id: string;
+      server_id: string;
       guild_id: string;
       discord_channel_id: string;
       discord_channel_name: string;
@@ -385,18 +389,18 @@ export async function listDiscordChannelMappings(hubId: string): Promise<Discord
       created_at: string;
       updated_at: string;
     }>(
-      `select id, hub_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled, created_at, updated_at
+      `select id, server_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled, created_at, updated_at
        from discord_bridge_channel_mappings
-       where hub_id = $1
+       where server_id = $1
        order by created_at asc`,
-      [hubId]
+      [serverId]
     );
     return row.rows.map(mapMapping);
   });
 }
 
 export async function upsertDiscordChannelMapping(input: {
-  hubId: string;
+  serverId: string;
   guildId: string;
   discordChannelId: string;
   discordChannelName: string;
@@ -406,7 +410,7 @@ export async function upsertDiscordChannelMapping(input: {
   return withDb(async (db) => {
     const row = await db.query<{
       id: string;
-      hub_id: string;
+      server_id: string;
       guild_id: string;
       discord_channel_id: string;
       discord_channel_name: string;
@@ -416,19 +420,19 @@ export async function upsertDiscordChannelMapping(input: {
       updated_at: string;
     }>(
       `insert into discord_bridge_channel_mappings
-       (id, hub_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled)
+       (id, server_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled)
        values ($1, $2, $3, $4, $5, $6, $7)
-       on conflict (hub_id, discord_channel_id)
+       on conflict (server_id, discord_channel_id)
        do update set
          guild_id = excluded.guild_id,
          discord_channel_name = excluded.discord_channel_name,
          matrix_channel_id = excluded.matrix_channel_id,
          enabled = excluded.enabled,
          updated_at = now()
-       returning id, hub_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled, created_at, updated_at`,
+       returning id, server_id, guild_id, discord_channel_id, discord_channel_name, matrix_channel_id, enabled, created_at, updated_at`,
       [
         randomId("dbmap"),
-        input.hubId,
+        input.serverId,
         input.guildId,
         input.discordChannelId,
         input.discordChannelName,
@@ -444,20 +448,20 @@ export async function upsertDiscordChannelMapping(input: {
   });
 }
 
-export async function deleteDiscordChannelMapping(input: { hubId: string; mappingId: string }): Promise<void> {
+export async function deleteDiscordChannelMapping(input: { serverId: string; mappingId: string }): Promise<void> {
   await withDb(async (db) => {
-    await db.query("delete from discord_bridge_channel_mappings where id = $1 and hub_id = $2", [
+    await db.query("delete from discord_bridge_channel_mappings where id = $1 and server_id = $2", [
       input.mappingId,
-      input.hubId
+      input.serverId
     ]);
   });
 }
 
-export async function retryDiscordBridgeSync(hubId: string): Promise<DiscordBridgeConnection> {
+export async function retryDiscordBridgeSync(serverId: string): Promise<DiscordBridgeConnection> {
   return withDb(async (db) => {
     const row = await db.query<{
       id: string;
-      hub_id: string;
+      server_id: string;
       connected_by_user_id: string;
       guild_id: string | null;
       guild_name: string | null;
@@ -468,9 +472,9 @@ export async function retryDiscordBridgeSync(hubId: string): Promise<DiscordBrid
     }>(
       `update discord_bridge_connections
        set status = 'syncing', last_error = null, updated_at = now()
-       where hub_id = $1
-       returning id, hub_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at`,
-      [hubId]
+       where server_id = $1
+       returning id, server_id, connected_by_user_id, guild_id, guild_name, status, last_sync_at, last_error, updated_at`,
+      [serverId]
     );
     const updated = row.rows[0];
     if (!updated) {
@@ -480,10 +484,10 @@ export async function retryDiscordBridgeSync(hubId: string): Promise<DiscordBrid
     await db.query(
       `update discord_bridge_connections
        set status = 'connected', last_sync_at = now(), updated_at = now()
-       where hub_id = $1`,
-      [hubId]
+       where server_id = $1`,
+      [serverId]
     );
-    const refreshed = await getDiscordBridgeConnection(hubId);
+    const refreshed = await getDiscordBridgeConnection(serverId);
     if (!refreshed) {
       throw new Error("Discord bridge connection not found after sync.");
     }
@@ -492,21 +496,21 @@ export async function retryDiscordBridgeSync(hubId: string): Promise<DiscordBrid
 }
 
 export async function relayDiscordMessageToMappedChannel(input: {
-  hubId: string;
+  serverId: string;
   discordChannelId: string;
   authorName: string;
   content: string;
   mediaUrls?: string[];
 }): Promise<{ relayed: boolean; matrixChannelId?: string; limitation?: string }> {
-  const mappings = await listDiscordChannelMappings(input.hubId);
+  const mappings = await listDiscordChannelMappings(input.serverId);
   const mapping = mappings.find((item) => item.discordChannelId === input.discordChannelId && item.enabled);
   if (!mapping) {
     return { relayed: false, limitation: "No active mapping for Discord channel." };
   }
 
-  const connection = await getDiscordBridgeConnection(input.hubId);
+  const connection = await getDiscordBridgeConnection(input.serverId);
   if (!connection) {
-    return { relayed: false, limitation: "Bridge not connected for hub." };
+    return { relayed: false, limitation: "Bridge not connected for server." };
   }
 
   const mappedChannelExists = await withDb(async (db) => {
@@ -515,9 +519,9 @@ export async function relayDiscordMessageToMappedChannel(input: {
          select 1
          from channels ch
          join servers s on s.id = ch.server_id
-         where ch.id = $1 and s.hub_id = $2
+         where ch.id = $1 and s.id = $2
        ) as exists`,
-      [mapping.matrixChannelId, input.hubId]
+      [mapping.matrixChannelId, input.serverId]
     );
     return Boolean(row.rows[0]?.exists);
   });
@@ -532,7 +536,8 @@ export async function relayDiscordMessageToMappedChannel(input: {
   await createMessage({
     channelId: mapping.matrixChannelId,
     actorUserId: connection.connectedByUserId,
-    content: body.join("\n")
+    content: body.join("\n"),
+    isRelay: true
   });
 
   return {

@@ -93,35 +93,15 @@ export function AdminConsole() {
   );
 
   async function loadHubState(hubId: string): Promise<void> {
-    const [policy, bridge, mappingItems, serverItems, auditItems] = await Promise.all([
+    const [policy, serverItems] = await Promise.all([
       fetchFederationPolicy(hubId),
-      fetchDiscordBridgeHealth(hubId),
-      listDiscordBridgeMappings(hubId),
-      listServers(),
-      listDelegationAuditEvents(hubId)
+      listServers()
     ]);
     setFederationAllowlist(policy.policy?.allowlist.join(", ") ?? "");
     setFederationStatus(policy.status);
-    setBridgeStatus(bridge);
-    setMappings(
-      mappingItems.map((item) => ({
-        id: item.id,
-        discordChannelId: item.discordChannelId,
-        discordChannelName: item.discordChannelName,
-        matrixChannelId: item.matrixChannelId
-      }))
-    );
-    setAuditEvents(auditItems);
 
     const hubServers = serverItems.filter((server) => server.hubId === hubId);
     setServers(hubServers);
-    const serverIds = new Set(hubServers.map((server) => server.id));
-    const channelsPerServer = await Promise.all([...serverIds].map((serverId) => listChannels(serverId)));
-    setChannels(
-      channelsPerServer
-        .flat()
-        .map((channel) => ({ id: channel.id, name: `#${channel.name}` }))
-    );
 
     if (hubServers.length > 0 && hubServers[0]) {
       const firstServerId = hubServers[0].id;
@@ -131,8 +111,24 @@ export function AdminConsole() {
   }
 
   async function loadServerState(serverId: string): Promise<void> {
-    const assigned = await listSpaceOwnerAssignments(serverId);
+    const [assigned, bridge, mappingItems, channelItems] = await Promise.all([
+      listSpaceOwnerAssignments(serverId),
+      fetchDiscordBridgeHealth(serverId),
+      listDiscordBridgeMappings(serverId),
+      listChannels(serverId)
+    ]);
     setDelegations(assigned);
+    setBridgeStatus(bridge);
+    setMappings(
+      mappingItems.map((item) => ({
+        id: item.id,
+        discordChannelId: item.discordChannelId,
+        discordChannelName: item.discordChannelName,
+        matrixChannelId: item.matrixChannelId
+      }))
+    );
+    setChannels(channelItems.map((channel) => ({ id: channel.id, name: `#${channel.name}` })));
+
     if (previewUserId) {
       await loadPreview(serverId, previewUserId);
     }
@@ -225,15 +221,15 @@ export function AdminConsole() {
       .then((pending) => {
         setDiscordGuilds(pending.guilds);
         setSelectedGuildId((current) => current || pending.guilds[0]?.id || "");
-        if (!selectedHubId) {
-          setSelectedHubId(pending.hubId);
+        if (!selectedServerId) {
+          setSelectedServerId(pending.serverId);
         }
       })
       .catch(() => {
         setDiscordPendingSelectionId(null);
         setDiscordGuilds([]);
       });
-  }, [discordPendingSelectionId, selectedHubId]);
+  }, [discordPendingSelectionId, selectedServerId]);
 
   async function handleHubChange(nextHubId: string): Promise<void> {
     setSelectedHubId(nextHubId);
@@ -281,7 +277,7 @@ export function AdminConsole() {
 
   async function handleSelectGuild(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!discordPendingSelectionId || !selectedGuildId || !selectedHubId) {
+    if (!discordPendingSelectionId || !selectedGuildId || !selectedServerId) {
       return;
     }
     setBusy(true);
@@ -292,7 +288,7 @@ export function AdminConsole() {
         guildId: selectedGuildId
       });
       setDiscordPendingSelectionId(null);
-      await loadHubState(selectedHubId);
+      await loadServerState(selectedServerId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to select Discord guild.");
     } finally {
@@ -301,14 +297,14 @@ export function AdminConsole() {
   }
 
   async function handleRetryBridge(): Promise<void> {
-    if (!selectedHubId) {
+    if (!selectedServerId) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await retryDiscordBridgeSyncAction(selectedHubId);
-      await loadHubState(selectedHubId);
+      await retryDiscordBridgeSyncAction(selectedServerId);
+      await loadServerState(selectedServerId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to retry bridge sync.");
     } finally {
@@ -318,14 +314,14 @@ export function AdminConsole() {
 
   async function handleUpsertMapping(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!selectedHubId || !bridgeStatus?.connection?.guildId) {
+    if (!selectedServerId || !bridgeStatus?.connection?.guildId) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await upsertDiscordBridgeMapping({
-        hubId: selectedHubId,
+        serverId: selectedServerId,
         guildId: bridgeStatus.connection.guildId,
         discordChannelId,
         discordChannelName,
@@ -335,7 +331,7 @@ export function AdminConsole() {
       setDiscordChannelId("");
       setDiscordChannelName("");
       setMatrixChannelId("");
-      await loadHubState(selectedHubId);
+      await loadServerState(selectedServerId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to save mapping.");
     } finally {
@@ -344,14 +340,14 @@ export function AdminConsole() {
   }
 
   async function handleDeleteMapping(mappingId: string): Promise<void> {
-    if (!selectedHubId) {
+    if (!selectedServerId) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await deleteDiscordBridgeMapping({ hubId: selectedHubId, mappingId });
-      await loadHubState(selectedHubId);
+      await deleteDiscordBridgeMapping({ serverId: selectedServerId, mappingId });
+      await loadServerState(selectedServerId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to delete mapping.");
     } finally {
@@ -547,96 +543,7 @@ export function AdminConsole() {
           ) : null}
         </section>
 
-        <section className="panel stack">
-          <h2>Discord Bridge</h2>
-          {selectedHubId ? (
-            <a className="button-link" href={discordBridgeStartUrl(selectedHubId)}>
-              Connect Discord
-            </a>
-          ) : null}
-          <p>
-            Status: {bridgeStatus?.connection?.status ?? "disconnected"}
-            {bridgeStatus?.connection?.guildName ? ` (${bridgeStatus.connection.guildName})` : ""}
-          </p>
-          <button type="button" className="ghost" disabled={busy || !selectedHubId} onClick={() => void handleRetryBridge()}>
-            Retry Sync
-          </button>
 
-          {discordPendingSelectionId && discordGuilds.length > 0 ? (
-            <form className="stack" onSubmit={handleSelectGuild}>
-              <label htmlFor="guild-select-admin">Select Guild</label>
-              <select
-                id="guild-select-admin"
-                value={selectedGuildId}
-                onChange={(event) => setSelectedGuildId(event.target.value)}
-              >
-                {discordGuilds.map((guild) => (
-                  <option key={guild.id} value={guild.id}>
-                    {guild.name}
-                  </option>
-                ))}
-              </select>
-              <button type="submit" disabled={busy}>
-                Confirm Guild
-              </button>
-            </form>
-          ) : null}
-
-          <form className="stack" onSubmit={handleUpsertMapping}>
-            <label htmlFor="discord-channel-id-admin">Discord Channel ID</label>
-            <input
-              id="discord-channel-id-admin"
-              value={discordChannelId}
-              onChange={(event) => setDiscordChannelId(event.target.value)}
-              required
-            />
-            <label htmlFor="discord-channel-name-admin">Discord Channel Name</label>
-            <input
-              id="discord-channel-name-admin"
-              value={discordChannelName}
-              onChange={(event) => setDiscordChannelName(event.target.value)}
-              required
-            />
-            <label htmlFor="matrix-channel-id-admin">Matrix Channel</label>
-            <select
-              id="matrix-channel-id-admin"
-              value={matrixChannelId}
-              onChange={(event) => setMatrixChannelId(event.target.value)}
-              required
-            >
-              <option value="">Select channel</option>
-              {channels.map((channel) => (
-                <option key={channel.id} value={channel.id}>
-                  {channel.name}
-                </option>
-              ))}
-            </select>
-            <button type="submit" disabled={busy || !bridgeStatus?.connection?.guildId}>
-              Save Mapping
-            </button>
-          </form>
-
-          {mappings.length > 0 ? (
-            <ul>
-              {mappings.map((mapping) => (
-                <li key={mapping.id}>
-                  {mapping.discordChannelName} ({mapping.discordChannelId}) → {mapping.matrixChannelId}
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => {
-                      void handleDeleteMapping(mapping.id);
-                    }}
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No channel mappings configured yet.</p>
-          )}
-        </section>
 
         <section className="panel stack">
           <h2>Space Delegation & Ownership</h2>
@@ -775,6 +682,97 @@ export function AdminConsole() {
               Transfer Ownership
             </button>
           </form>
+        </section>
+
+        <section className="panel stack">
+          <h2>Discord Bridge</h2>
+          {selectedServerId ? (
+            <a className="button-link" href={discordBridgeStartUrl(selectedServerId, "/admin")}>
+              Connect Discord
+            </a>
+          ) : null}
+          <p>
+            Status: {bridgeStatus?.connection?.status ?? "disconnected"}
+            {bridgeStatus?.connection?.guildName ? ` (${bridgeStatus.connection.guildName})` : ""}
+          </p>
+          <button type="button" className="ghost" disabled={busy || !selectedServerId} onClick={() => void handleRetryBridge()}>
+            Retry Sync
+          </button>
+
+          {discordPendingSelectionId && discordGuilds.length > 0 ? (
+            <form className="stack" onSubmit={handleSelectGuild}>
+              <label htmlFor="guild-select-admin">Select Guild</label>
+              <select
+                id="guild-select-admin"
+                value={selectedGuildId}
+                onChange={(event) => setSelectedGuildId(event.target.value)}
+              >
+                {discordGuilds.map((guild) => (
+                  <option key={guild.id} value={guild.id}>
+                    {guild.name}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" disabled={busy}>
+                Confirm Guild
+              </button>
+            </form>
+          ) : null}
+
+          <form className="stack" onSubmit={handleUpsertMapping}>
+            <label htmlFor="discord-channel-id-admin">Discord Channel ID</label>
+            <input
+              id="discord-channel-id-admin"
+              value={discordChannelId}
+              onChange={(event) => setDiscordChannelId(event.target.value)}
+              required
+            />
+            <label htmlFor="discord-channel-name-admin">Discord Channel Name</label>
+            <input
+              id="discord-channel-name-admin"
+              value={discordChannelName}
+              onChange={(event) => setDiscordChannelName(event.target.value)}
+              required
+            />
+            <label htmlFor="matrix-channel-id-admin">Matrix Channel (Matrix ID)</label>
+            <select
+              id="matrix-channel-id-admin"
+              value={matrixChannelId}
+              onChange={(event) => setMatrixChannelId(event.target.value)}
+              required
+            >
+              <option value="">Select channel</option>
+              {channels.map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  {channel.name}
+                </option>
+              ))}
+            </select>
+            <button type="submit" disabled={busy || !bridgeStatus?.connection?.guildId}>
+              Save Mapping
+            </button>
+          </form>
+
+          {mappings.length > 0 ? (
+            <ul>
+              {mappings.map((mapping) => (
+                <li key={mapping.id}>
+                  {mapping.discordChannelName} ({mapping.discordChannelId}) → {mapping.matrixChannelId}
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      void handleDeleteMapping(mapping.id);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No channel mappings configured yet.</p>
+          )}
         </section>
 
         <section className="panel stack">

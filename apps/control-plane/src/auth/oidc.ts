@@ -16,6 +16,7 @@ interface OidcProfile {
   provider: SupportedOidcProvider;
   oidcSubject: string;
   email: string | null;
+  username?: string;
   preferredUsername: string | null;
   avatarUrl: string | null;
 }
@@ -193,6 +194,7 @@ async function exchangeDiscordCode(code: string, verifier: string): Promise<Oidc
     provider: "discord",
     oidcSubject: profile.id,
     email: profile.email ?? null,
+    username: profile.username,
     preferredUsername: null,
     avatarUrl: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : null
   };
@@ -277,6 +279,8 @@ async function exchangeTwitchCode(code: string, verifier: string): Promise<OidcP
   const profileJson = (await userResponse.json()) as {
     data?: Array<{
       id: string;
+      login: string;
+      display_name: string;
       email?: string;
       profile_image_url?: string;
     }>;
@@ -290,6 +294,7 @@ async function exchangeTwitchCode(code: string, verifier: string): Promise<OidcP
     provider: "twitch",
     oidcSubject: profile.id,
     email: profile.email ?? null,
+    username: profile.login || profile.display_name,
     preferredUsername: null,
     avatarUrl: profile.profile_image_url ?? null
   };
