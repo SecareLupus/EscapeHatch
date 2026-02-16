@@ -1,14 +1,20 @@
-import "dotenv/config";
+import "./load-env.js";
 import { buildApp } from "./app.js";
 import { config } from "./config.js";
-import { initDb } from "./db/client.js";
 import { startDiscordBot } from "./services/discord-bot-client.js";
 
-const app = await buildApp();
-await initDb();
-await startDiscordBot();
+async function start() {
+  const app = await buildApp();
+  try {
+    await app.listen({ port: config.port, host: "0.0.0.0" });
+    console.log(`Control plane running at http://localhost:${config.port}`);
 
-app.listen({ port: config.port, host: "0.0.0.0" }).catch((error) => {
-  app.log.error(error);
-  process.exit(1);
-});
+    // Start Discord bot client
+    await startDiscordBot();
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
+}
+
+start();

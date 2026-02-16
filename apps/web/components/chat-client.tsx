@@ -331,7 +331,8 @@ export function ChatClient() {
       setProviders(providerData);
     } catch (cause) {
       console.error("Failed to load auth providers:", cause);
-      setError(cause instanceof Error ? cause.message : "Failed to load auth providers.");
+      const message = cause instanceof Error ? cause.message : "Failed to load auth providers.";
+      setError(`${message} (Target: ${controlPlaneBaseUrl}/auth/providers)`);
     }
 
     const viewerData = await fetchViewerSession();

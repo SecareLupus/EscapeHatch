@@ -7,7 +7,7 @@ import { withDb } from "../db/client.js";
 let client: Client | null = null;
 
 export async function startDiscordBot() {
-    if (config.discordBridge.mockMode || !config.discordBridge.botToken || config.discordBridge.botToken === "REPLACE_ME_IN_PORTAL") {
+    if (config.discordBridge.mockMode || !config.discordBotToken || config.discordBotToken === "REPLACE_ME_IN_PORTAL") {
         logEvent("info", "discord_bot_skipped", { reason: config.discordBridge.mockMode ? "mock_mode" : "missing_token" });
         return;
     }
@@ -52,7 +52,7 @@ export async function startDiscordBot() {
     });
 
     try {
-        await client.login(config.discordBridge.botToken);
+        await client.login(config.discordBotToken);
     } catch (error) {
         logEvent("error", "discord_bot_login_failed", { error: String(error) });
     }

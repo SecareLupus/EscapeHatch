@@ -33,19 +33,17 @@ export const config = {
     twitchUserInfoUrl: process.env.OIDC_TWITCH_USERINFO_URL ?? "https://api.twitch.tv/helix/users"
   },
   discordBridge: {
+    mockMode: process.env.DISCORD_BRIDGE_MOCK === "true",
     clientId: process.env.DISCORD_BRIDGE_CLIENT_ID,
     clientSecret: process.env.DISCORD_BRIDGE_CLIENT_SECRET,
+    callbackUrl: process.env.DISCORD_BRIDGE_CALLBACK_URL ?? "http://localhost:4000/v1/discord/oauth/callback",
     authorizeUrl: process.env.DISCORD_BRIDGE_AUTHORIZE_URL ?? "https://discord.com/api/oauth2/authorize",
     tokenUrl: process.env.DISCORD_BRIDGE_TOKEN_URL ?? "https://discord.com/api/oauth2/token",
     userInfoUrl: process.env.DISCORD_BRIDGE_USERINFO_URL ?? "https://discord.com/api/users/@me",
     userGuildsUrl: process.env.DISCORD_BRIDGE_USER_GUILDS_URL ?? "https://discord.com/api/users/@me/guilds",
-    callbackUrl:
-      process.env.DISCORD_BRIDGE_CALLBACK_URL ??
-      `${process.env.APP_BASE_URL ?? "http://localhost:4000"}/v1/discord/oauth/callback`,
-    bridgeSecret: process.env.DISCORD_BRIDGE_SECRET ?? "",
-    botToken: process.env.DISCORD_BRIDGE_BOT_TOKEN ?? "",
-    mockMode: process.env.DISCORD_BRIDGE_MOCK !== "false"
+    relaySecret: process.env.DISCORD_BRIDGE_SECRET ?? ""
   },
+  discordBotToken: process.env.DISCORD_BRIDGE_BOT_TOKEN ?? "",
   voice: {
     tokenTtlSeconds: Number(process.env.SFU_TOKEN_TTL_SECONDS ?? "300")
   },
@@ -55,3 +53,14 @@ export const config = {
     strictProvisioning: process.env.SYNAPSE_STRICT_PROVISIONING === "true"
   }
 };
+
+// Config verification logging
+console.log("--- Configuration Loaded ---");
+console.log(`Port: ${config.port}`);
+console.log(`Dev Auth Bypass: ${config.devAuthBypass}`);
+console.log(`Discord OIDC Enabled: ${Boolean(config.oidc.discordClientId)}`);
+console.log(`Google OIDC Enabled: ${Boolean(config.oidc.googleClientId)}`);
+console.log(`Twitch OIDC Enabled: ${Boolean(config.oidc.twitchClientId)}`);
+console.log(`Discord Bridge Credentials: ${Boolean(config.discordBridge.clientId && config.discordBridge.clientSecret)}`);
+console.log(`Discord Bot Token Present: ${Boolean(config.discordBotToken)}`);
+console.log("----------------------------");
