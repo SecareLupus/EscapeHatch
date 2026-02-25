@@ -2,8 +2,12 @@ import "./load-env.js";
 import { buildApp } from "./app.js";
 import { config } from "./config.js";
 import { startDiscordBot } from "./services/discord-bot-client.js";
+import { initDb } from "./db/client.js";
 
 async function start() {
+  // Ensure DB schema is initialized
+  await initDb();
+
   const app = await buildApp();
   try {
     await app.listen({ port: config.port, host: "0.0.0.0" });

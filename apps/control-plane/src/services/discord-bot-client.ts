@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events } from "discord.js";
+import { Client, GatewayIntentBits, Events, Message } from "discord.js";
 import { config } from "../config.js";
 import { relayDiscordMessageToMappedChannel } from "./discord-bridge-service.js";
 import { logEvent } from "./observability-service.js";
@@ -20,11 +20,11 @@ export async function startDiscordBot() {
         ]
     });
 
-    client.once(Events.ClientReady, (readyClient) => {
+    client.once(Events.ClientReady, (readyClient: Client<true>) => {
         logEvent("info", "discord_bot_ready", { tag: readyClient.user.tag });
     });
 
-    client.on(Events.MessageCreate, async (message) => {
+    client.on(Events.MessageCreate, async (message: Message) => {
         if (message.author.bot) return;
 
         // Find if this server has a bridge connected
@@ -44,7 +44,7 @@ export async function startDiscordBot() {
                 discordChannelId: message.channelId,
                 authorName: message.author.username,
                 content: message.content,
-                mediaUrls: message.attachments.map(a => a.url)
+                mediaUrls: message.attachments.map((a: { url: string }) => a.url)
             });
         } catch (error) {
             logEvent("error", "discord_relay_failed", { messageId: message.id, error: String(error) });
