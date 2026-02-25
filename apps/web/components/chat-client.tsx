@@ -8,6 +8,7 @@ import { Sidebar } from "./sidebar";
 import { ChatWindow } from "./chat-window";
 import Link from "next/link";
 import { useToast } from "./toast-provider";
+import { ContextMenu, ContextMenuItem } from "./context-menu";
 import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@escapehatch/shared";
 import {
   bootstrapAdmin,
@@ -181,6 +182,8 @@ export function ChatClient() {
   const [selectedHubIdForCreate, setSelectedHubIdForCreate] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("New Category");
 
+  const [userContextMenu, setUserContextMenu] = useState<{ x: number; y: number; userId: string; displayName: string } | null>(null);
+
   const messagesRef = useRef<HTMLOListElement | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
   const chatStateRequestIdRef = useRef(0);
@@ -329,6 +332,79 @@ export function ChatClient() {
       })
       .catch(() => dispatch({ type: "SET_HUBS", payload: [] }));
   }, [dispatch]);
+
+  const handleUserContextMenu = (event: React.MouseEvent, member: { id: string, displayName: string }) => {
+    event.preventDefault();
+    setUserContextMenu({ x: event.clientX, y: event.clientY, userId: member.id, displayName: member.displayName });
+  };
+
+  const userContextMenuItems: ContextMenuItem[] = useMemo(() => {
+    if (!userContextMenu) return [];
+    const isModerator = allowedActions.includes("moderation.kick") || allowedActions.includes("moderation.ban");
+    const isSelf = userContextMenu.userId === viewer?.productUserId;
+
+    const items: ContextMenuItem[] = [
+      {
+        label: "View Profile",
+        icon: "👤",
+        onClick: () => {
+          // TODO: Implement profile modal
+          dispatch({ type: "SET_ACTIVE_MODAL", payload: "profile" as any }); // Simplified for now
+        }
+      },
+      {
+          label: "Direct Message",
+          icon: "💬",
+          onClick: () => {
+              // TODO: Implement DM creation
+              console.log("DM user", userContextMenu.userId);
+          }
+      }
+    ];
+
+    if (!isSelf) {
+        items.push({
+            label: "Ignore / Block",
+            icon: "🚫",
+            onClick: () => {
+                // TODO: Implement block list
+                console.log("Block user", userContextMenu.userId);
+            }
+        });
+    }
+
+    if (isModerator && !isSelf) {
+      items.push({
+        label: "Timeout (Shadow Mute)",
+        icon: "⏳",
+        danger: true,
+        onClick: () => {
+            void performModerationAction({
+                action: "timeout",
+                serverId: selectedServerId || "",
+                targetUserId: userContextMenu.userId,
+                timeoutSeconds: 3600,
+                reason: "Shadow mute requested via context menu"
+            });
+        }
+      });
+      items.push({
+        label: "Kick",
+        icon: "👢",
+        danger: true,
+        onClick: () => {
+            void performModerationAction({
+                action: "kick",
+                serverId: selectedServerId || "",
+                targetUserId: userContextMenu.userId,
+                reason: "Kick requested via context menu"
+            });
+        }
+      });
+    }
+
+    return items;
+  }, [userContextMenu, allowedActions, viewer, selectedServerId, dispatch]);
 
   const refreshChatState = useCallback(async (preferredServerId?: string, preferredChannelId?: string): Promise<void> => {
     const requestId = ++chatStateRequestIdRef.current;
@@ -1456,17 +1532,9 @@ export function ChatClient() {
             sendContentWithOptimistic={sendContentWithOptimistic}
             handleJoinVoice={handleJoinVoice}
             handleLeaveVoice={handleLeaveVoice}
-            toggleTheme={toggleTheme}
-            handleLogout={handleLogout}
             draftMessage={draftMessage}
             setDraftMessage={setDraftMessage}
-            controlsOpen={controlsOpen}
-            setControlsOpen={setControlsOpen}
-            slowModeSeconds={slowModeSeconds}
-            setSlowModeSeconds={setSlowModeSeconds}
-            controlsReason={controlsReason}
-            setControlsReason={setControlsReason}
-            updatingControls={updatingControls}
+
             sending={sending}
             voiceConnected={voiceConnected}
             voiceGrant={voiceGrant}
@@ -1496,6 +1564,70 @@ export function ChatClient() {
                         <strong>Mentions in channel:</strong> {mentions.length}
                       </p>
                     ) : null}
+
+                    <hr />
+                    <h3>Channel Members</h3>
+                    <ul className="member-list">
+                      {memberRoster.map((member) => (
+                        <li
+                            key={member.id}
+                            className="member-item"
+                            onContextMenu={(e) => handleUserContextMenu(e, member)}
+                        >
+                          <span className="member-dot" /> {member.displayName}
+                        </li>
+                      ))}
+                      {memberRoster.length === 0 && <p className="muted">No recent activity</p>}
+                    </ul>
+
+                    {canManageChannel && (
+                      <>
+                        <hr />
+                        <h3>Channel Controls</h3>
+                        <div className="stack" style={{ gap: "1rem" }}>
+                          <div className="controls-row">
+                            <button
+                              type="button"
+                              className="ghost"
+                              disabled={updatingControls}
+                              onClick={() => {
+                                void handleSetLock(!activeChannel.isLocked);
+                              }}
+                            >
+                              {activeChannel.isLocked ? "Unlock Channel" : "Lock Channel"}
+                            </button>
+                            <span className="muted">{activeChannel.isLocked ? "Currently locked" : "Currently unlocked"}</span>
+                          </div>
+                          <form className="stack" style={{ gap: "0.5rem" }} onSubmit={handleUpdateSlowMode}>
+                            <div className="stack" style={{ gap: "0.25rem" }}>
+                              <label htmlFor="slow-mode-input" className="small-label">Slow mode (seconds)</label>
+                              <input
+                                id="slow-mode-input"
+                                type="number"
+                                min={0}
+                                max={600}
+                                value={slowModeSeconds}
+                                onChange={(event) => setSlowModeSeconds(event.target.value)}
+                              />
+                            </div>
+                            <div className="stack" style={{ gap: "0.25rem" }}>
+                              <label htmlFor="controls-reason" className="small-label">Reason</label>
+                              <input
+                                id="controls-reason"
+                                value={controlsReason}
+                                onChange={(event) => setControlsReason(event.target.value)}
+                                minLength={3}
+                                required
+                              />
+                            </div>
+                            <button type="submit" disabled={updatingControls}>
+                              {updatingControls ? "Saving..." : "Apply Slow Mode"}
+                            </button>
+                          </form>
+                        </div>
+                      </>
+                    )}
+
                     {activeChannel.type === "voice" ? (
                       <>
                         <hr />
@@ -1783,6 +1915,15 @@ export function ChatClient() {
             )}
           </div>
         </div>
+      )}
+
+      {userContextMenu && (
+        <ContextMenu
+          x={userContextMenu.x}
+          y={userContextMenu.y}
+          items={userContextMenuItems}
+          onClose={() => setUserContextMenu(null)}
+        />
       )}
     </main>
   );

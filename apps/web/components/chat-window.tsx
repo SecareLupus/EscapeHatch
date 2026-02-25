@@ -1,8 +1,14 @@
 "use client";
 
-import React, { useMemo, useRef, useEffect } from "react";
+import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { useChat, MessageItem } from "../context/chat-context";
-import type { ChatMessage } from "@escapehatch/shared";
+import type { ChatMessage, ModerationActionType } from "@escapehatch/shared";
+import { ContextMenu, ContextMenuItem } from "./context-menu";
+import { performModerationAction, createReport } from "../lib/control-plane";
+import dynamic from "next/dynamic";
+
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false }) as any;
+import type { EmojiClickData } from "emoji-picker-react";
 
 interface ChatWindowProps {
     handleSendMessage: (event: React.FormEvent) => Promise<void>;
@@ -14,22 +20,14 @@ interface ChatWindowProps {
     sendContentWithOptimistic: (content: string, failedId?: string) => Promise<void>;
     handleJoinVoice: () => Promise<void>;
     handleLeaveVoice: () => Promise<void>;
-    toggleTheme: () => void;
-    handleLogout: () => Promise<void>;
     // UI local states passed down for sync (until moved to context)
     draftMessage: string;
-    setDraftMessage: (val: string) => void;
-    controlsOpen: boolean;
-    setControlsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-    slowModeSeconds: string;
-    setSlowModeSeconds: (val: string) => void;
-    controlsReason: string;
-    setControlsReason: (val: string) => void;
-    updatingControls: boolean;
+    setDraftMessage: React.Dispatch<React.SetStateAction<string>>;
     sending: boolean;
     voiceConnected: boolean;
     voiceGrant: any; // Type as needed
     mentions: any[]; // Type as needed
+    handlePerformModerationAction?: (action: ModerationActionType, targetUserId?: string, targetMessageId?: string) => Promise<void>;
 }
 
 function formatMessageTime(value: string): string {
@@ -47,17 +45,8 @@ export function ChatWindow({
     sendContentWithOptimistic,
     handleJoinVoice,
     handleLeaveVoice,
-    toggleTheme,
-    handleLogout,
     draftMessage,
     setDraftMessage,
-    controlsOpen,
-    setControlsOpen,
-    slowModeSeconds,
-    setSlowModeSeconds,
-    controlsReason,
-    setControlsReason,
-    updatingControls,
     sending,
     voiceConnected,
     voiceGrant,
@@ -82,12 +71,34 @@ export function ChatWindow({
     const messagesRef = useRef<HTMLOListElement | null>(null);
     const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
 
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: MessageItem | null } | null>(null);
+    const [userContextMenu, setUserContextMenu] = useState<{ x: number; y: number; userId: string; displayName: string } | null>(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+    const [editContent, setEditContent] = useState("");
+
     const activeChannel = activeChannelData;
 
     const activeServer = useMemo(
         () => servers.find((s) => s.id === (activeChannel?.serverId ?? selectedServerId)),
         [servers, selectedServerId, activeChannel?.serverId]
     );
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (showEmojiPicker && !target.closest(".emoji-picker-container") && !target.closest(".emoji-trigger")) {
+                setShowEmojiPicker(false);
+            }
+        };
+
+        if (showEmojiPicker) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [showEmojiPicker]);
 
     const canManageChannel = useMemo(
         () =>
@@ -129,6 +140,178 @@ export function ChatWindow({
         return grouped;
     }, [messages]);
 
+    const handleContextMenu = (event: React.MouseEvent, message: MessageItem) => {
+        event.preventDefault();
+        setContextMenu({ x: event.clientX, y: event.clientY, message });
+    };
+
+    const isMediaUrl = (url: string) => {
+        return /\.(jpeg|jpg|gif|png|webp)$/i.test(url) || /media\.giphy\.com|tenor\.com\/view/i.test(url);
+    };
+
+    const extractMediaUrls = (content: string) => {
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        return content.match(urlRegex)?.filter(isMediaUrl) || [];
+    };
+
+    const messageContextMenuItems: ContextMenuItem[] = useMemo(() => {
+        if (!contextMenu?.message) return [];
+        const isAuthor = contextMenu.message.authorUserId === viewer?.productUserId;
+        const isModerator = allowedActions.includes("moderation.kick") || allowedActions.includes("moderation.ban");
+
+        const items: ContextMenuItem[] = [
+            {
+                label: "Add Reaction",
+                icon: "😀",
+                onClick: () => {
+                    // TODO: Implement reaction picker or quick reactions
+                    console.log("Add reaction to", contextMenu.message?.id);
+                }
+            },
+            {
+                label: "Copy Text",
+                icon: "📋",
+                onClick: () => {
+                    void navigator.clipboard.writeText(contextMenu.message?.content || "");
+                }
+            }
+        ];
+
+        if (isAuthor) {
+            items.push({
+                label: "Edit Message",
+                icon: "✏️",
+                onClick: () => {
+                    setEditingMessageId(contextMenu.message?.id || null);
+                    setEditContent(contextMenu.message?.content || "");
+                }
+            });
+        }
+
+        if (isModerator || isAuthor) {
+            items.push({
+                label: "Delete Message",
+                icon: "🗑️",
+                danger: true,
+                onClick: () => {
+                    if (confirm("Are you sure you want to delete this message?")) {
+                        void performModerationAction({
+                            action: "redact_message",
+                            serverId: selectedServerId || "",
+                            channelId: selectedChannelId || "",
+                            targetMessageId: contextMenu.message?.id,
+                            reason: "Manually deleted by user/mod"
+                        });
+                    }
+                }
+            });
+        }
+
+        if (isModerator && !isAuthor) {
+            items.push({
+                label: "Timeout User (Shadow Mute)",
+                icon: "⏳",
+                danger: true,
+                onClick: () => {
+                   void performModerationAction({
+                       action: "timeout",
+                       serverId: selectedServerId || "",
+                       targetUserId: contextMenu.message?.authorUserId,
+                       timeoutSeconds: 3600,
+                       reason: "Shadow mute requested"
+                   });
+                }
+            });
+            items.push({
+                label: "Kick User",
+                icon: "👢",
+                danger: true,
+                onClick: () => {
+                    void performModerationAction({
+                        action: "kick",
+                        serverId: selectedServerId || "",
+                        targetUserId: contextMenu.message?.authorUserId,
+                        reason: "Kick requested via message context"
+                    });
+                }
+            });
+        }
+
+        return items;
+    }, [contextMenu, viewer, allowedActions, selectedServerId, selectedChannelId]);
+
+    const userContextMenuItems: ContextMenuItem[] = useMemo(() => {
+        if (!userContextMenu) return [];
+        const isModerator = allowedActions.includes("moderation.kick") || allowedActions.includes("moderation.ban");
+        const isSelf = userContextMenu.userId === viewer?.productUserId;
+
+        const items: ContextMenuItem[] = [
+            {
+                label: "View Profile",
+                icon: "👤",
+                onClick: () => {
+                    // TODO: Implement profile modal
+                    console.log("View profile", userContextMenu.userId);
+                }
+            },
+            {
+                label: "Direct Message",
+                icon: "💬",
+                onClick: () => {
+                    console.log("DM user", userContextMenu.userId);
+                }
+            }
+        ];
+
+        if (!isSelf) {
+            items.push({
+                label: "Ignore / Block",
+                icon: "🚫",
+                onClick: () => {
+                    console.log("Block user", userContextMenu.userId);
+                }
+            });
+        }
+
+        if (isModerator && !isSelf) {
+            items.push({
+                label: "Timeout (Shadow Mute)",
+                icon: "⏳",
+                danger: true,
+                onClick: () => {
+                    void performModerationAction({
+                        action: "timeout",
+                        serverId: selectedServerId || "",
+                        targetUserId: userContextMenu.userId,
+                        timeoutSeconds: 3600,
+                        reason: "Shadow mute requested via message user"
+                    });
+                }
+            });
+            items.push({
+                label: "Kick",
+                icon: "👢",
+                danger: true,
+                onClick: () => {
+                    void performModerationAction({
+                        action: "kick",
+                        serverId: selectedServerId || "",
+                        targetUserId: userContextMenu.userId,
+                        reason: "Kick requested via message user"
+                    });
+                }
+            });
+        }
+
+        return items;
+    }, [userContextMenu, viewer, allowedActions, selectedServerId]);
+
+    const handleUserContextMenu = (event: React.MouseEvent, userId: string, displayName: string) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setUserContextMenu({ x: event.clientX, y: event.clientY, userId, displayName });
+    };
+
     return (
         <section className="timeline panel" aria-label="Messages">
             <header className="channel-header">
@@ -153,28 +336,7 @@ export function ChatWindow({
                 </div>
                 <div className="channel-actions">
                     <span className="channel-badge">{activeChannel?.type ?? "none"}</span>
-                    <button
-                        type="button"
-                        className="icon-button"
-                        onClick={toggleTheme}
-                        aria-label={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
-                    >
-                        {theme === "light" ? "🌙" : "☀️"}
-                    </button>
-                    <button
-                        type="button"
-                        className="icon-button"
-                        onClick={handleLogout}
-                        aria-label="Logout"
-                        title="Logout"
-                    >
-                        🚪
-                    </button>
-                    {canManageChannel && activeChannel ? (
-                        <button type="button" className="ghost" onClick={() => setControlsOpen((current) => !current)}>
-                            {controlsOpen ? "Close Controls" : "Channel Controls"}
-                        </button>
-                    ) : null}
+
                     <button
                         type="button"
                         className="ghost"
@@ -186,81 +348,79 @@ export function ChatWindow({
                 </div>
             </header>
 
-            {controlsOpen && activeChannel ? (
-                <section className="channel-controls" aria-label="Channel controls">
-                    <div className="controls-row">
-                        <button
-                            type="button"
-                            className="ghost"
-                            disabled={updatingControls}
-                            onClick={() => {
-                                void handleSetLock(!activeChannel.isLocked);
-                            }}
-                        >
-                            {activeChannel.isLocked ? "Unlock Channel" : "Lock Channel"}
-                        </button>
-                        <span>{activeChannel.isLocked ? "Currently locked" : "Currently unlocked"}</span>
-                    </div>
-                    <form className="controls-row controls-form" onSubmit={handleUpdateSlowMode}>
-                        <label htmlFor="slow-mode-input">Slow mode (seconds)</label>
-                        <input
-                            id="slow-mode-input"
-                            type="number"
-                            min={0}
-                            max={600}
-                            value={slowModeSeconds}
-                            onChange={(event) => setSlowModeSeconds(event.target.value)}
-                        />
-                        <label htmlFor="controls-reason">Reason</label>
-                        <input
-                            id="controls-reason"
-                            value={controlsReason}
-                            onChange={(event) => setControlsReason(event.target.value)}
-                            minLength={3}
-                            required
-                        />
-                        <button type="submit" disabled={updatingControls}>
-                            {updatingControls ? "Saving..." : "Apply Slow Mode"}
-                        </button>
-                    </form>
-                </section>
-            ) : null}
 
             <ol className="messages" ref={messagesRef} onScroll={handleMessageListScroll}>
-                {renderedMessages.map(({ message, showHeader, showDateDivider }) => (
-                    <li key={message.id}>
-                        {showDateDivider ? (
-                            <div className="date-divider">
-                                <span>{new Date(message.createdAt).toLocaleDateString()}</span>
-                            </div>
-                        ) : null}
-                        <article>
-                            {showHeader ? (
-                                <header>
-                                    <strong>{message.authorDisplayName}</strong>
-                                    <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
-                                </header>
+                {renderedMessages.map(({ message, showHeader, showDateDivider }) => {
+                    const mediaUrls = extractMediaUrls(message.content);
+                    return (
+                        <li key={message.id}>
+                            {showDateDivider ? (
+                                <div className="date-divider">
+                                    <span>{new Date(message.createdAt).toLocaleDateString()}</span>
+                                </div>
                             ) : null}
-                            <p>{message.content}</p>
-                            {message.clientState === "sending" ? <small className="message-meta">Sending...</small> : null}
-                            {message.clientState === "failed" ? (
-                                <small className="message-meta message-meta-error">
-                                    Failed to send.
-                                    <button
-                                        type="button"
-                                        className="inline-action"
-                                        onClick={() => {
-                                            void sendContentWithOptimistic(message.content, message.id);
-                                        }}
-                                    >
-                                        Retry
-                                    </button>
-                                </small>
-                            ) : null}
-                        </article>
-                    </li>
-                ))}
+                            <article onContextMenu={(e) => handleContextMenu(e, message)}>
+                                {showHeader ? (
+                                    <header>
+                                        <strong 
+                                            className="author-name" 
+                                            style={{ cursor: "pointer" }}
+                                            onClick={(e) => handleUserContextMenu(e, message.authorUserId, message.authorDisplayName)}
+                                            onContextMenu={(e) => handleUserContextMenu(e, message.authorUserId, message.authorDisplayName)}
+                                        >
+                                            {message.authorDisplayName}
+                                        </strong>
+                                        <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+                                    </header>
+                                ) : null}
+                                <p>{message.content}</p>
+                                {mediaUrls.length > 0 && (
+                                    <div className="message-media-container">
+                                        {mediaUrls.map((url, i) => (
+                                            <div key={i} className="message-media">
+                                                <img src={url} alt="Attached media" loading="lazy" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {message.clientState === "sending" ? <small className="message-meta">Sending...</small> : null}
+                                {message.clientState === "failed" ? (
+                                    <small className="message-meta message-meta-error">
+                                        Failed to send.
+                                        <button
+                                            type="button"
+                                            className="inline-action"
+                                            onClick={() => {
+                                                void sendContentWithOptimistic(message.content, message.id);
+                                            }}
+                                        >
+                                            Retry
+                                        </button>
+                                    </small>
+                                ) : null}
+                            </article>
+                        </li>
+                    );
+                })}
             </ol>
+
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    items={messageContextMenuItems}
+                    onClose={() => setContextMenu(null)}
+                />
+            )}
+
+            {userContextMenu && (
+                <ContextMenu
+                    x={userContextMenu.x}
+                    y={userContextMenu.y}
+                    items={userContextMenuItems}
+                    onClose={() => setUserContextMenu(null)}
+                />
+            )}
 
             {!isNearBottom && pendingNewMessageCount > 0 ? (
                 <div className="jump-latest">
@@ -274,24 +434,50 @@ export function ChatWindow({
                 <label htmlFor="message-input" className="sr-only">
                     Message
                 </label>
-                <textarea
-                    id="message-input"
-                    ref={messageInputRef}
-                    value={draftMessage}
-                    onChange={(event) => setDraftMessage(event.target.value)}
-                    onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) {
-                            event.preventDefault();
-                            if (draftMessage.trim()) {
-                                void submitDraftMessage();
+                <div className="input-wrapper">
+                    <textarea
+                        id="message-input"
+                        ref={messageInputRef}
+                        value={draftMessage}
+                        onChange={(event) => setDraftMessage(event.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter" && !event.shiftKey) {
+                                event.preventDefault();
+                                if (draftMessage.trim()) {
+                                    void submitDraftMessage();
+                                }
                             }
-                        }
-                    }}
-                    maxLength={2000}
-                    placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel first"}
-                    aria-label={activeChannel ? `Message #${activeChannel.name}` : "Message channel"}
-                    disabled={!activeChannel || sending}
-                />
+                        }}
+                        maxLength={2000}
+                        placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel first"}
+                        aria-label={activeChannel ? `Message #${activeChannel.name}` : "Message channel"}
+                        disabled={!activeChannel || sending}
+                    />
+                    {showEmojiPicker && (
+                        <div className="emoji-picker-container">
+                            <EmojiPicker
+                                onEmojiClick={(emojiData: EmojiClickData) => {
+                                    setDraftMessage(prev => prev + emojiData.emoji);
+                                    setShowEmojiPicker(false);
+                                }}
+                                width={350}
+                                height={400}
+                                theme={theme as any}
+                            />
+                        </div>
+                    )}
+                    <button
+                        type="button"
+                        className="emoji-trigger overlay"
+                        title="Add emoji"
+                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    >
+                        {/* Minimal monochrome smiley icon */}
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+                        </svg>
+                    </button>
+                </div>
                 <div className="composer-actions">
                     <small className="char-count">{draftMessage.length}/2000</small>
                     <button type="submit" disabled={!activeChannel || sending || !draftMessage.trim()}>

@@ -95,7 +95,9 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 1rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
   width: 100%;
   max-width: 440px;
   overflow: hidden;
@@ -123,7 +125,9 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.6rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
   z-index: 1000;
   display: grid;
   min-width: 140px;
@@ -160,7 +164,9 @@ body {
   z-index: 1000;
   max-height: 200px;
   overflow-y: auto;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .search-results-dropdown li {
@@ -412,13 +418,11 @@ textarea:focus-visible,
 }
 
 @media (min-width: 769px) {
-
   .sidebar-overlay,
   .details-overlay {
     display: none !important;
   }
 }
-
 
 /* Mobile Drawer Styles */
 
@@ -532,7 +536,6 @@ textarea:focus-visible,
   border-color: #2d9c73;
 }
 
-
 .category-heading {
   margin: 0.35rem 0 0.2rem;
   font-size: 0.74rem;
@@ -617,8 +620,6 @@ textarea:focus-visible,
   text-align: center;
 }
 
-
-
 .channel-header {
   display: flex;
   align-items: center;
@@ -654,7 +655,9 @@ textarea:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .back-button:hover {
@@ -849,10 +852,28 @@ textarea:focus-visible,
 }
 
 .composer-actions {
-  display: grid;
-  gap: 0.4rem;
-  align-content: end;
-  justify-items: end;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 70px;
+}
+
+.input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+}
+
+.emoji-trigger.overlay {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .char-count {
@@ -863,8 +884,6 @@ textarea:focus-visible,
 .context {
   min-height: 0;
 }
-
-
 
 .context h3 {
   margin: 0.75rem 0 0.4rem;
@@ -1067,7 +1086,7 @@ textarea:focus-visible,
 }
 
 .provider-button.discord {
-  background: #5865F2;
+  background: #5865f2;
   color: white;
 }
 
@@ -1078,7 +1097,7 @@ textarea:focus-visible,
 }
 
 .provider-button.twitch {
-  background: #9146FF;
+  background: #9146ff;
   color: white;
 }
 
@@ -1206,7 +1225,6 @@ textarea:focus-visible,
   }
 }
 
-
 /* End of file - Toast styles append here */
 /* Toast Styles */
 .toast-container {
@@ -1227,7 +1245,9 @@ textarea:focus-visible,
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 0.85rem 1.1rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1298,4 +1318,152 @@ textarea:focus-visible,
   .messages {
     padding: 0.25rem;
   }
+}
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  z-index: 3000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  min-width: 180px;
+  overflow: hidden;
+  padding: 0.35rem;
+}
+
+.context-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.context-menu-item:hover {
+  background: var(--surface-alt);
+}
+
+.context-menu-item.danger {
+  color: var(--danger);
+}
+
+.context-menu-item.danger:hover {
+  background: #fff2f2;
+}
+
+[data-theme="dark"] .context-menu-item.danger:hover {
+  background: #4a1a1a;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.35rem -0.35rem;
+}
+
+/* Composer Actions & Emoji Button */
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.emoji-trigger.overlay {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 10;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  filter: grayscale(1) opacity(0.4);
+  transition: filter 0.2s, opacity 0.2s, background 0.2s;
+  color: var(--text);
+}
+
+[data-theme="light"] .emoji-trigger.overlay,
+:root:not([data-theme="dark"]) .emoji-trigger.overlay {
+  filter: grayscale(1) opacity(0.7);
+}
+
+.emoji-trigger.overlay:hover {
+  filter: grayscale(0) opacity(1);
+  background: var(--surface-alt);
+}
+
+.emoji-picker-container {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 0.5rem;
+  z-index: 2000;
+}
+
+/* Emoji Picker React Overrides */
+/* The skin tone picker is absolutely positioned at the top right of the search container.
+   By padding the outermost enclosing container (.epr-header), both the search field
+   and the skin tone picker are smoothly "squeezed" inwards uniformly. */
+.emoji-picker-container .epr-header {
+  padding: 15px 20px !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  display: block !important;
+}
+
+.emoji-picker-container .epr-search-container {
+  margin: 0 !important;
+  padding-right: 48px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.emoji-picker-container .epr-search-container input {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.emoji-picker-container .epr-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.emoji-picker-container .epr-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* Message Media */
+.message-media {
+  margin-top: 0.5rem;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  max-width: 100%;
+  border: 1px solid var(--border);
+}
+
+.message-media img,
+.message-media video {
+  display: block;
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+}
+
+.member-item {
+  cursor: context-menu;
+}
+
+.messages li article {
+  cursor: context-menu;
 }
