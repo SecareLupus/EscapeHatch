@@ -21,6 +21,7 @@ export async function listHubsForUser(productUserId: string): Promise<Hub[]> {
         id: string;
         name: string;
         owner_user_id: string;
+        s3_config: any;
         created_at: string;
       }>("select * from hubs order by created_at asc");
 
@@ -28,6 +29,7 @@ export async function listHubsForUser(productUserId: string): Promise<Hub[]> {
         id: row.id,
         name: row.name,
         ownerUserId: row.owner_user_id,
+        s3Config: row.s3_config ?? undefined,
         createdAt: row.created_at
       }));
     }
@@ -53,6 +55,7 @@ export async function listHubsForUser(productUserId: string): Promise<Hub[]> {
       id: string;
       name: string;
       owner_user_id: string;
+      s3_config: any;
       created_at: string;
     }>("select * from hubs where id = any($1::text[]) order by created_at asc", [ids]);
 
@@ -60,6 +63,7 @@ export async function listHubsForUser(productUserId: string): Promise<Hub[]> {
       id: row.id,
       name: row.name,
       ownerUserId: row.owner_user_id,
+      s3Config: row.s3_config ?? undefined,
       createdAt: row.created_at
     }));
   });

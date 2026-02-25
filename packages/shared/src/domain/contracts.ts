@@ -36,10 +36,20 @@ export interface ServerBlueprint {
   }>;
 }
 
+export interface S3Config {
+  bucket: string;
+  region: string;
+  endpoint?: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  publicUrlPrefix: string;
+}
+
 export interface Hub {
   id: string;
   name: string;
   ownerUserId: string;
+  s3Config?: S3Config;
   createdAt: string;
 }
 

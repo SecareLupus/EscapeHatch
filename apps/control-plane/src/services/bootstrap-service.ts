@@ -77,10 +77,23 @@ export async function bootstrapAdmin(input: {
       }
 
       const hubId = randomId("hub");
-      await db.query("insert into hubs (id, name, owner_user_id) values ($1, $2, $3)", [
+      const { config } = await import("../config.js");
+      const s3Config = config.s3.bucket && config.s3.accessKeyId && config.s3.secretAccessKey && config.s3.publicUrlPrefix
+        ? JSON.stringify({
+            bucket: config.s3.bucket,
+            region: config.s3.region,
+            endpoint: config.s3.endpoint,
+            accessKeyId: config.s3.accessKeyId,
+            secretAccessKey: config.s3.secretAccessKey,
+            publicUrlPrefix: config.s3.publicUrlPrefix
+          })
+        : null;
+
+      await db.query("insert into hubs (id, name, owner_user_id, s3_config) values ($1, $2, $3, $4)", [
         hubId,
         input.hubName,
-        input.productUserId
+        input.productUserId,
+        s3Config
       ]);
 
       const defaultServerId = randomId("srv");

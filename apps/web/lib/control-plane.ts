@@ -831,3 +831,27 @@ export async function listDelegationAuditEvents(hubId: string, limit = 50): Prom
   return json.items;
 }
 
+export async function uploadMedia(serverId: string, file: File): Promise<{ url: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = (reader.result as string).split(",")[1];
+        const res = await apiFetch<{ url: string }>("/v1/media/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            serverId,
+            contentType: file.type,
+            base64Data
+          })
+        });
+        resolve(res);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}

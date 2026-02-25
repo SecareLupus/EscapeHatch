@@ -337,5 +337,6 @@ export async function initDb(): Promise<void> {
     alter table channels add column if not exists position integer not null default 0;
     alter table categories add column if not exists position integer not null default 0;
     alter table identity_mappings add column if not exists theme text;
+    alter table hubs add column if not exists s3_config jsonb;
   `);
 }

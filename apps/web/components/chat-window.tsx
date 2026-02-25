@@ -4,9 +4,10 @@ import React, { useMemo, useRef, useEffect, useState, useCallback } from "react"
 import { useChat, MessageItem } from "../context/chat-context";
 import type { ChatMessage, ModerationActionType } from "@escapehatch/shared";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
-import { performModerationAction, createReport } from "../lib/control-plane";
+import { performModerationAction, createReport, uploadMedia } from "../lib/control-plane";
 import dynamic from "next/dynamic";
 
+// @ts-ignore - emoji-picker-react types mismatch with Next.js dynamic
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false }) as any;
 import type { EmojiClickData } from "emoji-picker-react";
 
@@ -76,6 +77,8 @@ export function ChatWindow({
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const activeChannel = activeChannelData;
 
@@ -312,8 +315,62 @@ export function ChatWindow({
         setUserContextMenu({ x: event.clientX, y: event.clientY, userId, displayName });
     };
 
+    const handleFileUpload = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        const file = files.item(0);
+        if (!file) return;
+        if (!file.type.startsWith("image/")) {
+            alert("Only images are supported.");
+            return;
+        }
+        if (!activeServer?.id) {
+            alert("Please select a server first.");
+            return;
+        }
+
+        setIsUploading(true);
+        try {
+            const { url } = await uploadMedia(activeServer.id, file);
+            setDraftMessage((prev) => (prev ? `${prev}\n![image](${url})` : `![image](${url})`));
+        } catch (error) {
+            console.error("Upload failed", error);
+            alert("Failed to upload image.");
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+        }
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+            e.preventDefault();
+            void handleFileUpload(e.clipboardData.files);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            e.preventDefault();
+            const hasImage = Array.from(e.dataTransfer.files).some((f) => f.type.startsWith("image/"));
+            if (hasImage) {
+                void handleFileUpload(e.dataTransfer.files);
+            }
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault(); // needed to allow drop
+    };
+
     return (
-        <section className="timeline panel" aria-label="Messages">
+        <section 
+            className="timeline panel" 
+            aria-label="Messages"
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+        >
             <header className="channel-header">
                 <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                     <button
@@ -440,6 +497,7 @@ export function ChatWindow({
                         ref={messageInputRef}
                         value={draftMessage}
                         onChange={(event) => setDraftMessage(event.target.value)}
+                        onPaste={handlePaste}
                         onKeyDown={(event) => {
                             if (event.key === "Enter" && !event.shiftKey) {
                                 event.preventDefault();
@@ -451,7 +509,7 @@ export function ChatWindow({
                         maxLength={2000}
                         placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel first"}
                         aria-label={activeChannel ? `Message #${activeChannel.name}` : "Message channel"}
-                        disabled={!activeChannel || sending}
+                        disabled={!activeChannel || sending || isUploading}
                     />
                     {showEmojiPicker && (
                         <div className="emoji-picker-container">
@@ -468,20 +526,28 @@ export function ChatWindow({
                     )}
                     <button
                         type="button"
-                        className="emoji-trigger overlay"
-                        title="Add emoji"
-                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        className="emoji-trigger attach-trigger"
+                        title="Attach image"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={!activeChannel || isUploading}
                     >
-                        {/* Minimal monochrome smiley icon */}
+                        {/* Paperclip icon */}
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                         </svg>
                     </button>
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        style={{ display: "none" }} 
+                        ref={fileInputRef} 
+                        onChange={(e) => handleFileUpload(e.target.files)} 
+                    />
                 </div>
                 <div className="composer-actions">
                     <small className="char-count">{draftMessage.length}/2000</small>
-                    <button type="submit" disabled={!activeChannel || sending || !draftMessage.trim()}>
-                        {sending ? "Sending..." : "Send"}
+                    <button type="submit" disabled={!activeChannel || sending || isUploading || (!draftMessage.trim() && !isUploading)}>
+                        {sending ? "Sending..." : isUploading ? "Uploading..." : "Send"}
                     </button>
                 </div>
             </form>

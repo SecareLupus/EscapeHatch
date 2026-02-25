@@ -77,6 +77,14 @@ export const config = {
     accessToken: process.env.SYNAPSE_ACCESS_TOKEN,
     strictProvisioning: process.env.SYNAPSE_STRICT_PROVISIONING === "true",
   },
+  s3: {
+    bucket: process.env.S3_BUCKET,
+    region: process.env.S3_REGION ?? "us-east-1",
+    endpoint: process.env.S3_ENDPOINT,
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    publicUrlPrefix: process.env.S3_PUBLIC_URL_PREFIX,
+  },
 };
 
 // Config verification logging

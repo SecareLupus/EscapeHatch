@@ -91,6 +91,7 @@ import {
   revokeSpaceOwnerAssignment,
   transferSpaceOwnership
 } from "../services/delegation-service.js";
+import { uploadMedia } from "../services/media-service.js";
 
 export async function registerDomainRoutes(app: FastifyInstance): Promise<void> {
   const initializedAuthHandlers = { preHandler: [requireAuth, requireInitialized] };
@@ -1230,5 +1231,30 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       serverId: params.serverId,
       ...payload
     });
+  });
+
+  app.post("/v1/media/upload", initializedAuthHandlers, async (request, reply) => {
+    const payload = z
+      .object({
+        serverId: z.string().min(1),
+        contentType: z.string().min(1),
+        base64Data: z.string().min(1) // Base64 chunk
+      })
+      .parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: payload.serverId
+    });
+
+    if (!allowed && !(await listRoleBindings({ productUserId: request.auth!.productUserId })).length) { 
+       // Basic fallback check: must have some role in the setup or be server manager
+       reply.code(403).send({ message: "Forbidden: Not part of any hubs or servers." });
+       return;
+    }
+
+    const result = await uploadMedia(payload);
+    reply.code(201);
+    return result;
   });
 }
