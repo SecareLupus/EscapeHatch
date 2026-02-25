@@ -411,6 +411,15 @@ textarea:focus-visible,
   pointer-events: auto;
 }
 
+@media (min-width: 769px) {
+
+  .sidebar-overlay,
+  .details-overlay {
+    display: none !important;
+  }
+}
+
+
 /* Mobile Drawer Styles */
 
 @media (max-width: 1280px) {
@@ -504,6 +513,25 @@ textarea:focus-visible,
   display: grid;
   gap: 0.35rem;
 }
+
+.filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: #2d9c73;
+}
+
 
 .category-heading {
   margin: 0.35rem 0 0.2rem;
