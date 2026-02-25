@@ -10,7 +10,17 @@ import { logEvent } from "./services/observability-service.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: false });
-  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin || origin.startsWith("http://localhost:3000") || origin.startsWith("http://127.0.0.1:3000")) {
+        cb(null, true);
+        return;
+      }
+      cb(new Error("Not allowed by CORS"), false);
+    },
+    credentials: true,
+    methods: ["GET", "PUT", "POST", "PATCH", "DELETE", "OPTIONS"]
+  });
   await app.register(sensible);
 
   const requestBuckets = new Map<string, { count: number; windowStartedAt: number }>();

@@ -1,0 +1,349 @@
+"use client";
+
+import React, { createContext, useContext, useReducer, ReactNode } from "react";
+import type {
+    Category,
+    Channel,
+    ChatMessage,
+    MentionMarker,
+    ModerationAction,
+    ModerationReport,
+    Server,
+    VoicePresenceMember,
+    VoiceTokenGrant
+} from "@escapehatch/shared";
+import type {
+    AuthProvidersResponse,
+    BootstrapStatus,
+    ViewerRoleBinding,
+    PrivilegedAction,
+    ViewerSession
+} from "../lib/control-plane";
+
+export interface MessageItem extends ChatMessage {
+    clientState?: "sending" | "failed";
+}
+
+export type ModalType =
+    | "create-space"
+    | "create-category"
+    | "create-room"
+    | "rename-space"
+    | "rename-category"
+    | "rename-room"
+    | null;
+
+export interface ChatState {
+    viewer: ViewerSession | null;
+    providers: AuthProvidersResponse | null;
+    bootstrapStatus: BootstrapStatus | null;
+    servers: Server[];
+    channels: Channel[];
+    categories: Category[];
+    messages: MessageItem[];
+    hubs: Array<{ id: string; name: string }>;
+    viewerRoles: ViewerRoleBinding[];
+    selectedServerId: string | null;
+    selectedChannelId: string | null;
+    loading: boolean;
+    error: string | null;
+    realtimeState: "disconnected" | "polling" | "live";
+    allowedActions: PrivilegedAction[];
+    activeModal: ModalType;
+    isDetailsOpen: boolean;
+    isSidebarOpen: boolean;
+    isAddMenuOpen: boolean;
+    theme: "light" | "dark";
+    // UI states that might be useful globally
+    lastReadByChannel: Record<string, string>;
+    mentionCountByChannel: Record<string, number>;
+    unreadCountByChannel: Record<string, number>;
+    channelFilter: string;
+    // Rename/Delete states
+    renameSpaceId: string;
+    renameSpaceName: string;
+    renameCategoryId: string;
+    renameCategoryName: string;
+    renameRoomId: string;
+    renameRoomName: string;
+    renameRoomType: "text" | "announcement" | "voice";
+    renameRoomCategoryId: string | null;
+    selectedCategoryIdForCreate: string;
+    isNearBottom: boolean;
+    pendingNewMessageCount: number;
+    lastSeenMessageId: string | null;
+    // Voice States
+    voiceConnected: boolean;
+    voiceMuted: boolean;
+    voiceDeafened: boolean;
+    voiceVideoEnabled: boolean;
+    voiceVideoQuality: "low" | "medium" | "high";
+    voiceGrant: VoiceTokenGrant | null;
+    voiceMembers: VoicePresenceMember[];
+    // Deletion confirmation states
+    deleteTargetSpaceId: string;
+    deleteSpaceConfirm: string;
+    deleteRoomConfirm: string;
+    // Transient Structural States
+    mutatingStructure: boolean;
+    bootstrapping: boolean;
+    creatingSpace: boolean;
+    creatingRoom: boolean;
+    creatingCategory: boolean;
+    savingOnboarding: boolean;
+    sending: boolean;
+    updatingControls: boolean;
+}
+
+type ChatAction =
+    | { type: "SET_VIEWER"; payload: ViewerSession | null }
+    | { type: "SET_PROVIDERS"; payload: AuthProvidersResponse | null }
+    | { type: "SET_BOOTSTRAP_STATUS"; payload: BootstrapStatus | null }
+    | { type: "SET_SERVERS"; payload: Server[] }
+    | { type: "SET_CHANNELS"; payload: Channel[] }
+    | { type: "SET_CATEGORIES"; payload: Category[] }
+    | { type: "SET_MESSAGES"; payload: MessageItem[] }
+    | { type: "SET_HUBS"; payload: Array<{ id: string; name: string }> }
+    | { type: "SET_VIEWER_ROLES"; payload: ViewerRoleBinding[] }
+    | { type: "SET_SELECTED_SERVER_ID"; payload: string | null }
+    | { type: "SET_SELECTED_CHANNEL_ID"; payload: string | null }
+    | { type: "SET_LOADING"; payload: boolean }
+    | { type: "SET_ERROR"; payload: string | null }
+    | { type: "SET_REALTIME_STATE"; payload: "disconnected" | "polling" | "live" }
+    | { type: "SET_ALLOWED_ACTIONS"; payload: PrivilegedAction[] }
+    | { type: "SET_ACTIVE_MODAL"; payload: ModalType }
+    | { type: "SET_DETAILS_OPEN"; payload: boolean }
+    | { type: "SET_SIDEBAR_OPEN"; payload: boolean }
+    | { type: "SET_ADD_MENU_OPEN"; payload: boolean }
+    | { type: "SET_THEME"; payload: "light" | "dark" }
+    | { type: "UPDATE_MESSAGES"; payload: (current: MessageItem[]) => MessageItem[] }
+    | { type: "SET_LAST_READ"; payload: { channelId: string; lastSeenId: string } }
+    | { type: "SET_MENTION_COUNTS"; payload: Record<string, number> }
+    | { type: "SET_UNREAD_COUNTS"; payload: Record<string, number> }
+    | { type: "SET_CHANNEL_FILTER"; payload: string }
+    | { type: "SET_RENAME_SPACE"; payload: { id: string; name: string } }
+    | { type: "SET_RENAME_CATEGORY"; payload: { id: string; name: string } }
+    | { type: "SET_RENAME_ROOM"; payload: { id: string; name: string; type: "text" | "announcement" | "voice"; categoryId: string | null } }
+    | { type: "SET_SELECTED_CATEGORY_FOR_CREATE"; payload: string }
+    | { type: "SET_NEAR_BOTTOM"; payload: boolean }
+    | { type: "SET_PENDING_NEW_MESSAGE_COUNT"; payload: number }
+    | { type: "SET_LAST_SEEN_MESSAGE_ID"; payload: string | null }
+    | { type: "SET_VOICE_CONNECTED"; payload: boolean }
+    | { type: "SET_VOICE_MUTED"; payload: boolean }
+    | { type: "SET_VOICE_DEAFENED"; payload: boolean }
+    | { type: "SET_VOICE_VIDEO_ENABLED"; payload: boolean }
+    | { type: "SET_VOICE_VIDEO_QUALITY"; payload: "low" | "medium" | "high" }
+    | { type: "SET_VOICE_GRANT"; payload: VoiceTokenGrant | null }
+    | { type: "SET_VOICE_MEMBERS"; payload: VoicePresenceMember[] }
+    | { type: "SET_DELETE_TARGET_SPACE_ID"; payload: string }
+    | { type: "SET_DELETE_SPACE_CONFIRM"; payload: string }
+    | { type: "SET_DELETE_ROOM_CONFIRM"; payload: string }
+    | { type: "SET_MUTATING_STRUCTURE"; payload: boolean }
+    | { type: "SET_BOOTSTRAPPING"; payload: boolean }
+    | { type: "SET_CREATING_SPACE"; payload: boolean }
+    | { type: "SET_CREATING_ROOM"; payload: boolean }
+    | { type: "SET_CREATING_CATEGORY"; payload: boolean }
+    | { type: "SET_SAVING_ONBOARDING"; payload: boolean }
+    | { type: "SET_SENDING"; payload: boolean }
+    | { type: "SET_UPDATING_CONTROLS"; payload: boolean };
+
+const initialState: ChatState = {
+    viewer: null,
+    providers: null,
+    bootstrapStatus: null,
+    servers: [],
+    channels: [],
+    categories: [],
+    messages: [],
+    hubs: [],
+    viewerRoles: [],
+    selectedServerId: null,
+    selectedChannelId: null,
+    loading: true,
+    error: null,
+    realtimeState: "disconnected",
+    allowedActions: [],
+    activeModal: null,
+    isDetailsOpen: true,
+    isSidebarOpen: false,
+    isAddMenuOpen: false,
+    theme: "light",
+    lastReadByChannel: {},
+    mentionCountByChannel: {},
+    unreadCountByChannel: {},
+    channelFilter: "",
+    renameSpaceId: "",
+    renameSpaceName: "",
+    renameCategoryId: "",
+    renameCategoryName: "",
+    renameRoomId: "",
+    renameRoomName: "",
+    renameRoomType: "text",
+    renameRoomCategoryId: null,
+    selectedCategoryIdForCreate: "",
+    isNearBottom: true,
+    pendingNewMessageCount: 0,
+    lastSeenMessageId: null,
+    voiceConnected: false,
+    voiceMuted: false,
+    voiceDeafened: false,
+    voiceVideoEnabled: false,
+    voiceVideoQuality: "medium",
+    voiceGrant: null,
+    voiceMembers: [],
+    deleteTargetSpaceId: "",
+    deleteSpaceConfirm: "",
+    deleteRoomConfirm: "",
+    mutatingStructure: false,
+    bootstrapping: false,
+    creatingSpace: false,
+    creatingRoom: false,
+    creatingCategory: false,
+    savingOnboarding: false,
+    sending: false,
+    updatingControls: false
+};
+
+function chatReducer(state: ChatState, action: ChatAction): ChatState {
+    switch (action.type) {
+        case "SET_VIEWER":
+            return { ...state, viewer: action.payload };
+        case "SET_PROVIDERS":
+            return { ...state, providers: action.payload };
+        case "SET_BOOTSTRAP_STATUS":
+            return { ...state, bootstrapStatus: action.payload };
+        case "SET_SERVERS":
+            return { ...state, servers: action.payload };
+        case "SET_CHANNELS":
+            return { ...state, channels: action.payload };
+        case "SET_CATEGORIES":
+            return { ...state, categories: action.payload };
+        case "SET_MESSAGES":
+            return { ...state, messages: action.payload };
+        case "SET_HUBS":
+            return { ...state, hubs: action.payload };
+        case "SET_VIEWER_ROLES":
+            return { ...state, viewerRoles: action.payload };
+        case "SET_SELECTED_SERVER_ID":
+            return { ...state, selectedServerId: action.payload };
+        case "SET_SELECTED_CHANNEL_ID":
+            return { ...state, selectedChannelId: action.payload };
+        case "SET_LOADING":
+            return { ...state, loading: action.payload };
+        case "SET_ERROR":
+            return { ...state, error: action.payload };
+        case "SET_REALTIME_STATE":
+            return { ...state, realtimeState: action.payload };
+        case "SET_ALLOWED_ACTIONS":
+            return { ...state, allowedActions: action.payload };
+        case "SET_ACTIVE_MODAL":
+            return { ...state, activeModal: action.payload };
+        case "SET_DETAILS_OPEN":
+            return { ...state, isDetailsOpen: action.payload };
+        case "SET_SIDEBAR_OPEN":
+            return { ...state, isSidebarOpen: action.payload };
+        case "SET_ADD_MENU_OPEN":
+            return { ...state, isAddMenuOpen: action.payload };
+        case "SET_THEME":
+            return { ...state, theme: action.payload };
+        case "SET_CHANNEL_FILTER":
+            return { ...state, channelFilter: action.payload };
+        case "SET_RENAME_SPACE":
+            return { ...state, renameSpaceId: action.payload.id, renameSpaceName: action.payload.name };
+        case "SET_RENAME_CATEGORY":
+            return { ...state, renameCategoryId: action.payload.id, renameCategoryName: action.payload.name };
+        case "SET_RENAME_ROOM":
+            return {
+                ...state,
+                renameRoomId: action.payload.id,
+                renameRoomName: action.payload.name,
+                renameRoomType: action.payload.type,
+                renameRoomCategoryId: action.payload.categoryId
+            };
+        case "SET_SELECTED_CATEGORY_FOR_CREATE":
+            return { ...state, selectedCategoryIdForCreate: action.payload };
+        case "SET_NEAR_BOTTOM":
+            return { ...state, isNearBottom: action.payload };
+        case "SET_PENDING_NEW_MESSAGE_COUNT":
+            return { ...state, pendingNewMessageCount: action.payload };
+        case "SET_LAST_SEEN_MESSAGE_ID":
+            return { ...state, lastSeenMessageId: action.payload };
+        case "UPDATE_MESSAGES":
+            return { ...state, messages: action.payload(state.messages) };
+        case "SET_LAST_READ":
+            return {
+                ...state,
+                lastReadByChannel: {
+                    ...state.lastReadByChannel,
+                    [action.payload.channelId]: action.payload.lastSeenId
+                }
+            };
+        case "SET_MENTION_COUNTS":
+            return { ...state, mentionCountByChannel: action.payload };
+        case "SET_UNREAD_COUNTS":
+            return { ...state, unreadCountByChannel: action.payload };
+        case "SET_VOICE_CONNECTED":
+            return { ...state, voiceConnected: action.payload };
+        case "SET_VOICE_MUTED":
+            return { ...state, voiceMuted: action.payload };
+        case "SET_VOICE_DEAFENED":
+            return { ...state, voiceDeafened: action.payload };
+        case "SET_VOICE_VIDEO_ENABLED":
+            return { ...state, voiceVideoEnabled: action.payload };
+        case "SET_VOICE_VIDEO_QUALITY":
+            return { ...state, voiceVideoQuality: action.payload };
+        case "SET_VOICE_GRANT":
+            return { ...state, voiceGrant: action.payload };
+        case "SET_VOICE_MEMBERS":
+            return { ...state, voiceMembers: action.payload };
+        case "SET_DELETE_TARGET_SPACE_ID":
+            return { ...state, deleteTargetSpaceId: action.payload };
+        case "SET_DELETE_SPACE_CONFIRM":
+            return { ...state, deleteSpaceConfirm: action.payload };
+        case "SET_DELETE_ROOM_CONFIRM":
+            return { ...state, deleteRoomConfirm: action.payload };
+        case "SET_MUTATING_STRUCTURE":
+            return { ...state, mutatingStructure: action.payload };
+        case "SET_BOOTSTRAPPING":
+            return { ...state, bootstrapping: action.payload };
+        case "SET_CREATING_SPACE":
+            return { ...state, creatingSpace: action.payload };
+        case "SET_CREATING_ROOM":
+            return { ...state, creatingRoom: action.payload };
+        case "SET_CREATING_CATEGORY":
+            return { ...state, creatingCategory: action.payload };
+        case "SET_SAVING_ONBOARDING":
+            return { ...state, savingOnboarding: action.payload };
+        case "SET_SENDING":
+            return { ...state, sending: action.payload };
+        case "SET_UPDATING_CONTROLS":
+            return { ...state, updatingControls: action.payload };
+        default:
+            return state;
+    }
+}
+
+interface ChatContextType {
+    state: ChatState;
+    dispatch: React.Dispatch<ChatAction>;
+}
+
+const ChatContext = createContext<ChatContextType | undefined>(undefined);
+
+export function ChatProvider({ children }: { children: ReactNode }) {
+    const [state, dispatch] = useReducer(chatReducer, initialState);
+
+    return (
+        <ChatContext.Provider value={{ state, dispatch }}>
+            {children}
+        </ChatContext.Provider>
+    );
+}
+
+export function useChat() {
+    const context = useContext(ChatContext);
+    if (context === undefined) {
+        throw new Error("useChat must be used within a ChatProvider");
+    }
+    return context;
+}
