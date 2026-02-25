@@ -364,11 +364,9 @@ export function ChatClient() {
       return;
     }
 
-    // Immediately clear room/message context while loading next space to avoid cross-space bleed.
+    // Clear channels to show loading state or clear previous server's sidebar
     dispatch({ type: "SET_CHANNELS", payload: [] });
     dispatch({ type: "SET_CATEGORIES", payload: [] });
-    dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: null });
-    dispatch({ type: "SET_MESSAGES", payload: [] });
 
     const channelItems = await listChannels(nextServerId);
     if (requestId !== chatStateRequestIdRef.current) {
@@ -382,18 +380,36 @@ export function ChatClient() {
     dispatch({ type: "SET_CATEGORIES", payload: categoryItems });
 
     const textChannels = channelItems.filter((channel) => channel.type === "text" || channel.type === "announcement");
-    const candidateChannelId =
-      preferredChannelId ??
-      urlChannelId ??
-      selectedChannelId ??
-      textChannels[0]?.id ??
-      channelItems[0]?.id ??
-      null;
-    const nextChannelId =
-      candidateChannelId && channelItems.some((channel) => channel.id === candidateChannelId)
-        ? candidateChannelId
-        : (textChannels[0]?.id ?? channelItems[0]?.id ?? null);
-    dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: nextChannelId });
+
+    let nextChannelId = selectedChannelId;
+    let shouldFetchMessages = false;
+
+    // If an explicit channel ID is provided via arguments or URL:
+    if (preferredChannelId || urlChannelId) {
+      const explicitId = preferredChannelId ?? urlChannelId;
+      if (explicitId && channelItems.some((c) => c.id === explicitId)) {
+        nextChannelId = explicitId;
+        shouldFetchMessages = true;
+      }
+    }
+
+    // If there is NO active channel selected yet:
+    if (!nextChannelId) {
+      nextChannelId = textChannels[0]?.id ?? channelItems[0]?.id ?? null;
+      shouldFetchMessages = true;
+    }
+
+    if (nextChannelId !== selectedChannelId) {
+      dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: nextChannelId });
+    }
+
+    if (nextChannelId && (shouldFetchMessages || !selectedChannelId)) {
+      const nextChannelObj = channelItems.find(c => c.id === nextChannelId);
+      if (nextChannelObj) {
+        dispatch({ type: "SET_ACTIVE_CHANNEL_DATA", payload: nextChannelObj });
+      }
+    }
+
     setUrlSelection(nextServerId, nextChannelId);
 
     if (!nextChannelId) {
@@ -401,11 +417,13 @@ export function ChatClient() {
       return;
     }
 
-    const messageItems = await listMessages(nextChannelId);
-    if (requestId !== chatStateRequestIdRef.current) {
-      return;
+    if (shouldFetchMessages) {
+      const messageItems = await listMessages(nextChannelId);
+      if (requestId !== chatStateRequestIdRef.current) {
+        return;
+      }
+      dispatch({ type: "SET_MESSAGES", payload: messageItems.map((message) => ({ ...message })) });
     }
-    dispatch({ type: "SET_MESSAGES", payload: messageItems.map((message) => ({ ...message })) });
   }, [selectedServerId, selectedChannelId, setUrlSelection, urlChannelId, urlServerId, dispatch]);
 
   const initialize = useCallback(async (): Promise<void> => {
@@ -768,7 +786,6 @@ export function ChatClient() {
     dispatch({ type: "SET_SELECTED_SERVER_ID", payload: serverId });
     dispatch({ type: "SET_CHANNELS", payload: [] });
     dispatch({ type: "SET_CATEGORIES", payload: [] });
-    dispatch({ type: "SET_MESSAGES", payload: [] });
     dispatch({ type: "SET_ERROR", payload: null });
     try {
       await refreshChatState(serverId);
@@ -778,6 +795,10 @@ export function ChatClient() {
   }
 
   async function handleChannelChange(channelId: string): Promise<void> {
+    const channel = channels.find(c => c.id === channelId);
+    if (channel) {
+      dispatch({ type: "SET_ACTIVE_CHANNEL_DATA", payload: channel });
+    }
     dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: channelId });
     dispatch({ type: "SET_ERROR", payload: null });
     try {

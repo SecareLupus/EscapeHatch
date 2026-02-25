@@ -210,7 +210,7 @@ export function Sidebar({
                             <h2 className="server-title">{activeServer?.name || "Channels"}</h2>
                         </div>
                         {canManageCurrentSpace && (
-                            <>
+                            <div style={{ position: "relative" }}>
                                 <button
                                     type="button"
                                     className="icon-button"
@@ -236,7 +236,7 @@ export function Sidebar({
                                         </button>
                                     </div>
                                 )}
-                            </>
+                            </div>
                         )}
                     </div>
 

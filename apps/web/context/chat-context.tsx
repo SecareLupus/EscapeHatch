@@ -54,6 +54,7 @@ export interface ChatState {
     isSidebarOpen: boolean;
     isAddMenuOpen: boolean;
     theme: "light" | "dark";
+    activeChannelData: Channel | null;
     // UI states that might be useful globally
     lastReadByChannel: Record<string, string>;
     mentionCountByChannel: Record<string, number>;
@@ -116,6 +117,7 @@ type ChatAction =
     | { type: "SET_SIDEBAR_OPEN"; payload: boolean }
     | { type: "SET_ADD_MENU_OPEN"; payload: boolean }
     | { type: "SET_THEME"; payload: "light" | "dark" }
+    | { type: "SET_ACTIVE_CHANNEL_DATA"; payload: Channel | null }
     | { type: "UPDATE_MESSAGES"; payload: (current: MessageItem[]) => MessageItem[] }
     | { type: "SET_LAST_READ"; payload: { channelId: string; lastSeenId: string } }
     | { type: "SET_MENTION_COUNTS"; payload: Record<string, number> }
@@ -168,6 +170,7 @@ const initialState: ChatState = {
     isSidebarOpen: false,
     isAddMenuOpen: false,
     theme: "light",
+    activeChannelData: null,
     lastReadByChannel: {},
     mentionCountByChannel: {},
     unreadCountByChannel: {},
@@ -246,6 +249,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return { ...state, isAddMenuOpen: action.payload };
         case "SET_THEME":
             return { ...state, theme: action.payload };
+        case "SET_ACTIVE_CHANNEL_DATA":
+            return { ...state, activeChannelData: action.payload };
         case "SET_CHANNEL_FILTER":
             return { ...state, channelFilter: action.payload };
         case "SET_RENAME_SPACE":

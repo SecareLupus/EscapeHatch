@@ -66,8 +66,11 @@ export function ChatWindow({
     const { state, dispatch } = useChat();
     const {
         viewer,
+        servers,
         channels,
+        selectedServerId,
         selectedChannelId,
+        activeChannelData,
         messages,
         isNearBottom,
         pendingNewMessageCount,
@@ -79,9 +82,11 @@ export function ChatWindow({
     const messagesRef = useRef<HTMLOListElement | null>(null);
     const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
 
-    const activeChannel = useMemo(
-        () => channels.find((c) => c.id === selectedChannelId),
-        [channels, selectedChannelId]
+    const activeChannel = activeChannelData;
+
+    const activeServer = useMemo(
+        () => servers.find((s) => s.id === (activeChannel?.serverId ?? selectedServerId)),
+        [servers, selectedServerId, activeChannel?.serverId]
     );
 
     const canManageChannel = useMemo(
@@ -138,7 +143,7 @@ export function ChatWindow({
                         ☰
                     </button>
                     <div>
-                        <h2>{activeChannel ? `#${activeChannel.name}` : "No channel selected"}</h2>
+                        <h2>{activeServer ? `${activeServer.name} - ` : ""}{activeChannel ? `#${activeChannel.name}` : "No channel selected"}</h2>
                         <p>
                             {activeChannel
                                 ? `${messages.length} messages · slow mode ${activeChannel.slowModeSeconds}s`
