@@ -1,7 +1,9 @@
+const appBaseUrl = process.env.APP_BASE_URL ?? "http://localhost:4000";
+
 export const config = {
   port: Number(process.env.PORT ?? "4000"),
-  appBaseUrl: process.env.APP_BASE_URL ?? "http://127.0.0.1:4000",
-  webBaseUrl: process.env.WEB_BASE_URL ?? "http://127.0.0.1:3000",
+  appBaseUrl,
+  webBaseUrl: process.env.WEB_BASE_URL ?? "http://localhost:3000",
   databaseUrl: process.env.DATABASE_URL,
   sessionSecret: process.env.SESSION_SECRET ?? "dev-insecure-session-secret",
   sessionTtlSeconds: Number(process.env.SESSION_TTL_SECONDS ?? "3600"),
@@ -53,7 +55,7 @@ export const config = {
     clientSecret: process.env.DISCORD_BRIDGE_CLIENT_SECRET,
     callbackUrl:
       process.env.DISCORD_BRIDGE_CALLBACK_URL ??
-      `${process.env.APP_BASE_URL ?? "http://localhost:4000"}/v1/discord/oauth/callback`,
+      `${appBaseUrl}/v1/discord/oauth/callback`,
     authorizeUrl:
       process.env.DISCORD_BRIDGE_AUTHORIZE_URL ??
       "https://discord.com/api/oauth2/authorize",
