@@ -336,7 +336,14 @@ export async function initDb(): Promise<void> {
     );
     alter table channels add column if not exists position integer not null default 0;
     alter table categories add column if not exists position integer not null default 0;
-    alter table identity_mappings add column if not exists theme text;
-    alter table hubs add column if not exists s3_config jsonb;
+    alter table identity_mappings add column if not exists settings jsonb;
+    alter table hubs add column if not exists theme jsonb;
+    alter table hubs add column if not exists space_customization_limits jsonb;
+    alter table hubs add column if not exists oidc_config jsonb;
+    alter table servers add column if not exists starting_channel_id text;
+    alter table servers add column if not exists visibility text default 'public';
+    alter table servers add column if not exists visitor_privacy text default 'public';
+    alter table channels add column if not exists restricted_visibility boolean not null default false;
+    alter table channels add column if not exists allowed_role_ids text[] not null default '{}';
   `);
 }

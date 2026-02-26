@@ -10,6 +10,7 @@ export interface IdentityMapping {
   matrixUserId: string | null;
   productUserId: string;
   theme?: "light" | "dark" | null;
+  settings?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
 }

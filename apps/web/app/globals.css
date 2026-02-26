@@ -418,7 +418,6 @@ textarea:focus-visible,
 }
 
 @media (min-width: 769px) {
-
   .sidebar-overlay,
   .details-overlay {
     display: none !important;
@@ -1400,7 +1399,10 @@ textarea:focus-visible,
 
 .composer-trigger.overlay {
   filter: grayscale(1) opacity(0.4);
-  transition: filter 0.2s, opacity 0.2s, background 0.2s;
+  transition:
+    filter 0.2s,
+    opacity 0.2s,
+    background 0.2s;
 }
 
 [data-theme="light"] .composer-trigger.overlay,
@@ -1472,6 +1474,102 @@ textarea:focus-visible,
 
 .member-item {
   cursor: context-menu;
+}
+
+/* Settings Layout */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 2rem;
+  height: 100%;
+  min-height: 0;
+}
+
+.settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-right: 1px solid var(--border);
+  padding-right: 1.5rem;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.6rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.settings-nav-item:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.settings-nav-item.active {
+  background: var(--surface-alt);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.settings-content {
+  overflow-y: auto;
+  padding-right: 1rem;
+}
+
+.settings-section {
+  margin-bottom: 2.5rem;
+}
+
+.settings-section h3 {
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settings-row label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.settings-description {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: -0.25rem;
+}
+
+@media (max-width: 768px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding-right: 0;
+    padding-bottom: 1rem;
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .settings-nav-item {
+    white-space: nowrap;
+  }
 }
 
 .messages li article {

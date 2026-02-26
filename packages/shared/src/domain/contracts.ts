@@ -50,6 +50,9 @@ export interface Hub {
   name: string;
   ownerUserId: string;
   s3Config?: S3Config;
+  theme?: Record<string, any>;
+  spaceCustomizationLimits?: Record<string, any>;
+  oidcConfig?: Record<string, any>;
   createdAt: string;
 }
 
@@ -60,6 +63,9 @@ export interface Server {
   matrixSpaceId: string | null;
   createdByUserId: string;
   ownerUserId: string;
+  startingChannelId?: string | null;
+  visibility?: string;
+  visitorPrivacy?: string;
   createdAt: string;
 }
 
@@ -84,6 +90,8 @@ export interface Channel {
   slowModeSeconds: number;
   postingRestrictedToRoles: Role[];
   voiceMetadata: VoiceMetadata | null;
+  restrictedVisibility?: boolean;
+  allowedRoleIds?: string[];
   createdAt: string;
 }
 

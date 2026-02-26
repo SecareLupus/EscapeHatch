@@ -5,6 +5,7 @@ EscapeHatch is the monorepo for the **Creator Co-Op Hub Chat Platform**: a Matri
 ## Current local capability
 
 The repository now runs a **usable local chat demo** backed by the control-plane + PostgreSQL:
+
 - Auth: developer login (or Discord OIDC when configured)
 - One-time bootstrap: first authenticated user initializes hub/admin
 - Chat domain: servers, channels, and persistent channel messages
@@ -31,7 +32,7 @@ Synapse/Discord remain optional for day-one local testing.
 ```bash
 pnpm install
 cp .env.example .env
-docker compose up -d postgres
+docker compose up -d
 pnpm dev
 ```
 
@@ -40,13 +41,23 @@ pnpm dev
 
 `pnpm dev` auto-loads root `.env` for both `apps/control-plane` and `apps/web`.
 
+### Matrix (Synapse) Setup
+
+If you are using Matrix features for the first time:
+
+1. Generate the signing key: `bash docker/synapse/setup-synapse.sh`
+2. Start Synapse: `docker compose up -d synapse`
+3. Generate an admin access token (needed for `SYNAPSE_ACCESS_TOKEN` in `.env`) via the Synapse admin API or by manually creating a user and promoting them.
+
 ## First-run flow
 
 1. Open `http://localhost:3000`
 2. Sign in (default local path is **Developer Login** when `DEV_AUTH_BYPASS=true`)
 3. Run bootstrap in the UI by entering:
+
 - `Hub Name`
 - `Setup Token` (must match `SETUP_BOOTSTRAP_TOKEN` from `.env`)
+
 4. Start messaging in the default `#general` channel
 
 ## Validation commands

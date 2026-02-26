@@ -855,3 +855,56 @@ export async function uploadMedia(serverId: string, file: File): Promise<{ url: 
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Settings API
+ */
+
+export async function fetchHubSettings(hubId: string): Promise<Partial<Hub>> {
+  return apiFetch<Partial<Hub>>(`/v1/hubs/${encodeURIComponent(hubId)}/settings`);
+}
+
+export async function updateHubSettings(hubId: string, settings: Partial<Hub>): Promise<void> {
+  await apiFetch(`/v1/hubs/${encodeURIComponent(hubId)}/settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+}
+
+export async function fetchServerSettings(serverId: string): Promise<Partial<Server>> {
+  return apiFetch<Partial<Server>>(`/v1/servers/${encodeURIComponent(serverId)}/settings`);
+}
+
+export async function updateServerSettings(serverId: string, settings: Partial<Server>): Promise<void> {
+  await apiFetch(`/v1/servers/${encodeURIComponent(serverId)}/settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+}
+
+export async function fetchChannelSettings(channelId: string, serverId: string): Promise<Partial<Channel>> {
+  const query = new URLSearchParams({ serverId });
+  return apiFetch<Partial<Channel>>(`/v1/channels/${encodeURIComponent(channelId)}/settings?${query.toString()}`);
+}
+
+export async function updateChannelSettings(channelId: string, settings: Partial<Channel> & { serverId: string }): Promise<void> {
+  await apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+}
+
+export async function fetchUserSettings(): Promise<Record<string, any>> {
+  return apiFetch<Record<string, any>>("/v1/me/settings");
+}
+
+export async function updateUserSettings(settings: Record<string, any>): Promise<void> {
+  await apiFetch("/v1/me/settings", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+}

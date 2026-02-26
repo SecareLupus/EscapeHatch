@@ -91,6 +91,16 @@ import {
   revokeSpaceOwnerAssignment,
   transferSpaceOwnership
 } from "../services/delegation-service.js";
+import {
+  getChannelSettings,
+  getHubSettings,
+  getServerSettings,
+  getUserSettings,
+  updateChannelSettings,
+  updateHubSettings,
+  updateServerSettings,
+  updateUserSettings
+} from "../services/settings-service.js";
 import { uploadMedia } from "../services/media-service.js";
 
 export async function registerDomainRoutes(app: FastifyInstance): Promise<void> {
@@ -225,6 +235,40 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     });
     return result;
   });
+  
+  app.get("/v1/hubs/:hubId/settings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+    return getHubSettings(params.hubId);
+  });
+
+  app.patch("/v1/hubs/:hubId/settings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({
+      theme: z.any().optional(),
+      spaceCustomizationLimits: z.any().optional(),
+      oidcConfig: z.any().optional()
+    }).parse(request.body);
+
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+
+    await updateHubSettings(params.hubId, payload);
+    reply.code(204).send();
+  });
 
   app.post("/v1/channels", initializedAuthHandlers, async (request, reply) => {
     const payload = z
@@ -311,6 +355,40 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     }
 
     await deleteServer(params.serverId);
+    reply.code(204).send();
+  });
+
+  app.get("/v1/servers/:serverId/settings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: params.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+    return getServerSettings(params.serverId);
+  });
+
+  app.patch("/v1/servers/:serverId/settings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({
+      startingChannelId: z.string().min(1).nullable().optional(),
+      visibility: z.string().optional(),
+      visitorPrivacy: z.string().optional()
+    }).parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: params.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    await updateServerSettings(params.serverId, payload);
     reply.code(204).send();
   });
 
@@ -566,6 +644,41 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     reply.code(204).send();
   });
 
+  app.get("/v1/channels/:channelId/settings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const query = z.object({ serverId: z.string().min(1) }).parse(request.query);
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: query.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+    return getChannelSettings(params.channelId);
+  });
+
+  app.patch("/v1/channels/:channelId/settings", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({
+      serverId: z.string().min(1),
+      restrictedVisibility: z.boolean().optional(),
+      allowedRoleIds: z.array(z.string()).optional()
+    }).parse(request.body);
+
+    const allowed = await canManageServer({
+      productUserId: request.auth!.productUserId,
+      serverId: payload.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+
+    await updateChannelSettings(params.channelId, payload);
+    reply.code(204).send();
+  });
+
   app.get("/v1/channels/:channelId/stream", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
 
@@ -768,6 +881,16 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         productUserId: request.auth!.productUserId
       })
     };
+  });
+
+  app.get("/v1/me/settings", initializedAuthHandlers, async (request) => {
+    return getUserSettings(request.auth!.productUserId);
+  });
+
+  app.patch("/v1/me/settings", initializedAuthHandlers, async (request) => {
+    const payload = z.record(z.string(), z.any()).parse(request.body);
+    await updateUserSettings(request.auth!.productUserId, payload);
+    return { success: true };
   });
 
   app.get("/v1/permissions", initializedAuthHandlers, async (request, reply) => {
