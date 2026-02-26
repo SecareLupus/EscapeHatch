@@ -1,0 +1,58 @@
+
+> @escapehatch/web@0.1.0 build /home/desmond/Documents/EscapeHatch/EscapeHatch/apps/web
+> npx dotenv-cli -e ../../.env -- next build
+
+  ▲ Next.js 14.2.30
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./app/settings/rooms/[id]/page.tsx
+34:8  Warning: React Hook useEffect has a missing dependency: 'channel'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/admin-console.tsx
+179:6  Warning: React Hook useEffect has a missing dependency: 'loadHubState'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/bridge-manager.tsx
+57:8  Warning: React Hook useEffect has a missing dependency: 'loadState'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/chat-client.tsx
+517:6  Warning: React Hook useCallback has a missing dependency: 'showToast'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+549:6  Warning: React Hook useEffect has missing dependencies: 'dispatch' and 'showToast'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+612:6  Warning: React Hook useEffect has a missing dependency: 'state.deleteTargetSpaceId'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+648:6  Warning: React Hook useEffect has a missing dependency: 'dispatch'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+679:6  Warning: React Hook useEffect has a missing dependency: 'dispatch'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+701:6  Warning: React Hook useEffect has missing dependencies: 'dispatch' and 'pendingNewMessageCount'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+769:6  Warning: React Hook useEffect has a missing dependency: 'dispatch'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/chat-window.tsx
+438:49  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/7) ...
+   Generating static pages (1/7) 
+   Generating static pages (3/7) 
+   Generating static pages (5/7) 
+ ✓ Generating static pages (7/7)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ƒ /                                    16.5 kB         115 kB
+├ ○ /_not-found                          872 B          88.1 kB
+├ ƒ /admin                               3.21 kB         104 kB
+├ ○ /settings                            989 B          90.8 kB
+├ ○ /settings/hub                        2.84 kB        92.7 kB
+├ ƒ /settings/rooms/[id]                 2.93 kB        92.7 kB
+└ ƒ /settings/spaces/[id]                2.7 kB           95 kB
++ First Load JS shared by all            87.2 kB
+  ├ chunks/240-620be6ec8e5dde6d.js       31.6 kB
+  ├ chunks/9862b9c0-9a720fc27fea5ce9.js  53.7 kB
+  └ other shared chunks (total)          1.98 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

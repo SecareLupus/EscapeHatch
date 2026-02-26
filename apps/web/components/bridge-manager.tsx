@@ -82,7 +82,10 @@ export default function BridgeManager({ serverId, hubId, returnTo }: BridgeManag
             const res = await fetchDiscordBridgePendingSelection(pendingId);
             setDiscordGuilds(res.guilds);
             if (res.guilds.length > 0) {
-                setSelectedGuildId(res.guilds[0].id);
+                const firstGuild = res.guilds[0];
+                if (firstGuild) {
+                    setSelectedGuildId(firstGuild.id);
+                }
             }
         } catch (err) {
             console.error("Failed to load pending selection", err);
