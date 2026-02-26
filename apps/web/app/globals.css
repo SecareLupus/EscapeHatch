@@ -418,6 +418,7 @@ textarea:focus-visible,
 }
 
 @media (min-width: 769px) {
+
   .sidebar-overlay,
   .details-overlay {
     display: none !important;
@@ -866,14 +867,13 @@ textarea:focus-visible,
   display: flex;
 }
 
-.emoji-trigger.overlay {
+.composer-trigger.overlay {
   position: absolute;
   right: 0.5rem;
   bottom: 0.5rem;
   z-index: 10;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex;
+  gap: 0.25rem;
 }
 
 .char-count {
@@ -1380,25 +1380,35 @@ textarea:focus-visible,
   gap: 1rem;
 }
 
-.emoji-trigger.overlay {
-  position: absolute;
-  right: 0.5rem;
-  bottom: 0.5rem;
-  z-index: 10;
+.composer-trigger {
   background: transparent;
   border: none;
-  box-shadow: none;
-  filter: grayscale(1) opacity(0.4);
-  transition: filter 0.2s, opacity 0.2s, background 0.2s;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.composer-trigger:hover {
+  background: var(--surface-alt);
   color: var(--text);
 }
 
-[data-theme="light"] .emoji-trigger.overlay,
-:root:not([data-theme="dark"]) .emoji-trigger.overlay {
+.composer-trigger.overlay {
+  filter: grayscale(1) opacity(0.4);
+  transition: filter 0.2s, opacity 0.2s, background 0.2s;
+}
+
+[data-theme="light"] .composer-trigger.overlay,
+:root:not([data-theme="dark"]) .composer-trigger.overlay {
   filter: grayscale(1) opacity(0.7);
 }
 
-.emoji-trigger.overlay:hover {
+.composer-trigger.overlay:hover {
   filter: grayscale(0) opacity(1);
   background: var(--surface-alt);
 }

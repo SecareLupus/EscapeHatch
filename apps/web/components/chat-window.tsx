@@ -90,7 +90,7 @@ export function ChatWindow({
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as HTMLElement;
-            if (showEmojiPicker && !target.closest(".emoji-picker-container") && !target.closest(".emoji-trigger")) {
+            if (showEmojiPicker && !target.closest(".emoji-picker-container") && !target.closest(".composer-trigger")) {
                 setShowEmojiPicker(false);
             }
         };
@@ -216,13 +216,13 @@ export function ChatWindow({
                 icon: "⏳",
                 danger: true,
                 onClick: () => {
-                   void performModerationAction({
-                       action: "timeout",
-                       serverId: selectedServerId || "",
-                       targetUserId: contextMenu.message?.authorUserId,
-                       timeoutSeconds: 3600,
-                       reason: "Shadow mute requested"
-                   });
+                    void performModerationAction({
+                        action: "timeout",
+                        serverId: selectedServerId || "",
+                        targetUserId: contextMenu.message?.authorUserId,
+                        timeoutSeconds: 3600,
+                        reason: "Shadow mute requested"
+                    });
                 }
             });
             items.push({
@@ -365,8 +365,8 @@ export function ChatWindow({
     };
 
     return (
-        <section 
-            className="timeline panel" 
+        <section
+            className="timeline panel"
             aria-label="Messages"
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -419,8 +419,8 @@ export function ChatWindow({
                             <article onContextMenu={(e) => handleContextMenu(e, message)}>
                                 {showHeader ? (
                                     <header>
-                                        <strong 
-                                            className="author-name" 
+                                        <strong
+                                            className="author-name"
                                             style={{ cursor: "pointer" }}
                                             onClick={(e) => handleUserContextMenu(e, message.authorUserId, message.authorDisplayName)}
                                             onContextMenu={(e) => handleUserContextMenu(e, message.authorUserId, message.authorDisplayName)}
@@ -524,24 +524,39 @@ export function ChatWindow({
                             />
                         </div>
                     )}
-                    <button
-                        type="button"
-                        className="emoji-trigger attach-trigger"
-                        title="Attach image"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={!activeChannel || isUploading}
-                    >
-                        {/* Paperclip icon */}
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                        </svg>
-                    </button>
-                    <input 
-                        type="file" 
-                        accept="image/*" 
-                        style={{ display: "none" }} 
-                        ref={fileInputRef} 
-                        onChange={(e) => handleFileUpload(e.target.files)} 
+                    <div className="composer-trigger overlay">
+                        <button
+                            type="button"
+                            className="composer-trigger"
+                            title="Insert emoji"
+                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                            disabled={!activeChannel || sending || isUploading}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                                <line x1="9" y1="9" x2="9.01" y2="9" />
+                                <line x1="15" y1="9" x2="15.01" y2="9" />
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
+                            className="composer-trigger"
+                            title="Attach image"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={!activeChannel || isUploading}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                            </svg>
+                        </button>
+                    </div>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        ref={fileInputRef}
+                        onChange={(e) => handleFileUpload(e.target.files)}
                     />
                 </div>
                 <div className="composer-actions">

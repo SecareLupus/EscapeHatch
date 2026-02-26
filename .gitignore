@@ -4,3 +4,14 @@ node_modules
 dist
 .env
 .DS_Store
+
+# Synapse Data
+docker/synapse/*.db
+docker/synapse/*.log
+docker/synapse/*.pid
+docker/synapse/media_store/
+docker/synapse/*.signing.key
+
+# Synapse Config
+!docker/synapse/homeserver.yaml
+!docker/synapse/*.log.config
