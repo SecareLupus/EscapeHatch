@@ -38,6 +38,7 @@ export async function initDb(): Promise<void> {
       id text primary key,
       name text not null,
       owner_user_id text not null,
+      s3_config jsonb,
       created_at timestamptz not null default now()
     );
 
@@ -345,5 +346,6 @@ export async function initDb(): Promise<void> {
     alter table servers add column if not exists visitor_privacy text default 'public';
     alter table channels add column if not exists restricted_visibility boolean not null default false;
     alter table channels add column if not exists allowed_role_ids text[] not null default '{}';
+    alter table hubs add column if not exists s3_config jsonb;
   `);
 }
