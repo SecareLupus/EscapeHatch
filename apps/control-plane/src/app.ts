@@ -12,7 +12,12 @@ export async function buildApp() {
   const app = Fastify({ logger: false });
   await app.register(cors, {
     origin: (origin, cb) => {
-      if (!origin || origin.startsWith("http://localhost:3000") || origin.startsWith("http://127.0.0.1:3000")) {
+      if (
+        !origin ||
+        origin.startsWith("http://localhost:3000") ||
+        origin.startsWith("http://127.0.0.1:3000") ||
+        (config.webBaseUrl && origin.startsWith(config.webBaseUrl))
+      ) {
         cb(null, true);
         return;
       }
