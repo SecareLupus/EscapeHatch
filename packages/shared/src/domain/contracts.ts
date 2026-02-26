@@ -53,6 +53,7 @@ export interface Hub {
   theme?: Record<string, any>;
   spaceCustomizationLimits?: Record<string, any>;
   oidcConfig?: Record<string, any>;
+  allowSpaceDiscordBridge?: boolean;
   createdAt: string;
 }
 

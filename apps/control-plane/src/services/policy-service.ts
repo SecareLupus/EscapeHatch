@@ -60,7 +60,7 @@ interface RoleBinding {
 const HUB_MANAGER_ROLES: Role[] = ["hub_admin"];
 const SERVER_MANAGER_ROLES: Role[] = ["hub_admin", "space_owner"];
 
-async function fetchServerScope(
+export async function fetchServerScope(
   db: Parameters<Parameters<typeof withDb>[0]>[0],
   serverId: string
 ): Promise<{ hubId: string; ownerUserId: string } | null> {

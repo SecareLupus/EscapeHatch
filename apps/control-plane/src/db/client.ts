@@ -39,6 +39,7 @@ export async function initDb(): Promise<void> {
       name text not null,
       owner_user_id text not null,
       s3_config jsonb,
+      allow_space_discord_bridge boolean not null default true,
       created_at timestamptz not null default now()
     );
 
@@ -346,6 +347,7 @@ export async function initDb(): Promise<void> {
     alter table servers add column if not exists visitor_privacy text default 'public';
     alter table channels add column if not exists restricted_visibility boolean not null default false;
     alter table channels add column if not exists allowed_role_ids text[] not null default '{}';
+    alter table hubs add column if not exists allow_space_discord_bridge boolean not null default true;
     alter table hubs add column if not exists s3_config jsonb;
   `);
 }

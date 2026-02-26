@@ -4,7 +4,7 @@ import type { Hub, Server, Channel } from "@escapehatch/shared";
 export async function getHubSettings(hubId: string): Promise<Partial<Hub>> {
   return withDb(async (db) => {
     const res = await db.query(
-      "select theme, space_customization_limits, oidc_config from hubs where id = $1",
+      "select theme, space_customization_limits, oidc_config, allow_space_discord_bridge from hubs where id = $1",
       [hubId]
     );
     const row = res.rows[0];
@@ -12,7 +12,8 @@ export async function getHubSettings(hubId: string): Promise<Partial<Hub>> {
     return {
       theme: row.theme,
       spaceCustomizationLimits: row.space_customization_limits,
-      oidcConfig: row.oidc_config
+      oidcConfig: row.oidc_config,
+      allowSpaceDiscordBridge: row.allow_space_discord_bridge
     };
   });
 }
@@ -21,15 +22,23 @@ export async function updateHubSettings(hubId: string, settings: {
   theme?: any;
   spaceCustomizationLimits?: any;
   oidcConfig?: any;
+  allowSpaceDiscordBridge?: boolean;
 }): Promise<void> {
   return withDb(async (db) => {
     await db.query(
       `update hubs set 
         theme = case when $2::jsonb is not null then $2::jsonb else theme end,
         space_customization_limits = case when $3::jsonb is not null then $3::jsonb else space_customization_limits end,
-        oidc_config = case when $4::jsonb is not null then $4::jsonb else oidc_config end
+        oidc_config = case when $4::jsonb is not null then $4::jsonb else oidc_config end,
+        allow_space_discord_bridge = coalesce($5, allow_space_discord_bridge)
       where id = $1`,
-      [hubId, settings.theme ? JSON.stringify(settings.theme) : null, settings.spaceCustomizationLimits ? JSON.stringify(settings.spaceCustomizationLimits) : null, settings.oidcConfig ? JSON.stringify(settings.oidcConfig) : null]
+      [
+        hubId,
+        settings.theme ? JSON.stringify(settings.theme) : null,
+        settings.spaceCustomizationLimits ? JSON.stringify(settings.spaceCustomizationLimits) : null,
+        settings.oidcConfig ? JSON.stringify(settings.oidcConfig) : null,
+        settings.allowSpaceDiscordBridge
+      ]
     );
   });
 }

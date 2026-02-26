@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { fetchServerSettings, updateServerSettings } from "../../../../lib/control-plane";
 import { useChat } from "../../../../context/chat-context";
 import { useToast } from "../../../../components/toast-provider";
+import BridgeManager from "../../../../components/bridge-manager";
 
 export default function SpaceSettingsPage() {
     const params = useParams();
@@ -103,6 +104,14 @@ export default function SpaceSettingsPage() {
                     {saving ? "Saving..." : "Save Changes"}
                 </button>
             </div>
+
+            <hr style={{ margin: '3rem 0', border: 'none', borderTop: '1px solid var(--border)' }} />
+
+            <BridgeManager 
+                serverId={serverId} 
+                hubId={server.hubId} 
+                returnTo={`/settings/spaces/${serverId}`}
+            />
         </div>
     );
 }

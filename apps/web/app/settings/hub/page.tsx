@@ -87,6 +87,18 @@ export default function HubSettingsPage() {
                     />
                 </section>
 
+                <section className="settings-row checkbox-row">
+                    <label className="checkbox-container">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.allowSpaceDiscordBridge !== false}
+                            onChange={(e) => setSettings({ ...settings, allowSpaceDiscordBridge: e.target.checked })}
+                        />
+                        <span className="checkbox-label">Allow Space Owners to manage Discord Bridge</span>
+                    </label>
+                    <p className="settings-description">When enabled, individual Space Owners can bridge their rooms to Discord without Hub Admin intervention.</p>
+                </section>
+
                 <button 
                     onClick={handleSave} 
                     disabled={saving}

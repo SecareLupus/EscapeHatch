@@ -12,10 +12,12 @@ import {
   setChannelControls,
   transitionReportStatus
 } from "../services/moderation-service.js";
+import { withDb } from "../db/client.js";
 import { issueVoiceToken } from "../services/voice-service.js";
 import {
   canManageHub,
   canManageServer,
+  fetchServerScope,
   grantRole,
   isActionAllowed,
   listAllowedActions,
@@ -105,6 +107,40 @@ import { uploadMedia } from "../services/media-service.js";
 
 export async function registerDomainRoutes(app: FastifyInstance): Promise<void> {
   const initializedAuthHandlers = { preHandler: [requireAuth, requireInitialized] };
+
+  async function canManageDiscordBridge(input: {
+    productUserId: string;
+    serverId: string;
+  }): Promise<boolean> {
+    const allowed = await canManageServer({
+      productUserId: input.productUserId,
+      serverId: input.serverId
+    });
+    if (!allowed) {
+      return false;
+    }
+
+    const isHubAdmin = await withDb(async (db) => {
+      const server = await fetchServerScope(db, input.serverId);
+      if (!server) return false;
+      return canManageHub({
+        productUserId: input.productUserId,
+        hubId: server.hubId
+      });
+    });
+
+    if (isHubAdmin) {
+      return true;
+    }
+
+    const hubSettings = await withDb(async (db) => {
+      const server = await fetchServerScope(db, input.serverId);
+      if (!server) return null;
+      return getHubSettings(server.hubId);
+    });
+
+    return hubSettings?.allowSpaceDiscordBridge !== false;
+  }
 
   app.get("/health", async () => {
     return { status: "ok", service: "control-plane" };
@@ -254,7 +290,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const payload = z.object({
       theme: z.any().optional(),
       spaceCustomizationLimits: z.any().optional(),
-      oidcConfig: z.any().optional()
+      oidcConfig: z.any().optional(),
+      allowSpaceDiscordBridge: z.boolean().optional()
     }).parse(request.body);
 
     const allowed = await canManageHub({
@@ -1158,7 +1195,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
   app.get("/v1/discord/oauth/start", initializedAuthHandlers, async (request, reply) => {
     const query = z.object({ serverId: z.string().min(1), returnTo: z.string().optional() }).parse(request.query);
-    const allowed = await canManageServer({
+    const allowed = await canManageDiscordBridge({
       productUserId: request.auth!.productUserId,
       serverId: query.serverId
     });
@@ -1227,7 +1264,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
   app.get("/v1/discord/bridge/:serverId/health", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
-    const allowed = await canManageServer({
+    const allowed = await canManageDiscordBridge({
       productUserId: request.auth!.productUserId,
       serverId: params.serverId
     });
@@ -1246,7 +1283,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
   app.post("/v1/discord/bridge/:serverId/retry-sync", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
-    const allowed = await canManageServer({
+    const allowed = await canManageDiscordBridge({
       productUserId: request.auth!.productUserId,
       serverId: params.serverId
     });
@@ -1267,7 +1304,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
   app.get("/v1/discord/bridge/:serverId/mappings", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
-    const allowed = await canManageServer({
+    const allowed = await canManageDiscordBridge({
       productUserId: request.auth!.productUserId,
       serverId: params.serverId
     });
@@ -1289,7 +1326,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         enabled: z.boolean().default(true)
       })
       .parse(request.body);
-    const allowed = await canManageServer({
+    const allowed = await canManageDiscordBridge({
       productUserId: request.auth!.productUserId,
       serverId: params.serverId
     });
@@ -1305,7 +1342,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
   app.delete("/v1/discord/bridge/:serverId/mappings/:mappingId", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ serverId: z.string().min(1), mappingId: z.string().min(1) }).parse(request.params);
-    const allowed = await canManageServer({
+    const allowed = await canManageDiscordBridge({
       productUserId: request.auth!.productUserId,
       serverId: params.serverId
     });
@@ -1331,7 +1368,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       await requireInitialized(request, reply);
       if (reply.sent) return;
 
-      const allowed = await canManageServer({
+      const allowed = await canManageDiscordBridge({
         productUserId: request.auth!.productUserId,
         serverId: params.serverId
       });

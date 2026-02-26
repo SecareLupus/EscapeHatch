@@ -491,7 +491,7 @@ test("federation + discord bridge + video controls admin workflow", async (t) =>
 
     const oauthStart = await app.inject({
       method: "GET",
-      url: `/v1/discord/oauth/start?hubId=${encodeURIComponent(hubId)}`,
+      url: `/v1/discord/oauth/start?serverId=${encodeURIComponent(bootstrapBody.defaultServerId)}`,
       headers: { cookie: adminCookie }
     });
     assert.equal(oauthStart.statusCode, 302);
@@ -530,7 +530,7 @@ test("federation + discord bridge + video controls admin workflow", async (t) =>
 
     const mappingUpsert = await app.inject({
       method: "PUT",
-      url: `/v1/discord/bridge/${hubId}/mappings`,
+      url: `/v1/discord/bridge/${bootstrapBody.defaultServerId}/mappings`,
       headers: { cookie: adminCookie },
       payload: {
         guildId: firstGuildId,
@@ -544,7 +544,7 @@ test("federation + discord bridge + video controls admin workflow", async (t) =>
 
     const relay = await app.inject({
       method: "POST",
-      url: `/v1/discord/bridge/${hubId}/relay`,
+      url: `/v1/discord/bridge/${bootstrapBody.defaultServerId}/relay`,
       headers: { cookie: adminCookie },
       payload: {
         discordChannelId: "discord_chan_general",
@@ -1222,6 +1222,104 @@ test("space owner can rename their own space and manage categories", async (t) =
         item.role === "space_owner" && item.serverId === bootstrapBody.defaultServerId
     );
     assert.ok(hasOwnerRole, "Space Owner role should be present in roles list");
+
+  } finally {
+    await app.close();
+  }
+});
+
+test("Discord bridge permissions respect Hub setting for Space Owners", async (t) => {
+  if (!pool) {
+    t.skip("DATABASE_URL not configured.");
+    return;
+  }
+  if (!config.setupBootstrapToken) {
+    t.skip("SETUP_BOOTSTRAP_TOKEN not configured.");
+    return;
+  }
+
+  await initDb();
+  await resetDb();
+  const app = await buildApp();
+
+  try {
+    const adminIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "bridge_adm",
+      email: "bridge-admin@dev.local",
+      preferredUsername: "bridge-admin",
+      avatarUrl: null
+    });
+    const adminCookie = createAuthCookie({
+      productUserId: adminIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "bridge_adm"
+    });
+
+    const bootstrapResponse = await app.inject({
+      method: "POST",
+      url: "/auth/bootstrap-admin",
+      headers: { cookie: adminCookie },
+      payload: {
+        setupToken: config.setupBootstrapToken,
+        hubName: "Bridge Test Hub"
+      }
+    });
+    const bootstrapBody = bootstrapResponse.json() as { defaultServerId: string };
+    const hubId = (await app.inject({ method: "GET", url: "/v1/bootstrap/context", headers: { cookie: adminCookie } })).json().hubId as string;
+
+    const ownerIdentity = await upsertIdentityMapping({
+      provider: "dev",
+      oidcSubject: "bridge_owner",
+      email: "bridge-owner@dev.local",
+      preferredUsername: "bridge-owner",
+      avatarUrl: null
+    });
+    const ownerCookie = createAuthCookie({
+      productUserId: ownerIdentity.productUserId,
+      provider: "dev",
+      oidcSubject: "bridge_owner"
+    });
+
+    // Make bridge_owner a space_owner
+    await app.inject({
+      method: "POST",
+      url: `/v1/servers/${bootstrapBody.defaultServerId}/delegation/space-owners`,
+      headers: { cookie: adminCookie },
+      payload: { productUserId: ownerIdentity.productUserId }
+    });
+
+    // 1. By default, Space Owner CAN start bridge
+    const oauthStartAllowed = await app.inject({
+      method: "GET",
+      url: `/v1/discord/oauth/start?serverId=${encodeURIComponent(bootstrapBody.defaultServerId)}`,
+      headers: { cookie: ownerCookie }
+    });
+    assert.equal(oauthStartAllowed.statusCode, 302);
+
+    // 2. Disable Space bridge at Hub level
+    await app.inject({
+      method: "PATCH",
+      url: `/v1/hubs/${hubId}/settings`,
+      headers: { cookie: adminCookie },
+      payload: { allowSpaceDiscordBridge: false }
+    });
+
+    // 3. Space Owner should now be FORBIDDEN
+    const oauthStartDisabled = await app.inject({
+      method: "GET",
+      url: `/v1/discord/oauth/start?serverId=${encodeURIComponent(bootstrapBody.defaultServerId)}`,
+      headers: { cookie: ownerCookie }
+    });
+    assert.equal(oauthStartDisabled.statusCode, 403);
+
+    // 4. Hub Admin should STILL be allowed
+    const oauthStartAdmin = await app.inject({
+      method: "GET",
+      url: `/v1/discord/oauth/start?serverId=${encodeURIComponent(bootstrapBody.defaultServerId)}`,
+      headers: { cookie: adminCookie }
+    });
+    assert.equal(oauthStartAdmin.statusCode, 302);
 
   } finally {
     await app.close();
