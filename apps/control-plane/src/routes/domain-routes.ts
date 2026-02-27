@@ -42,7 +42,8 @@ import {
   updateCategory,
   updateChannel,
   updateChannelVideoControls,
-  upsertChannelReadState
+  upsertChannelReadState,
+  getUnreadSummary
 } from "../services/chat-service.js";
 import { getBootstrapStatus } from "../services/bootstrap-service.js";
 import { publishChannelMessage, subscribeToChannelMessages } from "../services/chat-realtime.js";
@@ -79,6 +80,7 @@ import {
   getDiscordBridgeConnection,
   getPendingDiscordGuildSelection,
   listDiscordChannelMappings,
+  listDiscordGuildChannels,
   relayDiscordMessageToMappedChannel,
   retryDiscordBridgeSync,
   selectDiscordGuild,
@@ -198,6 +200,11 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
   app.get("/v1/hubs", initializedAuthHandlers, async (request) => {
     return { items: await listHubsForUser(request.auth!.productUserId) };
+  });
+
+  app.get("/v1/me/notifications", initializedAuthHandlers, async (request) => {
+    const summary = await getUnreadSummary(request.auth!.productUserId);
+    return { summary };
   });
 
   app.get("/v1/hubs/:hubId/federation-policy", initializedAuthHandlers, async (request, reply) => {
@@ -1213,7 +1220,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
   });
 
   app.get("/v1/discord/oauth/callback", initializedAuthHandlers, async (request, reply) => {
-    const query = z.object({ code: z.string(), state: z.string() }).parse(request.query);
+    const query = z.object({ code: z.string(), state: z.string(), guild_id: z.string().optional() }).parse(request.query);
     const state = consumeDiscordOauthState(query.state);
     if (!state || state.productUserId !== request.auth!.productUserId) {
       reply.code(400).send({ message: "Invalid Discord bridge OAuth state." });
@@ -1223,10 +1230,14 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const completed = await completeDiscordOauthAndListGuilds({
       serverId: state.serverId,
       productUserId: request.auth!.productUserId,
-      code: query.code
+      code: query.code,
+      guildId: query.guild_id
     });
     const redirect = new URL(state.returnTo || "/", config.webBaseUrl);
     redirect.searchParams.set("discordPendingSelection", completed.pendingSelectionId);
+    if (completed.selectedGuildId) {
+      redirect.searchParams.set("discordGuildId", completed.selectedGuildId);
+    }
     reply.redirect(redirect.toString(), 302);
   });
 
@@ -1279,6 +1290,24 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       mappingCount: mappings.length,
       activeMappingCount: mappings.filter((mapping) => mapping.enabled).length
     };
+  });
+
+  app.get("/v1/discord/bridge/:serverId/guild-channels", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const allowed = await canManageDiscordBridge({
+      productUserId: request.auth!.productUserId,
+      serverId: params.serverId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient server management scope." });
+      return;
+    }
+    const connection = await getDiscordBridgeConnection(params.serverId);
+    if (!connection || !connection.guildId) {
+      reply.code(400).send({ message: "No Discord bridge connection found for this server." });
+      return;
+    }
+    return { items: await listDiscordGuildChannels(connection.guildId) };
   });
 
   app.post("/v1/discord/bridge/:serverId/retry-sync", initializedAuthHandlers, async (request, reply) => {

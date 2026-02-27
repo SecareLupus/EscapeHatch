@@ -8,6 +8,7 @@ import {
     selectDiscordBridgeGuild, 
     retryDiscordBridgeSyncAction, 
     listDiscordBridgeMappings, 
+    listDiscordBridgeGuildChannels,
     upsertDiscordBridgeMapping, 
     deleteDiscordBridgeMapping,
     listChannels,
@@ -40,13 +41,15 @@ export default function BridgeManager({ serverId, hubId, returnTo }: BridgeManag
     const [discordChannelName, setDiscordChannelName] = useState("");
     const [matrixChannelId, setMatrixChannelId] = useState("");
     const [hubDisabled, setHubDisabled] = useState(false);
+    const [availableDiscordChannels, setAvailableDiscordChannels] = useState<Array<{ id: string; name: string }>>([]);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const pendingId = urlParams.get("discordPendingSelection");
+        const guildId = urlParams.get("discordGuildId");
         if (pendingId) {
             setDiscordPendingSelectionId(pendingId);
-            void loadPendingSelection(pendingId);
+            void loadPendingSelection(pendingId, guildId);
         }
     }, []);
 
@@ -55,6 +58,12 @@ export default function BridgeManager({ serverId, hubId, returnTo }: BridgeManag
             void loadState();
         }
     }, [serverId]);
+
+    useEffect(() => {
+        if (bridgeStatus?.connection) {
+            void loadDiscordChannels();
+        }
+    }, [bridgeStatus?.connection]);
 
     async function loadState() {
         setLoading(true);
@@ -77,15 +86,25 @@ export default function BridgeManager({ serverId, hubId, returnTo }: BridgeManag
         }
     }
 
-    async function loadPendingSelection(pendingId: string) {
+    async function loadDiscordChannels() {
+        try {
+            const chans = await listDiscordBridgeGuildChannels(serverId);
+            setAvailableDiscordChannels(chans);
+        } catch (err) {
+            console.error("Failed to load Discord channels", err);
+        }
+    }
+
+    async function loadPendingSelection(pendingId: string, preSelectedGuildId?: string | null) {
         try {
             const res = await fetchDiscordBridgePendingSelection(pendingId);
             setDiscordGuilds(res.guilds);
-            if (res.guilds.length > 0) {
-                const firstGuild = res.guilds[0];
-                if (firstGuild) {
-                    setSelectedGuildId(firstGuild.id);
-                }
+            
+            // Priority: 1. preSelectedGuildId (from URL), 2. res.selectedGuildId (from backend), 3. first guild
+            const guildIdToSelect = preSelectedGuildId || res.selectedGuildId || (res.guilds.length > 0 ? res.guilds[0]?.id : "");
+            
+            if (guildIdToSelect) {
+                setSelectedGuildId(guildIdToSelect);
             }
         } catch (err) {
             console.error("Failed to load pending selection", err);
@@ -116,9 +135,10 @@ export default function BridgeManager({ serverId, hubId, returnTo }: BridgeManag
             });
             setDiscordPendingSelectionId(null);
             setDiscordGuilds([]);
-            // Clear URL param
+            // Clear URL params
             const url = new URL(window.location.href);
             url.searchParams.delete("discordPendingSelection");
+            url.searchParams.delete("discordGuildId");
             window.history.replaceState({}, "", url.toString());
             await loadState();
             showToast("Discord server connected", "success");
@@ -240,29 +260,29 @@ export default function BridgeManager({ serverId, hubId, returnTo }: BridgeManag
                 <div className="settings-grid" style={{ marginTop: '2rem' }}>
                     <h3>Channel Mappings</h3>
                     <form className="stack" onSubmit={handleUpsertMapping}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                            <div className="stack">
-                                <label htmlFor="discord-channel-id">Discord Channel ID</label>
-                                <input
-                                    id="discord-channel-id"
-                                    value={discordChannelId}
-                                    onChange={(event) => setDiscordChannelId(event.target.value)}
-                                    required
-                                    placeholder="e.g. 12345678"
-                                    className="filter-input"
-                                />
-                            </div>
-                            <div className="stack">
-                                <label htmlFor="discord-channel-name">Discord Channel Name</label>
-                                <input
-                                    id="discord-channel-name"
-                                    value={discordChannelName}
-                                    onChange={(event) => setDiscordChannelName(event.target.value)}
-                                    required
-                                    placeholder="e.g. general"
-                                    className="filter-input"
-                                />
-                            </div>
+                        <div className="stack">
+                            <label htmlFor="discord-channel-id">Discord Channel</label>
+                            <select
+                                id="discord-channel-id"
+                                value={discordChannelId}
+                                onChange={(event) => {
+                                    const cid = event.target.value;
+                                    setDiscordChannelId(cid);
+                                    const chan = availableDiscordChannels.find(c => c.id === cid);
+                                    if (chan) {
+                                        setDiscordChannelName(chan.name);
+                                    }
+                                }}
+                                required
+                                className="filter-input"
+                            >
+                                <option value="">Select a Discord channel...</option>
+                                {availableDiscordChannels.map((chan) => (
+                                    <option key={chan.id} value={chan.id}>
+                                        #{chan.name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div className="stack" style={{ marginTop: '1rem' }}>
                             <label htmlFor="matrix-channel-id">Hub Room (Internal)</label>

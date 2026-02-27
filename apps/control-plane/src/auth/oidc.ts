@@ -79,8 +79,7 @@ export function createAuthorizationRedirect(input: {
       scope: "identify email",
       state,
       code_challenge: challenge,
-      code_challenge_method: "S256",
-      prompt: "consent"
+      code_challenge_method: "S256"
     });
     return `${config.oidc.discordAuthorizeUrl}?${query.toString()}`;
   }
@@ -94,8 +93,7 @@ export function createAuthorizationRedirect(input: {
       state,
       code_challenge: challenge,
       code_challenge_method: "S256",
-      access_type: "offline",
-      prompt: "consent"
+      access_type: "offline"
     });
     return `${config.oidc.googleAuthorizeUrl}?${query.toString()}`;
   }
@@ -107,8 +105,7 @@ export function createAuthorizationRedirect(input: {
     scope: "user:read:email",
     state,
     code_challenge: challenge,
-    code_challenge_method: "S256",
-    force_verify: "true"
+    code_challenge_method: "S256"
   });
   return `${config.oidc.twitchAuthorizeUrl}?${query.toString()}`;
 }
@@ -120,6 +117,9 @@ interface ExchangeTokenInput {
 
 interface OidcExchangeResult {
   profile: OidcProfile;
+  accessToken: string;
+  refreshToken?: string;
+  tokenExpiresAt?: string;
   intent: OidcIntent;
   productUserId?: string;
 }
@@ -132,29 +132,48 @@ export async function exchangeAuthorizationCode(input: ExchangeTokenInput): Prom
   inMemoryState.delete(input.state);
 
   if (stateEntry.provider === "discord") {
+    const exchangeResult = await exchangeDiscordCode(input.code, stateEntry.verifier);
     return {
-      profile: await exchangeDiscordCode(input.code, stateEntry.verifier),
+      ...exchangeResult,
       intent: stateEntry.intent,
       productUserId: stateEntry.productUserId
     };
   }
 
   if (stateEntry.provider === "google") {
+    const exchangeResult = await exchangeGoogleCode(input.code, stateEntry.verifier);
     return {
-      profile: await exchangeGoogleCode(input.code, stateEntry.verifier),
+      ...exchangeResult,
       intent: stateEntry.intent,
       productUserId: stateEntry.productUserId
     };
   }
 
+  const exchangeResult = await exchangeTwitchCode(input.code, stateEntry.verifier);
   return {
-    profile: await exchangeTwitchCode(input.code, stateEntry.verifier),
+    ...exchangeResult,
     intent: stateEntry.intent,
     productUserId: stateEntry.productUserId
   };
 }
 
-async function exchangeDiscordCode(code: string, verifier: string): Promise<OidcProfile> {
+export async function refreshAccessToken(
+  provider: SupportedOidcProvider,
+  refreshToken: string
+): Promise<{ accessToken: string; refreshToken?: string; tokenExpiresAt?: string }> {
+  if (provider === "discord") {
+    return refreshDiscordToken(refreshToken);
+  }
+  if (provider === "google") {
+    return refreshGoogleToken(refreshToken);
+  }
+  return refreshTwitchToken(refreshToken);
+}
+
+async function exchangeDiscordCode(
+  code: string,
+  verifier: string
+): Promise<{ profile: OidcProfile; accessToken: string; refreshToken?: string; tokenExpiresAt?: string }> {
   if (!config.oidc.discordClientId || !config.oidc.discordClientSecret) {
     throw new Error("Discord OIDC client credentials are missing.");
   }
@@ -175,7 +194,11 @@ async function exchangeDiscordCode(code: string, verifier: string): Promise<Oidc
     throw new Error(`Discord token exchange failed (${tokenResponse.status}).`);
   }
 
-  const tokenJson = (await tokenResponse.json()) as { access_token: string };
+  const tokenJson = (await tokenResponse.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
   const userResponse = await fetch(config.oidc.discordUserInfoUrl, {
     headers: { Authorization: `Bearer ${tokenJson.access_token}` }
   });
@@ -191,16 +214,26 @@ async function exchangeDiscordCode(code: string, verifier: string): Promise<Oidc
   };
 
   return {
-    provider: "discord",
-    oidcSubject: profile.id,
-    email: profile.email ?? null,
-    username: profile.username,
-    preferredUsername: null,
-    avatarUrl: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : null
+    profile: {
+      provider: "discord",
+      oidcSubject: profile.id,
+      email: profile.email ?? null,
+      username: profile.username,
+      preferredUsername: null,
+      avatarUrl: profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : null
+    },
+    accessToken: tokenJson.access_token,
+    refreshToken: tokenJson.refresh_token,
+    tokenExpiresAt: tokenJson.expires_in
+      ? new Date(Date.now() + tokenJson.expires_in * 1000).toISOString()
+      : undefined
   };
 }
 
-async function exchangeGoogleCode(code: string, verifier: string): Promise<OidcProfile> {
+async function exchangeGoogleCode(
+  code: string,
+  verifier: string
+): Promise<{ profile: OidcProfile; accessToken: string; refreshToken?: string; tokenExpiresAt?: string }> {
   if (!config.oidc.googleClientId || !config.oidc.googleClientSecret) {
     throw new Error("Google OIDC client credentials are missing.");
   }
@@ -221,7 +254,11 @@ async function exchangeGoogleCode(code: string, verifier: string): Promise<OidcP
     throw new Error(`Google token exchange failed (${tokenResponse.status}).`);
   }
 
-  const tokenJson = (await tokenResponse.json()) as { access_token: string };
+  const tokenJson = (await tokenResponse.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
   const userResponse = await fetch(config.oidc.googleUserInfoUrl, {
     headers: { Authorization: `Bearer ${tokenJson.access_token}` }
   });
@@ -236,15 +273,25 @@ async function exchangeGoogleCode(code: string, verifier: string): Promise<OidcP
   };
 
   return {
-    provider: "google",
-    oidcSubject: profile.sub,
-    email: profile.email ?? null,
-    preferredUsername: null,
-    avatarUrl: profile.picture ?? null
+    profile: {
+      provider: "google",
+      oidcSubject: profile.sub,
+      email: profile.email ?? null,
+      preferredUsername: null,
+      avatarUrl: profile.picture ?? null
+    },
+    accessToken: tokenJson.access_token,
+    refreshToken: tokenJson.refresh_token,
+    tokenExpiresAt: tokenJson.expires_in
+      ? new Date(Date.now() + tokenJson.expires_in * 1000).toISOString()
+      : undefined
   };
 }
 
-async function exchangeTwitchCode(code: string, verifier: string): Promise<OidcProfile> {
+async function exchangeTwitchCode(
+  code: string,
+  verifier: string
+): Promise<{ profile: OidcProfile; accessToken: string; refreshToken?: string; tokenExpiresAt?: string }> {
   if (!config.oidc.twitchClientId || !config.oidc.twitchClientSecret) {
     throw new Error("Twitch OIDC client credentials are missing.");
   }
@@ -265,7 +312,11 @@ async function exchangeTwitchCode(code: string, verifier: string): Promise<OidcP
     throw new Error(`Twitch token exchange failed (${tokenResponse.status}).`);
   }
 
-  const tokenJson = (await tokenResponse.json()) as { access_token: string };
+  const tokenJson = (await tokenResponse.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
   const userResponse = await fetch(config.oidc.twitchUserInfoUrl, {
     headers: {
       Authorization: `Bearer ${tokenJson.access_token}`,
@@ -291,11 +342,126 @@ async function exchangeTwitchCode(code: string, verifier: string): Promise<OidcP
   }
 
   return {
-    provider: "twitch",
-    oidcSubject: profile.id,
-    email: profile.email ?? null,
-    username: profile.login || profile.display_name,
-    preferredUsername: null,
-    avatarUrl: profile.profile_image_url ?? null
+    profile: {
+      provider: "twitch",
+      oidcSubject: profile.id,
+      email: profile.email ?? null,
+      username: profile.login || profile.display_name,
+      preferredUsername: null,
+      avatarUrl: profile.profile_image_url ?? null
+    },
+    accessToken: tokenJson.access_token,
+    refreshToken: tokenJson.refresh_token,
+    tokenExpiresAt: tokenJson.expires_in
+      ? new Date(Date.now() + tokenJson.expires_in * 1000).toISOString()
+      : undefined
+  };
+}
+
+async function refreshDiscordToken(
+  refreshToken: string
+): Promise<{ accessToken: string; refreshToken?: string; tokenExpiresAt?: string }> {
+  if (!config.oidc.discordClientId || !config.oidc.discordClientSecret) {
+    throw new Error("Discord OIDC client credentials are missing.");
+  }
+
+  const response = await fetch(config.oidc.discordTokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.oidc.discordClientId,
+      client_secret: config.oidc.discordClientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Discord token refresh failed (${response.status}).`);
+  }
+
+  const json = (await response.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token,
+    tokenExpiresAt: json.expires_in
+      ? new Date(Date.now() + json.expires_in * 1000).toISOString()
+      : undefined
+  };
+}
+
+async function refreshGoogleToken(
+  refreshToken: string
+): Promise<{ accessToken: string; refreshToken?: string; tokenExpiresAt?: string }> {
+  if (!config.oidc.googleClientId || !config.oidc.googleClientSecret) {
+    throw new Error("Google OIDC client credentials are missing.");
+  }
+
+  const response = await fetch(config.oidc.googleTokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.oidc.googleClientId,
+      client_secret: config.oidc.googleClientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Google token refresh failed (${response.status}).`);
+  }
+
+  const json = (await response.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token,
+    tokenExpiresAt: json.expires_in
+      ? new Date(Date.now() + json.expires_in * 1000).toISOString()
+      : undefined
+  };
+}
+
+async function refreshTwitchToken(
+  refreshToken: string
+): Promise<{ accessToken: string; refreshToken?: string; tokenExpiresAt?: string }> {
+  if (!config.oidc.twitchClientId || !config.oidc.twitchClientSecret) {
+    throw new Error("Twitch OIDC client credentials are missing.");
+  }
+
+  const response = await fetch(config.oidc.twitchTokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.oidc.twitchClientId,
+      client_secret: config.oidc.twitchClientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Twitch token refresh failed (${response.status}).`);
+  }
+
+  const json = (await response.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token,
+    tokenExpiresAt: json.expires_in
+      ? new Date(Date.now() + json.expires_in * 1000).toISOString()
+      : undefined
   };
 }

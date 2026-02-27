@@ -1,9 +1,10 @@
-const appBaseUrl = process.env.APP_BASE_URL ?? "http://localhost:4000";
+const appBaseUrl = (process.env.APP_BASE_URL ?? "http://localhost:4000").replace(/\/+$/, "");
+const webBaseUrl = (process.env.WEB_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
 export const config = {
   port: Number(process.env.PORT ?? "4000"),
   appBaseUrl,
-  webBaseUrl: process.env.WEB_BASE_URL ?? "http://localhost:3000",
+  webBaseUrl,
   databaseUrl: process.env.DATABASE_URL,
   sessionSecret: process.env.SESSION_SECRET ?? "dev-insecure-session-secret",
   sessionTtlSeconds: Number(process.env.SESSION_TTL_SECONDS ?? "3600"),
@@ -100,4 +101,5 @@ console.log(
   `Discord Bridge Credentials: ${Boolean(config.discordBridge.clientId && config.discordBridge.clientSecret)}`,
 );
 console.log(`Discord Bot Token Present: ${Boolean(config.discordBotToken)}`);
+console.log(`Discord Bridge Callback: ${config.discordBridge.callbackUrl}`);
 console.log("----------------------------");

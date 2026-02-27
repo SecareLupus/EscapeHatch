@@ -147,7 +147,9 @@ type ChatAction =
     | { type: "SET_CREATING_CATEGORY"; payload: boolean }
     | { type: "SET_SAVING_ONBOARDING"; payload: boolean }
     | { type: "SET_SENDING"; payload: boolean }
-    | { type: "SET_UPDATING_CONTROLS"; payload: boolean };
+    | { type: "SET_UPDATING_CONTROLS"; payload: boolean }
+    | { type: "SET_NOTIFICATIONS"; payload: Record<string, { unreadCount: number; mentionCount: number }> }
+    | { type: "CLEAR_NOTIFICATIONS"; payload: { channelId: string } };
 
 const initialState: ChatState = {
     viewer: null,
@@ -287,6 +289,32 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return { ...state, mentionCountByChannel: action.payload };
         case "SET_UNREAD_COUNTS":
             return { ...state, unreadCountByChannel: action.payload };
+        case "SET_NOTIFICATIONS": {
+            const unreadCounts: Record<string, number> = {};
+            const mentionCounts: Record<string, number> = {};
+            for (const [channelId, data] of Object.entries(action.payload)) {
+                unreadCounts[channelId] = data.unreadCount;
+                mentionCounts[channelId] = data.mentionCount;
+            }
+            return {
+                ...state,
+                unreadCountByChannel: unreadCounts,
+                mentionCountByChannel: mentionCounts
+            };
+        }
+        case "CLEAR_NOTIFICATIONS": {
+            return {
+                ...state,
+                unreadCountByChannel: {
+                    ...state.unreadCountByChannel,
+                    [action.payload.channelId]: 0
+                },
+                mentionCountByChannel: {
+                    ...state.mentionCountByChannel,
+                    [action.payload.channelId]: 0
+                }
+            };
+        }
         case "SET_VOICE_CONNECTED":
             return { ...state, voiceConnected: action.payload };
         case "SET_VOICE_MUTED":

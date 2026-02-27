@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
+import { ChannelType } from "discord.js";
 import type { DiscordBridgeChannelMapping, DiscordBridgeConnection } from "@escapehatch/shared";
 import { config } from "../config.js";
 import { withDb } from "../db/client.js";
 import { createMessage } from "./chat-service.js";
+import { getDiscordBotClient } from "./discord-bot-client.js";
 
 function randomId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -132,8 +134,7 @@ export function createDiscordConnectUrl(input: { serverId: string; productUserId
     response_type: "code",
     scope: "identify guilds bot",
     permissions: "536873984", // Read Messages, Send Messages, Manage Webhooks
-    state,
-    prompt: "consent"
+    state
   });
   return `${config.discordBridge.authorizeUrl}?${query.toString()}`;
 }
@@ -252,7 +253,8 @@ export async function completeDiscordOauthAndListGuilds(input: {
   serverId: string;
   productUserId: string;
   code: string;
-}): Promise<{ pendingSelectionId: string; guilds: Array<{ id: string; name: string }> }> {
+  guildId?: string;
+}): Promise<{ pendingSelectionId: string; guilds: Array<{ id: string; name: string }>; selectedGuildId?: string }> {
   const exchanged = await exchangeDiscordOAuthCode(input.code);
   const pendingSelectionId = randomId("dbpending");
   pendingGuildSelections.set(pendingSelectionId, {
@@ -268,7 +270,8 @@ export async function completeDiscordOauthAndListGuilds(input: {
 
   return {
     pendingSelectionId,
-    guilds: exchanged.guilds
+    guilds: exchanged.guilds,
+    selectedGuildId: input.guildId
   };
 }
 
@@ -545,4 +548,32 @@ export async function relayDiscordMessageToMappedChannel(input: {
     matrixChannelId: mapping.matrixChannelId,
     limitation: "Formatting is text-first; rich embeds are not mirrored in this MVP."
   };
+}
+
+export async function listDiscordGuildChannels(guildId: string): Promise<Array<{ id: string; name: string }>> {
+  if (config.discordBridge.mockMode) {
+    return [
+      { id: "mock_chan_1", name: "general" },
+      { id: "mock_chan_2", name: "announcements" }
+    ];
+  }
+
+  const client = getDiscordBotClient();
+  if (!client || !client.isReady()) {
+    throw new Error("Discord bot is not ready; cannot fetch channels.");
+  }
+
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    if (!guild) {
+      throw new Error(`Guild ${guildId} not found by bot.`);
+    }
+
+    const channels = await guild.channels.fetch();
+    return channels
+      .filter((c) => c && (c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement))
+      .map((c) => ({ id: c!.id, name: c!.name }));
+  } catch (error) {
+    throw new Error(`Failed to fetch Discord channels: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }

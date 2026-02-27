@@ -678,7 +678,7 @@ export function discordBridgeStartUrl(serverId: string, returnTo?: string): stri
 
 export async function fetchDiscordBridgePendingSelection(
   pendingSelectionId: string
-): Promise<{ serverId: string; guilds: Array<{ id: string; name: string }> }> {
+): Promise<{ serverId: string; guilds: Array<{ id: string; name: string }>; selectedGuildId?: string }> {
   return apiFetch(`/v1/discord/bridge/pending/${encodeURIComponent(pendingSelectionId)}`);
 }
 
@@ -699,6 +699,13 @@ export async function fetchDiscordBridgeHealth(serverId: string): Promise<{
   activeMappingCount: number;
 }> {
   return apiFetch(`/v1/discord/bridge/${encodeURIComponent(serverId)}/health`);
+}
+
+export async function listDiscordBridgeGuildChannels(serverId: string): Promise<Array<{ id: string; name: string }>> {
+  const res = await apiFetch<{ items: Array<{ id: string; name: string }> }>(
+    `/v1/discord/bridge/${encodeURIComponent(serverId)}/guild-channels`
+  );
+  return res.items;
 }
 
 export async function retryDiscordBridgeSyncAction(serverId: string): Promise<DiscordBridgeConnection> {
@@ -907,4 +914,9 @@ export async function updateUserSettings(settings: Record<string, any>): Promise
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings)
   });
+}
+
+export async function fetchNotificationSummary(): Promise<Record<string, { unreadCount: number; mentionCount: number }>> {
+  const json = await apiFetch<{ summary: Record<string, { unreadCount: number; mentionCount: number }> }>("/v1/me/notifications");
+  return json.summary;
 }

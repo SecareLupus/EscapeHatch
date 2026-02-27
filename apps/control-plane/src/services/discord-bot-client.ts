@@ -27,27 +27,29 @@ export async function startDiscordBot() {
     client.on(Events.MessageCreate, async (message: Message) => {
         if (message.author.bot) return;
 
-        // Find if this server has a bridge connected
-        const serverId = await withDb(async (db) => {
-            const row = await db.query<{ server_id: string }>(
-                "select server_id from discord_bridge_connections where guild_id = $1 limit 1",
-                [message.guildId]
+        // Find all servers that have a mapping for this Discord channel
+        const serverIds = await withDb(async (db) => {
+            const rows = await db.query<{ server_id: string }>(
+                "select server_id from discord_bridge_channel_mappings where guild_id = $1 and discord_channel_id = $2 and enabled = true",
+                [message.guildId, message.channelId]
             );
-            return row.rows[0]?.server_id;
+            return rows.rows.map(r => r.server_id);
         });
 
-        if (!serverId) return;
+        if (serverIds.length === 0) return;
 
-        try {
-            await relayDiscordMessageToMappedChannel({
-                serverId,
-                discordChannelId: message.channelId,
-                authorName: message.author.username,
-                content: message.content,
-                mediaUrls: message.attachments.map((a: { url: string }) => a.url)
-            });
-        } catch (error) {
-            logEvent("error", "discord_relay_failed", { messageId: message.id, error: String(error) });
+        for (const serverId of serverIds) {
+            try {
+                await relayDiscordMessageToMappedChannel({
+                    serverId,
+                    discordChannelId: message.channelId,
+                    authorName: message.author.username,
+                    content: message.content,
+                    mediaUrls: message.attachments.map((a: { url: string }) => a.url)
+                });
+            } catch (error) {
+                logEvent("error", "discord_relay_failed", { serverId, messageId: message.id, error: String(error) });
+            }
         }
     });
 

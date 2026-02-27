@@ -11,6 +11,9 @@ export interface IdentityMapping {
   productUserId: string;
   theme?: "light" | "dark" | null;
   settings?: Record<string, any>;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  tokenExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

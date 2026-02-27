@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useChat, ModalType } from "../context/chat-context";
 import { Channel } from "@escapehatch/shared";
 
+const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(" ");
+
 interface SidebarProps {
     handleServerChange: (serverId: string) => Promise<void>;
     handleChannelChange: (channelId: string) => Promise<void>;
@@ -52,20 +54,7 @@ export function Sidebar({
         [viewerRoles, selectedServerId]
     );
 
-    const unreadCountByChannel = useMemo(() => {
-        const counts: Record<string, number> = {};
-        for (const channel of channels) {
-            const lastRead = lastReadByChannel[channel.id];
-            if (!lastRead) {
-                counts[channel.id] = 0;
-                continue;
-            }
-            counts[channel.id] = messages.filter(
-                (message) => message.channelId === channel.id && message.createdAt > lastRead
-            ).length;
-        }
-        return counts;
-    }, [channels, lastReadByChannel, messages]);
+    const unreadCountByChannel = state.unreadCountByChannel;
 
     const filteredChannels = useMemo(() => {
         const term = channelFilter.trim().toLowerCase();
@@ -135,7 +124,11 @@ export function Sidebar({
                                 <div className="list-item-container">
                                     <button
                                         type="button"
-                                        className={selectedServerId === server.id ? "list-item active" : "list-item"}
+                                        className={cn(
+                                            "list-item server-entry",
+                                            selectedServerId === server.id && "active",
+                                            channels.filter(c => c.serverId === server.id).some(c => (unreadCountByChannel[c.id] ?? 0) > 0) && "unread"
+                                        )}
                                         aria-current={selectedServerId === server.id ? "true" : undefined}
                                         onClick={() => {
                                             void handleServerChange(server.id);
@@ -145,12 +138,20 @@ export function Sidebar({
                                             handleServerKeyboardNavigation(event, server.id);
                                         }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                                             <span className="server-icon-placeholder">
                                                 {server.name.charAt(0).toUpperCase()}
                                             </span>
                                             {server.name}
                                         </div>
+                                        {(() => {
+                                            const hubMentionCount = channels
+                                                .filter(c => c.serverId === server.id)
+                                                .reduce((sum, c) => sum + (mentionCountByChannel[c.id] ?? 0), 0);
+                                            return hubMentionCount > 0 ? (
+                                                <span className="mention-pill">@{hubMentionCount}</span>
+                                            ) : null;
+                                        })()}
                                         {canManageCurrentSpace && selectedServerId === server.id && (
                                             <div className="inline-mgmt persistent">
                                                 <button
@@ -289,7 +290,11 @@ export function Sidebar({
                                             <li key={channel.id}>
                                                 <button
                                                     type="button"
-                                                    className={selectedChannelId === channel.id ? "list-item active" : "list-item"}
+                                                    className={cn(
+                                                        "list-item",
+                                                        selectedChannelId === channel.id && "active",
+                                                        (unreadCountByChannel[channel.id] ?? 0) > 0 && "unread"
+                                                    )}
                                                     aria-current={selectedChannelId === channel.id ? "true" : undefined}
                                                     onClick={() => {
                                                         void handleChannelChange(channel.id);
@@ -304,7 +309,7 @@ export function Sidebar({
                                                     </span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                         {(unreadCountByChannel[channel.id] ?? 0) > 0 ? (
-                                                            <span className="unread-pill">{unreadCountByChannel[channel.id]}</span>
+                                                            <span className="unread-pill"></span>
                                                         ) : null}
                                                         {(mentionCountByChannel[channel.id] ?? 0) > 0 ? (
                                                             <span className="mention-pill">@{mentionCountByChannel[channel.id]}</span>

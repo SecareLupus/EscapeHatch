@@ -636,3 +636,49 @@ export async function deleteChannel(input: { channelId: string; serverId: string
     }
   });
 }
+
+export async function getUnreadSummary(productUserId: string): Promise<Record<string, { unreadCount: number; mentionCount: number }>> {
+  return withDb(async (db) => {
+    // 1. Get unread message counts per channel
+    // Joined with channel_read_states to compare message creation time with last read time.
+    const messageCounts = await db.query<{ channel_id: string; unread_count: number }>(
+      `select ch.id as channel_id, count(msg.id) as unread_count
+       from channels ch
+       join chat_messages msg on msg.channel_id = ch.id
+       left join channel_read_states rs on rs.channel_id = ch.id and rs.product_user_id = $1
+       where (rs.last_read_at is null or msg.created_at > rs.last_read_at)
+       group by ch.id`,
+      [productUserId]
+    );
+
+    // 2. Get unread mention counts per channel
+    // Uses the same logic: mentions created after the last read timestamp.
+    const mentionCounts = await db.query<{ channel_id: string; mention_count: number }>(
+      `select mm.channel_id, count(mm.id) as mention_count
+       from mention_markers mm
+       left join channel_read_states rs on rs.channel_id = mm.channel_id and rs.product_user_id = $1
+       where mm.mentioned_user_id = $1
+         and (rs.last_read_at is null or mm.created_at > rs.last_read_at)
+       group by mm.channel_id`,
+      [productUserId]
+    );
+
+    const summary: Record<string, { unreadCount: number; mentionCount: number }> = {};
+
+    for (const row of messageCounts.rows) {
+      summary[row.channel_id] = {
+        unreadCount: Number(row.unread_count),
+        mentionCount: 0
+      };
+    }
+
+    for (const row of mentionCounts.rows) {
+      if (!summary[row.channel_id]) {
+        summary[row.channel_id] = { unreadCount: 0, mentionCount: 0 };
+      }
+      summary[row.channel_id]!.mentionCount = Number(row.mention_count);
+    }
+
+    return summary;
+  });
+}

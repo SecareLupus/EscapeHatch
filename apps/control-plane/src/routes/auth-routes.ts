@@ -231,7 +231,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           email: profile.email,
           preferredUsername: null,
           avatarUrl: profile.avatarUrl,
-          productUserId: exchanged.productUserId
+          productUserId: exchanged.productUserId,
+          accessToken: exchanged.accessToken,
+          refreshToken: exchanged.refreshToken,
+          tokenExpiresAt: exchanged.tokenExpiresAt
         });
       }
     } else if (!linkedIdentity) {
@@ -243,7 +246,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         email: profile.email,
         preferredUsername: null,
         avatarUrl: profile.avatarUrl,
-        productUserId: existingUserIdFromEmail ?? undefined
+        productUserId: existingUserIdFromEmail ?? undefined,
+        accessToken: exchanged.accessToken,
+        refreshToken: exchanged.refreshToken,
+        tokenExpiresAt: exchanged.tokenExpiresAt
       });
     }
 

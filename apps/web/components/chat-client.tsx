@@ -26,6 +26,7 @@ import {
   fetchAuthProviders,
   fetchBootstrapStatus,
   fetchViewerSession,
+  fetchNotificationSummary,
   listHubs,
   listMentions,
   listAuditLogs,
@@ -580,19 +581,20 @@ export function ChatClient() {
 
 
   useEffect(() => {
-    if (!canAccessWorkspace || !selectedChannelId) {
-      dispatch({ type: "SET_MENTION_COUNTS", payload: {} });
-      return;
-    }
+    if (!canAccessWorkspace) return;
 
-    void listMentions(selectedChannelId, 150)
-      .then((items) => {
-        dispatch({ type: "SET_MENTION_COUNTS", payload: { [selectedChannelId]: items.length } });
-      })
-      .catch(() => {
-        // Keep previous mention snapshot on fetch failures.
-      });
-  }, [canAccessWorkspace, selectedChannelId, dispatch]);
+    const refreshNotifications = () => {
+      void fetchNotificationSummary()
+        .then((summary) => dispatch({ type: "SET_NOTIFICATIONS", payload: summary }))
+        .catch(() => {
+          // Ignore transient fetch failures
+        });
+    };
+
+    refreshNotifications();
+    const timer = setInterval(refreshNotifications, 15000);
+    return () => clearInterval(timer);
+  }, [canAccessWorkspace, dispatch]);
 
   useEffect(() => {
     dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: 0 });
@@ -717,7 +719,28 @@ export function ChatClient() {
       dispatch({ type: "SET_REALTIME_STATE", payload: "polling" });
       pollInterval = setInterval(() => {
         void listMessages(selectedChannelId)
-          .then((next) => dispatch({ type: "SET_MESSAGES", payload: next.map((message) => ({ ...message })) }))
+          .then((next) => {
+            dispatch({
+              type: "UPDATE_MESSAGES",
+              payload: (current) => {
+                const map = new Map<string, MessageItem>();
+                // Keep all current sending/failed messages
+                current.forEach(m => {
+                  if (m.clientState === "sending" || m.clientState === "failed") {
+                    map.set(m.id, m);
+                  }
+                });
+                // Add all server messages, letting them overwrite if ID matches
+                // (Server messages won't have clientState so they'll overwrite "sending" if ID is same,
+                // but usually tmp IDs are different).
+                next.forEach(m => map.set(m.id, m));
+                
+                return Array.from(map.values()).sort((a, b) => 
+                  new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                );
+              }
+            });
+          })
           .catch(() => {
             // Keep previous messages on transient polling failures.
           });
@@ -758,6 +781,10 @@ export function ChatClient() {
             return [...current, message];
           }
         });
+        // If we are already at the bottom of the channel where message was received
+        if (state.selectedChannelId === message.channelId && state.isNearBottom) {
+          void markChannelAsRead(message.channelId);
+        }
       }
     });
 
@@ -881,10 +908,25 @@ export function ChatClient() {
       const next = await listMessages(channelId);
       dispatch({ type: "SET_MESSAGES", payload: next.map((message) => ({ ...message })) });
       setUrlSelection(selectedServerId, channelId);
+      
+      // Auto-clear if we are (presumably) at the bottom or latest messages loaded
+      // We'll also rely on the scroll event but doing it here handles the initial load
+      void markChannelAsRead(channelId);
     } catch (cause) {
       dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to load messages." });
     }
   }
+
+  const markChannelAsRead = useCallback(async (channelId: string) => {
+    if (!channelId) return;
+    // Immediate UI update
+    dispatch({ type: "CLEAR_NOTIFICATIONS", payload: { channelId } });
+    try {
+      await upsertChannelReadState(channelId, new Date().toISOString());
+    } catch (e) {
+      // Ignore transient errors
+    }
+  }, [dispatch]);
 
   function handleMessageListScroll(event?: React.UIEvent<HTMLOListElement>): void {
     const list = messagesRef.current;
@@ -897,6 +939,9 @@ export function ChatClient() {
     dispatch({ type: "SET_NEAR_BOTTOM", payload: nearBottom });
     if (nearBottom) {
       dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: 0 });
+      if (selectedChannelId) {
+        void markChannelAsRead(selectedChannelId);
+      }
     }
   }
 
@@ -1384,10 +1429,13 @@ export function ChatClient() {
     };
 
     dispatch({
-      type: "SET_MESSAGES",
-      payload: messages.some((item) => item.id === existingMessageId)
-        ? messages.map((item) => (item.id === existingMessageId ? optimisticMessage : item))
-        : [...messages, optimisticMessage]
+      type: "UPDATE_MESSAGES",
+      payload: (current) => {
+        if (current.some((item) => item.id === tempId)) {
+          return current.map((item) => (item.id === tempId ? optimisticMessage : item));
+        }
+        return [...current, optimisticMessage];
+      }
     });
 
     dispatch({ type: "SET_SENDING", payload: true });
@@ -1395,20 +1443,29 @@ export function ChatClient() {
     try {
       const persisted = await sendMessage(selectedChannelId, content.trim());
       dispatch({
-        type: "SET_MESSAGES",
-        payload: state.messages.map((item) => (item.id === tempId ? persisted : item))
+        type: "UPDATE_MESSAGES",
+        payload: (current) => {
+          // Check if message was already added by streamer
+          if (current.some(m => m.id === persisted.id)) {
+            // Remove the temporary message if it still exists
+            return current.filter(m => m.id !== tempId);
+          }
+          // Replace temp with persisted
+          return current.map((item) => (item.id === tempId ? persisted : item));
+        }
       });
     } catch (cause) {
       dispatch({
-        type: "SET_MESSAGES",
-        payload: state.messages.map((item) =>
-          item.id === tempId
-            ? {
-              ...item,
-              clientState: "failed"
-            }
-            : item
-        )
+        type: "UPDATE_MESSAGES",
+        payload: (current) => 
+          current.map((item) =>
+            item.id === tempId
+              ? {
+                ...item,
+                clientState: "failed"
+              }
+              : item
+          )
       });
       dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Message send failed." });
     } finally {

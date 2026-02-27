@@ -16,6 +16,9 @@ interface IdentityRow {
   matrix_user_id: string | null;
   product_user_id: string;
   theme: "light" | "dark" | null;
+  access_token: string | null;
+  refresh_token: string | null;
+  token_expires_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +34,9 @@ function mapRow(result: IdentityRow): IdentityMapping {
     matrixUserId: result.matrix_user_id,
     productUserId: result.product_user_id,
     theme: result.theme as "light" | "dark" | null,
+    accessToken: result.access_token,
+    refreshToken: result.refresh_token,
+    tokenExpiresAt: result.token_expires_at,
     createdAt: result.created_at,
     updatedAt: result.updated_at
   };
@@ -43,17 +49,23 @@ export async function upsertIdentityMapping(input: {
   preferredUsername: string | null;
   avatarUrl: string | null;
   productUserId?: string;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  tokenExpiresAt?: string | null;
 }): Promise<IdentityMapping> {
   return withDb(async (db) => {
     const row = await db.query<IdentityRow>(
       `insert into identity_mappings
-       (id, provider, oidc_subject, email, preferred_username, avatar_url, matrix_user_id, product_user_id)
-       values ($1,$2,$3,$4,$5,$6,$7,$8)
+       (id, provider, oidc_subject, email, preferred_username, avatar_url, matrix_user_id, product_user_id, access_token, refresh_token, token_expires_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        on conflict (provider, oidc_subject)
        do update set
          email = excluded.email,
          preferred_username = coalesce(identity_mappings.preferred_username, excluded.preferred_username),
          avatar_url = excluded.avatar_url,
+         access_token = excluded.access_token,
+         refresh_token = excluded.refresh_token,
+         token_expires_at = excluded.token_expires_at,
          updated_at = now()
        returning *`,
       [
@@ -64,7 +76,10 @@ export async function upsertIdentityMapping(input: {
         input.preferredUsername,
         input.avatarUrl,
         null,
-        input.productUserId ?? randomId("usr")
+        input.productUserId ?? randomId("usr"),
+        input.accessToken ?? null,
+        input.refreshToken ?? null,
+        input.tokenExpiresAt ?? null
       ]
     );
 

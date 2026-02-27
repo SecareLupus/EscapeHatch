@@ -349,5 +349,8 @@ export async function initDb(): Promise<void> {
     alter table channels add column if not exists allowed_role_ids text[] not null default '{}';
     alter table hubs add column if not exists allow_space_discord_bridge boolean not null default true;
     alter table hubs add column if not exists s3_config jsonb;
+    alter table identity_mappings add column if not exists access_token text;
+    alter table identity_mappings add column if not exists refresh_token text;
+    alter table identity_mappings add column if not exists token_expires_at timestamptz;
   `);
 }
