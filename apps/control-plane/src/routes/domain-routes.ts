@@ -73,8 +73,6 @@ import {
   upsertHubFederationPolicy
 } from "../services/federation-service.js";
 import {
-  completeDiscordOauthAndListGuilds,
-  consumeDiscordOauthState,
   createDiscordConnectUrl,
   deleteDiscordChannelMapping,
   getDiscordBridgeConnection,
@@ -1217,28 +1215,6 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       returnTo: query.returnTo
     });
     reply.redirect(url, 302);
-  });
-
-  app.get("/v1/discord/oauth/callback", initializedAuthHandlers, async (request, reply) => {
-    const query = z.object({ code: z.string(), state: z.string(), guild_id: z.string().optional() }).parse(request.query);
-    const state = consumeDiscordOauthState(query.state);
-    if (!state || state.productUserId !== request.auth!.productUserId) {
-      reply.code(400).send({ message: "Invalid Discord bridge OAuth state." });
-      return;
-    }
-
-    const completed = await completeDiscordOauthAndListGuilds({
-      serverId: state.serverId,
-      productUserId: request.auth!.productUserId,
-      code: query.code,
-      guildId: query.guild_id
-    });
-    const redirect = new URL(state.returnTo || "/", config.webBaseUrl);
-    redirect.searchParams.set("discordPendingSelection", completed.pendingSelectionId);
-    if (completed.selectedGuildId) {
-      redirect.searchParams.set("discordGuildId", completed.selectedGuildId);
-    }
-    reply.redirect(redirect.toString(), 302);
   });
 
   app.get("/v1/discord/bridge/pending/:pendingSelectionId", initializedAuthHandlers, async (request, reply) => {

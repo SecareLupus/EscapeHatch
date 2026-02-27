@@ -17,6 +17,10 @@ import { requireAuth } from "../auth/middleware.js";
 import type { AccountLinkingRequirement, IdentityProvider } from "@escapehatch/shared";
 import { config } from "../config.js";
 import { bootstrapAdmin, getBootstrapStatus } from "../services/bootstrap-service.js";
+import { 
+  completeDiscordOauthAndListGuilds, 
+  consumeDiscordOauthState 
+} from "../services/discord-bridge-service.js";
 
 const providerSchema = z.enum(["discord", "keycloak", "google", "github", "twitch", "dev"]);
 
@@ -190,14 +194,52 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     });
     reply.redirect(redirect, 302);
   });
-
   app.get("/auth/callback/:provider", async (request, reply) => {
     const { provider } = z.object({ provider: providerSchema }).parse(request.params);
     if (provider === "dev") {
       reply.code(400).send({ message: "Developer auth does not use callback endpoints." });
       return;
     }
-    const query = z.object({ code: z.string(), state: z.string() }).parse(request.query);
+
+    const query = z.object({ 
+      code: z.string(), 
+      state: z.string(),
+      guild_id: z.string().optional()
+    }).parse(request.query);
+
+    // Dispatch to Discord Bridge if state matches our bridge prefix
+    if (provider === "discord" && query.state.startsWith("dboauth_")) {
+      const state = consumeDiscordOauthState(query.state);
+      if (!state) {
+        reply.code(400).send({ message: "Invalid Discord bridge OAuth state." });
+        return;
+      }
+
+      // Bridge setup requires authentication
+      await requireAuth(request, reply);
+      if (reply.sent) return;
+
+      if (state.productUserId !== request.auth!.productUserId) {
+        reply.code(403).send({ message: "Discord bridge OAuth state mismatch." });
+        return;
+      }
+
+      const completed = await completeDiscordOauthAndListGuilds({
+        serverId: state.serverId,
+        productUserId: request.auth!.productUserId,
+        code: query.code,
+        guildId: query.guild_id
+      });
+
+      const redirect = new URL(state.returnTo || "/", config.webBaseUrl);
+      redirect.searchParams.set("discordPendingSelection", completed.pendingSelectionId);
+      if (completed.selectedGuildId) {
+        redirect.searchParams.set("discordGuildId", completed.selectedGuildId);
+      }
+      reply.redirect(redirect.toString(), 302);
+      return;
+    }
+
     const exchanged = await exchangeAuthorizationCode(query);
     const profile = exchanged.profile;
 

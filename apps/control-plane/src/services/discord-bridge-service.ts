@@ -132,7 +132,7 @@ export function createDiscordConnectUrl(input: { serverId: string; productUserId
     client_id: config.discordBridge.clientId ?? "",
     redirect_uri: config.discordBridge.callbackUrl,
     response_type: "code",
-    scope: "identify guilds bot",
+    scope: "identify guilds bot applications.commands",
     permissions: "536873984", // Read Messages, Send Messages, Manage Webhooks
     state
   });
