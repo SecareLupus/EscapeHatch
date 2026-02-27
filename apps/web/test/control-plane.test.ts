@@ -23,7 +23,7 @@ test("providerLinkUrl builds OAuth linking route", () => {
 test("discordBridgeStartUrl builds bridge OAuth route", () => {
   assert.equal(
     discordBridgeStartUrl("hub_123"),
-    "http://localhost:4000/v1/discord/oauth/start?hubId=hub_123"
+    "http://localhost:4000/v1/discord/oauth/start?serverId=hub_123"
   );
 });
 

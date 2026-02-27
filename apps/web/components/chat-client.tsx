@@ -632,22 +632,6 @@ export function ChatClient() {
     dispatch({ type: "SET_SELECTED_CATEGORY_FOR_CREATE", payload: selected.id });
   }, [categories, renameCategoryId, dispatch]);
 
-  useEffect(() => {
-    if (!selectedChannelId) {
-      return;
-    }
-
-    const newest = messages[messages.length - 1];
-    if (!newest) {
-      return;
-    }
-
-    dispatch({ type: "SET_LAST_READ", payload: { channelId: selectedChannelId, lastSeenId: newest.createdAt } });
-
-    void upsertChannelReadState(selectedChannelId, newest.createdAt).catch(() => {
-      // Ignore transient read-state sync errors.
-    });
-  }, [messages, selectedChannelId]);
 
   useEffect(() => {
     if (!voiceConnected || !selectedServerId || !selectedChannelId || activeChannel?.type !== "voice") {
@@ -922,7 +906,7 @@ export function ChatClient() {
     // Immediate UI update
     dispatch({ type: "CLEAR_NOTIFICATIONS", payload: { channelId } });
     try {
-      await upsertChannelReadState(channelId, new Date().toISOString());
+      await upsertChannelReadState(channelId);
     } catch (e) {
       // Ignore transient errors
     }

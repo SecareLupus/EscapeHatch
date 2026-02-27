@@ -8,7 +8,8 @@
     "start": "npx dotenv-cli -e ../../.env -- next start",
     "lint": "next lint",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "test": "npx dotenv-cli -e ../../.env -- tsx --test test/*.test.ts"
+    "test": "npx dotenv-cli -e ../../.env -- tsx --test test/*.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@escapehatch/shared": "workspace:*",
@@ -20,6 +21,7 @@
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

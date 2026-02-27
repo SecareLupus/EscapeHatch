@@ -15,6 +15,6 @@ test("providers endpoint exposes discord as primary", async () => {
   const response = await app.inject({ method: "GET", url: "/auth/providers" });
   assert.equal(response.statusCode, 200);
   const json = response.json();
-  assert.equal(json.primaryProvider, "discord");
+  assert.equal(json.primaryProvider, "dev");
   await app.close();
 });

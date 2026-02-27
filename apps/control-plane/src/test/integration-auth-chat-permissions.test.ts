@@ -7,6 +7,8 @@ import { initDb, pool } from "../db/client.js";
 import { getIdentityByProviderSubject, upsertIdentityMapping } from "../services/identity-service.js";
 import { isFederationHostAllowed } from "../services/federation-service.js";
 
+config.discordBridge.mockMode = true;
+
 async function resetDb(): Promise<void> {
   if (!pool) {
     return;
@@ -502,7 +504,7 @@ test("federation + discord bridge + video controls admin workflow", async (t) =>
 
     const oauthCallback = await app.inject({
       method: "GET",
-      url: `/v1/discord/oauth/callback?code=mock-code&state=${encodeURIComponent(state!)}`,
+      url: `/auth/callback/discord?code=mock-code&state=${encodeURIComponent(state!)}`,
       headers: { cookie: adminCookie }
     });
     assert.equal(oauthCallback.statusCode, 302);

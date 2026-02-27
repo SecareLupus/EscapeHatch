@@ -18,6 +18,9 @@ async function resetDb(): Promise<void> {
     await pool.query("delete from servers");
     await pool.query("delete from hubs");
     await pool.query("delete from identity_mappings");
+    await pool.query(
+      "update platform_settings set bootstrap_completed_at = null, bootstrap_admin_user_id = null, bootstrap_hub_id = null, default_server_id = null, default_channel_id = null where id = 'global'"
+    );
     await pool.query("commit");
   } catch (error) {
     await pool.query("rollback");
@@ -130,13 +133,9 @@ test("notifications summary returns unread counts and mentions", async (t) => {
 
     // 8. Member reads the channel
     await app.inject({
-      method: "POST",
-      url: "/v1/read-state",
-      headers: { cookie: memberCookie },
-      payload: {
-        channelId: defaultChannelId,
-        at: new Date().toISOString()
-      }
+      method: "PUT",
+      url: `/v1/channels/${defaultChannelId}/read-state`,
+      headers: { cookie: memberCookie }
     });
 
     // 9. Notifications should be clear

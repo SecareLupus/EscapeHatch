@@ -174,6 +174,7 @@ export async function createMessage(input: {
   isRelay?: boolean;
 }): Promise<ChatMessage> {
   return withDb(async (db) => {
+    try {
     const identity = await db.query<{ preferred_username: string | null; email: string | null }>(
       `select preferred_username, email
        from identity_mappings
@@ -272,8 +273,11 @@ export async function createMessage(input: {
         );
       }
     }
-
     return message;
+    } catch (e) {
+      console.error("CREATE_MESSAGE_ERROR", e);
+      throw e;
+    }
   });
 }
 
