@@ -57,6 +57,10 @@ import {
   updateUserTheme,
   updateVoicePresenceState,
   controlPlaneBaseUrl,
+  createDMChannel,
+  blockUser,
+  unblockUser,
+  listBlocks,
   type AuthProvidersResponse,
   type BootstrapStatus,
   type ViewerRoleBinding,
@@ -138,6 +142,7 @@ export function ChatClient() {
   } = state;
 
   const [mentions, setMentions] = useState<MentionMarker[]>([]);
+  const { blockedUserIds } = state;
 
   const filteredChannels = useMemo(() => {
     const term = channelFilter.trim().toLowerCase();
@@ -336,6 +341,10 @@ export function ChatClient() {
         }
       })
       .catch(() => dispatch({ type: "SET_HUBS", payload: [] }));
+
+    void listBlocks()
+      .then((items) => dispatch({ type: "SET_BLOCKED_USER_IDS", payload: items }))
+      .catch(() => dispatch({ type: "SET_BLOCKED_USER_IDS", payload: [] }));
   }, [dispatch]);
 
   const handleUserContextMenu = (event: React.MouseEvent, member: { id: string, displayName: string }) => {
@@ -360,20 +369,38 @@ export function ChatClient() {
       {
         label: "Direct Message",
         icon: "💬",
-        onClick: () => {
-          // TODO: Implement DM creation
-          console.log("DM user", userContextMenu.userId);
+        onClick: async () => {
+          if (!selectedHubIdForCreate) return;
+          try {
+            const channel = await createDMChannel(selectedHubIdForCreate, [userContextMenu.userId]);
+            setUrlSelection(channel.serverId, channel.id);
+            void refreshChatState(channel.serverId, channel.id);
+          } catch (e) {
+            showToast("Failed to create DM channel", "error");
+          }
         }
       }
     ];
 
     if (!isSelf) {
+      const isBlocked = blockedUserIds.includes(userContextMenu.userId);
       items.push({
-        label: "Ignore / Block",
-        icon: "🚫",
-        onClick: () => {
-          // TODO: Implement block list
-          console.log("Block user", userContextMenu.userId);
+        label: isBlocked ? "Unblock User" : "Ignore / Block",
+        icon: isBlocked ? "✅" : "🚫",
+        onClick: async () => {
+          try {
+            if (isBlocked) {
+              await unblockUser(userContextMenu.userId);
+              dispatch({ type: "UNBLOCK_USER", payload: userContextMenu.userId });
+              showToast("User unblocked", "success");
+            } else {
+              await blockUser(userContextMenu.userId);
+              dispatch({ type: "BLOCK_USER", payload: userContextMenu.userId });
+              showToast("User blocked", "success");
+            }
+          } catch (e) {
+            showToast("Failed to update block status", "error");
+          }
         }
       });
     }

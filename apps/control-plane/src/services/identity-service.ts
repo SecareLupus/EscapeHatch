@@ -303,3 +303,42 @@ export async function updateUserProfile(productUserId: string, input: {
     );
   });
 }
+export async function blockUser(blockerUserId: string, blockedUserId: string): Promise<void> {
+  await withDb(async (db) => {
+    await db.query(
+      `insert into user_blocks (blocker_user_id, blocked_user_id)
+       values ($1, $2)
+       on conflict (blocker_user_id, blocked_user_id) do nothing`,
+      [blockerUserId, blockedUserId]
+    );
+  });
+}
+
+export async function unblockUser(blockerUserId: string, blockedUserId: string): Promise<void> {
+  await withDb(async (db) => {
+    await db.query(
+      "delete from user_blocks where blocker_user_id = $1 and blocked_user_id = $2",
+      [blockerUserId, blockedUserId]
+    );
+  });
+}
+
+export async function listBlocks(blockerUserId: string): Promise<string[]> {
+  return withDb(async (db) => {
+    const rows = await db.query<{ blocked_user_id: string }>(
+      "select blocked_user_id from user_blocks where blocker_user_id = $1",
+      [blockerUserId]
+    );
+    return rows.rows.map((r) => r.blocked_user_id);
+  });
+}
+
+export async function isBlocked(blockerUserId: string, blockedUserId: string): Promise<boolean> {
+  return withDb(async (db) => {
+    const row = await db.query<{ exists: boolean }>(
+      "select exists(select 1 from user_blocks where blocker_user_id = $1 and blocked_user_id = $2)",
+      [blockerUserId, blockedUserId]
+    );
+    return Boolean(row.rows[0]?.exists);
+  });
+}

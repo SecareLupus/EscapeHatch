@@ -29,6 +29,7 @@ import {
   deleteChannel,
   deleteCategory,
   deleteServer,
+  getOrCreateDMChannel,
   listCategories,
   listChannels,
   listMessages,
@@ -276,7 +277,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     });
     return result;
   });
-  
+
   app.get("/v1/hubs/:hubId/settings", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
     const allowed = await canManageHub({
@@ -343,7 +344,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
   app.get("/v1/servers/:serverId/channels", initializedAuthHandlers, async (request) => {
     const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
-    return { items: await listChannels(params.serverId) };
+    return { items: await listChannels(params.serverId, request.auth!.productUserId) };
   });
 
   app.get("/v1/servers/:serverId/categories", initializedAuthHandlers, async (request) => {
@@ -447,7 +448,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       items: await listMessages({
         channelId: params.channelId,
         before: query.before,
-        limit: query.limit
+        limit: query.limit,
+        viewerUserId: request.auth!.productUserId
       })
     };
   });
@@ -506,6 +508,18 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
     reply.code(201);
     return message;
+  });
+
+  app.post("/v1/hubs/:hubId/dms", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({
+      userIds: z.array(z.string().min(1)).min(1).max(10)
+    }).parse(request.body);
+
+    const userIds = [...new Set([request.auth!.productUserId, ...payload.userIds])];
+    const channel = await getOrCreateDMChannel(params.hubId, userIds);
+    reply.code(201);
+    return channel;
   });
 
   app.post("/v1/categories", initializedAuthHandlers, async (request, reply) => {
@@ -1412,10 +1426,10 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       serverId: payload.serverId
     });
 
-    if (!allowed && !(await listRoleBindings({ productUserId: request.auth!.productUserId })).length) { 
-       // Basic fallback check: must have some role in the setup or be server manager
-       reply.code(403).send({ message: "Forbidden: Not part of any hubs or servers." });
-       return;
+    if (!allowed && !(await listRoleBindings({ productUserId: request.auth!.productUserId })).length) {
+      // Basic fallback check: must have some role in the setup or be server manager
+      reply.code(403).send({ message: "Forbidden: Not part of any hubs or servers." });
+      return;
     }
 
     const result = await uploadMedia(payload);

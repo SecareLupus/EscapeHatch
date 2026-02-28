@@ -71,6 +71,7 @@ export async function listServers(): Promise<Server[]> {
       id: string;
       hub_id: string;
       name: string;
+      type: "default" | "dm";
       matrix_space_id: string | null;
       created_by_user_id: string;
       owner_user_id: string;
@@ -81,6 +82,7 @@ export async function listServers(): Promise<Server[]> {
       id: row.id,
       hubId: row.hub_id,
       name: row.name,
+      type: row.type || "default",
       matrixSpaceId: row.matrix_space_id,
       createdByUserId: row.created_by_user_id,
       ownerUserId: row.owner_user_id,
@@ -89,8 +91,23 @@ export async function listServers(): Promise<Server[]> {
   });
 }
 
-export async function listChannels(serverId: string): Promise<Channel[]> {
+export async function listChannels(serverId: string, productUserId?: string): Promise<Channel[]> {
   return withDb(async (db) => {
+    const srvRow = await db.query<{ type: string }>("select type from servers where id = $1", [serverId]);
+    const isDmServer = srvRow.rows[0]?.type === 'dm';
+
+    if (isDmServer && productUserId) {
+      const rows = await db.query<ChannelRow>(
+        `select ch.*
+         from channels ch
+         join channel_members cm on cm.channel_id = ch.id
+         where ch.server_id = $1 and cm.product_user_id = $2
+         order by ch.position asc, ch.created_at asc`,
+        [serverId, productUserId]
+      );
+      return rows.rows.map(mapChannel);
+    }
+
     const rows = await db.query<ChannelRow>(
       "select * from channels where server_id = $1 order by position asc, created_at asc",
       [serverId]
@@ -113,33 +130,27 @@ export async function listMessages(input: {
   channelId: string;
   limit: number;
   before?: string;
+  viewerUserId?: string;
 }): Promise<ChatMessage[]> {
   return withDb(async (db) => {
-    if (input.before) {
-      const rows = await db.query<{
-        id: string;
-        channel_id: string;
-        author_user_id: string;
-        author_display_name: string;
-        content: string;
-        created_at: string;
-      }>(
-        `select * from chat_messages
-         where channel_id = $1 and created_at < $2::timestamptz
-         order by created_at desc
-         limit $3`,
-        [input.channelId, input.before, input.limit]
-      );
+    let query = `
+      select * from chat_messages
+      where channel_id = $1
+    `;
+    const params: any[] = [input.channelId];
 
-      return rows.rows.reverse().map((row) => ({
-        id: row.id,
-        channelId: row.channel_id,
-        authorUserId: row.author_user_id,
-        authorDisplayName: row.author_display_name,
-        content: row.content,
-        createdAt: row.created_at
-      }));
+    if (input.viewerUserId) {
+      query += ` and author_user_id not in (select blocked_user_id from user_blocks where blocker_user_id = $2)`;
+      params.push(input.viewerUserId);
     }
+
+    if (input.before) {
+      query += ` and created_at < $${params.length + 1}::timestamptz`;
+      params.push(input.before);
+    }
+
+    query += ` order by created_at desc limit $${params.length + 1}`;
+    params.push(input.limit);
 
     const rows = await db.query<{
       id: string;
@@ -148,13 +159,7 @@ export async function listMessages(input: {
       author_display_name: string;
       content: string;
       created_at: string;
-    }>(
-      `select * from chat_messages
-       where channel_id = $1
-       order by created_at desc
-       limit $2`,
-      [input.channelId, input.limit]
-    );
+    }>(query, params);
 
     return rows.rows.reverse().map((row) => ({
       id: row.id,
@@ -278,6 +283,58 @@ export async function createMessage(input: {
       console.error("CREATE_MESSAGE_ERROR", e);
       throw e;
     }
+  });
+}
+
+export async function getOrCreateDMChannel(hubId: string, productUserIds: string[]): Promise<Channel> {
+  return withDb(async (db) => {
+    const dmSrvRow = await db.query<{ id: string }>(
+      "select id from servers where hub_id = $1 and type = 'dm' limit 1",
+      [hubId]
+    );
+    let dmServerId = dmSrvRow.rows[0]?.id;
+
+    if (!dmServerId) {
+      dmServerId = `srv_${crypto.randomUUID().replaceAll("-", "")}`;
+      await db.query(
+        "insert into servers (id, hub_id, name, type, created_by_user_id, owner_user_id) values ($1, $2, $3, $4, $5, $6)",
+        [dmServerId, hubId, "Direct Messages", "dm", productUserIds[0], productUserIds[0]]
+      );
+    }
+
+    const sortedUserIds = [...new Set(productUserIds)].sort();
+    const existingRow = await db.query<{ id: string }>(
+      `select ch.id
+       from channels ch
+       join channel_members cm on cm.channel_id = ch.id
+       where ch.server_id = $1 and ch.type = 'dm'
+       group by ch.id
+       having count(cm.product_user_id) = $2
+          and array_agg(cm.product_user_id order by cm.product_user_id) = $3::text[]`,
+      [dmServerId, sortedUserIds.length, sortedUserIds]
+    );
+
+    if (existingRow.rows[0]) {
+      const chRow = await db.query<ChannelRow>("select * from channels where id = $1", [existingRow.rows[0].id]);
+      return mapChannel(chRow.rows[0]!);
+    }
+
+    const channelId = `chn_${crypto.randomUUID().replaceAll("-", "")}`;
+    const name = `DM: ${sortedUserIds.length} members`;
+    await db.query(
+      "insert into channels (id, server_id, name, type) values ($1, $2, $3, 'dm')",
+      [channelId, dmServerId, name]
+    );
+
+    for (const userId of sortedUserIds) {
+      await db.query(
+        "insert into channel_members (channel_id, product_user_id) values ($1, $2)",
+        [channelId, userId]
+      );
+    }
+
+    const chRow = await db.query<ChannelRow>("select * from channels where id = $1", [channelId]);
+    return mapChannel(chRow.rows[0]!);
   });
 }
 

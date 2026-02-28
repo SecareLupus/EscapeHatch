@@ -36,8 +36,15 @@ export function Sidebar({
         isAddMenuOpen,
         messages,
         lastReadByChannel,
-        mentionCountByChannel
+        mentionCountByChannel,
+        blockedUserIds
     } = state;
+
+    const sortedServers = useMemo(() => {
+        const dmServers = servers.filter(s => s.type === 'dm');
+        const defaultServers = servers.filter(s => s.type !== 'dm');
+        return [...defaultServers, ...dmServers];
+    }, [servers]);
 
     const canManageHub = useMemo(
         () => viewerRoles.some((binding) => binding.role === "hub_admin" && (binding.serverId === null || binding.serverId === "" || !binding.serverId)),
@@ -119,7 +126,7 @@ export function Sidebar({
                     </div>
 
                     <ul>
-                        {servers.map((server) => (
+                        {sortedServers.map((server) => (
                             <li key={server.id}>
                                 <div className="list-item-container">
                                     <button
@@ -140,7 +147,7 @@ export function Sidebar({
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                                             <span className="server-icon-placeholder">
-                                                {server.name.charAt(0).toUpperCase()}
+                                                {server.type === 'dm' ? '👤' : server.name.charAt(0).toUpperCase()}
                                             </span>
                                             {server.name}
                                         </div>

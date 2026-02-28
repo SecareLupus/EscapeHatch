@@ -12,7 +12,10 @@ import {
   setPreferredUsernameForProductUser,
   upsertIdentityMapping,
   updateUserTheme,
-  updateUserProfile
+  updateUserProfile,
+  blockUser,
+  unblockUser,
+  listBlocks
 } from "../services/identity-service.js";
 import { requireAuth } from "../auth/middleware.js";
 import type { AccountLinkingRequirement, IdentityProvider } from "@escapehatch/shared";
@@ -379,6 +382,23 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }).parse(request.body);
 
     await updateUserProfile(request.auth!.productUserId, payload);
+    reply.code(204).send();
+  });
+
+  app.get("/auth/blocks", { preHandler: requireAuth }, async (request) => {
+    const blockedUserIds = await listBlocks(request.auth!.productUserId);
+    return { items: blockedUserIds };
+  });
+
+  app.post("/auth/blocks", { preHandler: requireAuth }, async (request, reply) => {
+    const { userId } = z.object({ userId: z.string().min(1) }).parse(request.body);
+    await blockUser(request.auth!.productUserId, userId);
+    reply.code(204).send();
+  });
+
+  app.delete("/auth/blocks/:userId", { preHandler: requireAuth }, async (request, reply) => {
+    const { userId } = z.object({ userId: z.string().min(1) }).parse(request.params);
+    await unblockUser(request.auth!.productUserId, userId);
     reply.code(204).send();
   });
 

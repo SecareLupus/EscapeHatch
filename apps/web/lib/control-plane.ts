@@ -936,3 +936,29 @@ export async function fetchNotificationSummary(): Promise<Record<string, { unrea
   const json = await apiFetch<{ summary: Record<string, { unreadCount: number; mentionCount: number; isMuted: boolean }> }>("/v1/me/notifications");
   return json.summary;
 }
+export async function createDMChannel(hubId: string, userIds: string[]): Promise<Channel> {
+  return apiFetch<Channel>(`/v1/hubs/${encodeURIComponent(hubId)}/dms`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userIds })
+  });
+}
+
+export async function blockUser(userId: string): Promise<void> {
+  await apiFetch("/auth/blocks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId })
+  });
+}
+
+export async function unblockUser(userId: string): Promise<void> {
+  await apiFetch(`/auth/blocks/${encodeURIComponent(userId)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function listBlocks(): Promise<string[]> {
+  const json = await apiFetch<{ items: string[] }>("/auth/blocks");
+  return json.items;
+}

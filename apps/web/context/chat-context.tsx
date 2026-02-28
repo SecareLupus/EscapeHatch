@@ -99,6 +99,7 @@ export interface ChatState {
     channelScrollPositions: Record<string, number>;
     draftMessagesByChannel: Record<string, string>;
     profileUserId: string | null;
+    blockedUserIds: string[];
 }
 
 type ChatAction =
@@ -157,7 +158,10 @@ type ChatAction =
     | { type: "CLEAR_NOTIFICATIONS"; payload: { channelId: string } }
     | { type: "SET_CHANNEL_SCROLL_POSITION"; payload: { channelId: string; position: number } }
     | { type: "SET_CHANNEL_DRAFT"; payload: { channelId: string; draft: string } }
-    | { type: "SET_PROFILE_USER_ID"; payload: string | null };
+    | { type: "SET_PROFILE_USER_ID"; payload: string | null }
+    | { type: "SET_BLOCKED_USER_IDS"; payload: string[] }
+    | { type: "BLOCK_USER"; payload: string }
+    | { type: "UNBLOCK_USER"; payload: string };
 
 const initialState: ChatState = {
     viewer: null,
@@ -218,7 +222,8 @@ const initialState: ChatState = {
     updatingControls: false,
     channelScrollPositions: {},
     draftMessagesByChannel: {},
-    profileUserId: null
+    profileUserId: null,
+    blockedUserIds: []
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -384,6 +389,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             };
         case "SET_PROFILE_USER_ID":
             return { ...state, profileUserId: action.payload };
+        case "SET_BLOCKED_USER_IDS":
+            return { ...state, blockedUserIds: action.payload };
+        case "BLOCK_USER":
+            return { ...state, blockedUserIds: [...new Set([...state.blockedUserIds, action.payload])] };
+        case "UNBLOCK_USER":
+            return { ...state, blockedUserIds: state.blockedUserIds.filter(id => id !== action.payload) };
         default:
             return state;
     }
