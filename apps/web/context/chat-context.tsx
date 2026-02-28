@@ -59,6 +59,7 @@ export interface ChatState {
     lastReadByChannel: Record<string, string>;
     mentionCountByChannel: Record<string, number>;
     unreadCountByChannel: Record<string, number>;
+    muteStatusByChannel: Record<string, boolean>;
     channelFilter: string;
     // Rename/Delete states
     renameSpaceId: string;
@@ -150,7 +151,7 @@ type ChatAction =
     | { type: "SET_SAVING_ONBOARDING"; payload: boolean }
     | { type: "SET_SENDING"; payload: boolean }
     | { type: "SET_UPDATING_CONTROLS"; payload: boolean }
-    | { type: "SET_NOTIFICATIONS"; payload: Record<string, { unreadCount: number; mentionCount: number }> }
+    | { type: "SET_NOTIFICATIONS"; payload: Record<string, { unreadCount: number; mentionCount: number; isMuted: boolean }> }
     | { type: "CLEAR_NOTIFICATIONS"; payload: { channelId: string } }
     | { type: "SET_CHANNEL_SCROLL_POSITION"; payload: { channelId: string; position: number } }
     | { type: "SET_CHANNEL_DRAFT"; payload: { channelId: string; draft: string } };
@@ -180,6 +181,7 @@ const initialState: ChatState = {
     lastReadByChannel: {},
     mentionCountByChannel: {},
     unreadCountByChannel: {},
+    muteStatusByChannel: {},
     channelFilter: "",
     renameSpaceId: "",
     renameSpaceName: "",
@@ -298,14 +300,17 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         case "SET_NOTIFICATIONS": {
             const unreadCounts: Record<string, number> = {};
             const mentionCounts: Record<string, number> = {};
+            const muteStatuses: Record<string, boolean> = {};
             for (const [channelId, data] of Object.entries(action.payload)) {
                 unreadCounts[channelId] = data.unreadCount;
                 mentionCounts[channelId] = data.mentionCount;
+                muteStatuses[channelId] = data.isMuted;
             }
             return {
                 ...state,
                 unreadCountByChannel: unreadCounts,
-                mentionCountByChannel: mentionCounts
+                mentionCountByChannel: mentionCounts,
+                muteStatusByChannel: muteStatuses
             };
         }
         case "CLEAR_NOTIFICATIONS": {

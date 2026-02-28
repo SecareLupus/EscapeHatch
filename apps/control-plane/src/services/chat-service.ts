@@ -175,105 +175,105 @@ export async function createMessage(input: {
 }): Promise<ChatMessage> {
   return withDb(async (db) => {
     try {
-    const identity = await db.query<{ preferred_username: string | null; email: string | null }>(
-      `select preferred_username, email
+      const identity = await db.query<{ preferred_username: string | null; email: string | null }>(
+        `select preferred_username, email
        from identity_mappings
        where product_user_id = $1
        order by (preferred_username is not null) desc, updated_at desc, created_at asc
        limit 1`,
-      [input.actorUserId]
-    );
-
-    const profile = identity.rows[0];
-    const fallbackName = profile?.email?.split("@")[0] ?? `user-${input.actorUserId.slice(0, 8)}`;
-    const authorDisplayName = profile?.preferred_username ?? fallbackName;
-
-    // Outbound Discord Relay Logic
-    if (!input.isRelay) {
-      try {
-        const { listDiscordChannelMappings } = await import("./discord-bridge-service.js");
-        const { relayMatrixMessageToDiscord } = await import("./discord-bot-client.js");
-
-        // We need to find which server this channel belongs to
-        const channelRow = await db.query<{ server_id: string }>(
-          "select server_id from channels where id = $1 limit 1",
-          [input.channelId]
-        );
-        const serverId = channelRow.rows[0]?.server_id;
-
-        if (serverId) {
-          const mappings = await listDiscordChannelMappings(serverId);
-          const mappedChannels = mappings.filter(m => m.matrixChannelId === input.channelId && m.enabled);
-          for (const m of mappedChannels) {
-            await relayMatrixMessageToDiscord({
-              serverId,
-              discordChannelId: m.discordChannelId,
-              authorName: authorDisplayName,
-              content: input.content
-            });
-          }
-        }
-      } catch (error) {
-        // Don't block message creation if relay fails
-        console.error("Failed to relay message to Discord:", error);
-      }
-    }
-
-    const created = await db.query<{
-      id: string;
-      channel_id: string;
-      author_user_id: string;
-      author_display_name: string;
-      content: string;
-      created_at: string;
-    }>(
-      `insert into chat_messages (id, channel_id, author_user_id, author_display_name, content)
-       values ($1, $2, $3, $4, $5)
-       returning *`,
-      [`msg_${crypto.randomUUID().replaceAll("-", "")}`, input.channelId, input.actorUserId, authorDisplayName, input.content]
-    );
-
-    const row = created.rows[0];
-    if (!row) {
-      throw new Error("Message was not created.");
-    }
-
-    const message = {
-      id: row.id,
-      channelId: row.channel_id,
-      authorUserId: row.author_user_id,
-      authorDisplayName: row.author_display_name,
-      content: row.content,
-      createdAt: row.created_at
-    };
-
-    const mentionHandles = [...new Set((input.content.match(/@([a-zA-Z0-9._-]{3,40})/g) ?? []).map((token) => token.slice(1).toLowerCase()))];
-    if (mentionHandles.length > 0) {
-      const mentionRows = await db.query<{ product_user_id: string }>(
-        `select distinct product_user_id
-         from identity_mappings
-         where lower(preferred_username) = any($1::text[])`,
-        [mentionHandles]
+        [input.actorUserId]
       );
 
-      for (const mentioned of mentionRows.rows) {
-        if (!mentioned.product_user_id || mentioned.product_user_id === input.actorUserId) {
-          continue;
-        }
+      const profile = identity.rows[0];
+      const fallbackName = profile?.email?.split("@")[0] ?? `user-${input.actorUserId.slice(0, 8)}`;
+      const authorDisplayName = profile?.preferred_username ?? fallbackName;
 
-        await db.query(
-          `insert into mention_markers (id, channel_id, message_id, mentioned_user_id)
-           values ($1, $2, $3, $4)`,
-          [
-            `mm_${crypto.randomUUID().replaceAll("-", "")}`,
-            input.channelId,
-            message.id,
-            mentioned.product_user_id
-          ]
-        );
+      // Outbound Discord Relay Logic
+      if (!input.isRelay) {
+        try {
+          const { listDiscordChannelMappings } = await import("./discord-bridge-service.js");
+          const { relayMatrixMessageToDiscord } = await import("./discord-bot-client.js");
+
+          // We need to find which server this channel belongs to
+          const channelRow = await db.query<{ server_id: string }>(
+            "select server_id from channels where id = $1 limit 1",
+            [input.channelId]
+          );
+          const serverId = channelRow.rows[0]?.server_id;
+
+          if (serverId) {
+            const mappings = await listDiscordChannelMappings(serverId);
+            const mappedChannels = mappings.filter(m => m.matrixChannelId === input.channelId && m.enabled);
+            for (const m of mappedChannels) {
+              await relayMatrixMessageToDiscord({
+                serverId,
+                discordChannelId: m.discordChannelId,
+                authorName: authorDisplayName,
+                content: input.content
+              });
+            }
+          }
+        } catch (error) {
+          // Don't block message creation if relay fails
+          console.error("Failed to relay message to Discord:", error);
+        }
       }
-    }
-    return message;
+
+      const created = await db.query<{
+        id: string;
+        channel_id: string;
+        author_user_id: string;
+        author_display_name: string;
+        content: string;
+        created_at: string;
+      }>(
+        `insert into chat_messages (id, channel_id, author_user_id, author_display_name, content)
+       values ($1, $2, $3, $4, $5)
+       returning *`,
+        [`msg_${crypto.randomUUID().replaceAll("-", "")}`, input.channelId, input.actorUserId, authorDisplayName, input.content]
+      );
+
+      const row = created.rows[0];
+      if (!row) {
+        throw new Error("Message was not created.");
+      }
+
+      const message = {
+        id: row.id,
+        channelId: row.channel_id,
+        authorUserId: row.author_user_id,
+        authorDisplayName: row.author_display_name,
+        content: row.content,
+        createdAt: row.created_at
+      };
+
+      const mentionHandles = [...new Set((input.content.match(/@([a-zA-Z0-9._-]{3,40})/g) ?? []).map((token) => token.slice(1).toLowerCase()))];
+      if (mentionHandles.length > 0) {
+        const mentionRows = await db.query<{ product_user_id: string }>(
+          `select distinct product_user_id
+         from identity_mappings
+         where lower(preferred_username) = any($1::text[])`,
+          [mentionHandles]
+        );
+
+        for (const mentioned of mentionRows.rows) {
+          if (!mentioned.product_user_id || mentioned.product_user_id === input.actorUserId) {
+            continue;
+          }
+
+          await db.query(
+            `insert into mention_markers (id, channel_id, message_id, mentioned_user_id)
+           values ($1, $2, $3, $4)`,
+            [
+              `mm_${crypto.randomUUID().replaceAll("-", "")}`,
+              input.channelId,
+              message.id,
+              mentioned.product_user_id
+            ]
+          );
+        }
+      }
+      return message;
     } catch (e) {
       console.error("CREATE_MESSAGE_ERROR", e);
       throw e;
@@ -646,12 +646,13 @@ export async function getUnreadSummary(productUserId: string): Promise<Record<st
     // 1. Get unread message counts per channel
     // Joined with channel_read_states to compare message creation time with last read time.
     const messageCounts = await db.query<{ channel_id: string; unread_count: number }>(
-      `select ch.id as channel_id, count(msg.id) as unread_count
+      `select ch.id as channel_id, 
+              (case when coalesce(rs.is_muted, false) then 0 else count(msg.id) end) as unread_count
        from channels ch
        join chat_messages msg on msg.channel_id = ch.id
        left join channel_read_states rs on rs.channel_id = ch.id and rs.product_user_id = $1
-       where (rs.last_read_at is null or msg.created_at > rs.last_read_at)
-       group by ch.id`,
+       where msg.author_user_id != $1 and (rs.last_read_at is null or msg.created_at > rs.last_read_at)
+       group by ch.id, rs.is_muted`,
       [productUserId]
     );
 
@@ -667,18 +668,31 @@ export async function getUnreadSummary(productUserId: string): Promise<Record<st
       [productUserId]
     );
 
-    const summary: Record<string, { unreadCount: number; mentionCount: number }> = {};
+    const summary: Record<string, { unreadCount: number; mentionCount: number; isMuted: boolean }> = {};
+    const mutedStatusRows = await db.query<{ channel_id: string; is_muted: boolean }>(
+      "select channel_id, is_muted from channel_read_states where product_user_id = $1",
+      [productUserId]
+    );
+    const muteMap: Record<string, boolean> = {};
+    for (const row of mutedStatusRows.rows) {
+      muteMap[row.channel_id] = row.is_muted;
+    }
 
     for (const row of messageCounts.rows) {
       summary[row.channel_id] = {
         unreadCount: Number(row.unread_count),
-        mentionCount: 0
+        mentionCount: 0,
+        isMuted: muteMap[row.channel_id] ?? false
       };
     }
 
     for (const row of mentionCounts.rows) {
       if (!summary[row.channel_id]) {
-        summary[row.channel_id] = { unreadCount: 0, mentionCount: 0 };
+        summary[row.channel_id] = {
+          unreadCount: 0,
+          mentionCount: 0,
+          isMuted: muteMap[row.channel_id] ?? false
+        };
       }
       summary[row.channel_id]!.mentionCount = Number(row.mention_count);
     }

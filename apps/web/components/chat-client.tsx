@@ -1518,8 +1518,8 @@ export function ChatClient() {
 
     const content = draftMessage.trim();
     setDraftMessage("");
-    await sendContentWithOptimistic(content);
     messageInputRef.current?.focus();
+    await sendContentWithOptimistic(content);
   }
 
   async function handleSendMessage(event: React.FormEvent): Promise<void> {

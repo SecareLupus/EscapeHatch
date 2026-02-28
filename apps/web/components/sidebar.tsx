@@ -146,7 +146,7 @@ export function Sidebar({
                                         </div>
                                         {(() => {
                                             const hubMentionCount = channels
-                                                .filter(c => c.serverId === server.id)
+                                                .filter(c => c.serverId === server.id && !state.muteStatusByChannel[c.id])
                                                 .reduce((sum, c) => sum + (mentionCountByChannel[c.id] ?? 0), 0);
                                             return hubMentionCount > 0 ? (
                                                 <span className="mention-pill">@{hubMentionCount}</span>

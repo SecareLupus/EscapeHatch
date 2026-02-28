@@ -173,6 +173,7 @@ export async function initDb(): Promise<void> {
       product_user_id text not null,
       channel_id text not null references channels(id) on delete cascade,
       last_read_at timestamptz not null,
+      is_muted boolean not null default false,
       updated_at timestamptz not null default now(),
       primary key (product_user_id, channel_id)
     );
@@ -352,5 +353,6 @@ export async function initDb(): Promise<void> {
     alter table identity_mappings add column if not exists access_token text;
     alter table identity_mappings add column if not exists refresh_token text;
     alter table identity_mappings add column if not exists token_expires_at timestamptz;
+    alter table channel_read_states add column if not exists is_muted boolean not null default false;
   `);
 }

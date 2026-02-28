@@ -510,7 +510,7 @@ export function ChatWindow({
                         maxLength={2000}
                         placeholder={activeChannel ? `Message #${activeChannel.name}` : "Select a channel first"}
                         aria-label={activeChannel ? `Message #${activeChannel.name}` : "Message channel"}
-                        disabled={!activeChannel || sending || isUploading}
+                        disabled={!activeChannel || isUploading}
                     />
                     {showEmojiPicker && (
                         <div className="emoji-picker-container">

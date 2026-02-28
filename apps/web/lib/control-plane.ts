@@ -916,7 +916,7 @@ export async function updateUserSettings(settings: Record<string, any>): Promise
   });
 }
 
-export async function fetchNotificationSummary(): Promise<Record<string, { unreadCount: number; mentionCount: number }>> {
-  const json = await apiFetch<{ summary: Record<string, { unreadCount: number; mentionCount: number }> }>("/v1/me/notifications");
+export async function fetchNotificationSummary(): Promise<Record<string, { unreadCount: number; mentionCount: number; isMuted: boolean }>> {
+  const json = await apiFetch<{ summary: Record<string, { unreadCount: number; mentionCount: number; isMuted: boolean }> }>("/v1/me/notifications");
   return json.summary;
 }
