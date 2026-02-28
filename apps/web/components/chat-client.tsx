@@ -1566,11 +1566,7 @@ export function ChatClient() {
           >
             {theme === "light" ? "🌙" : "☀️"}
           </button>
-          {canManageCurrentSpace ? (
-            <Link href="/admin" className="ghost">
-              Admin Console
-            </Link>
-          ) : null}
+
           <Link href="/settings" className="icon-button" title="User Settings" aria-label="User Settings">
             ⚙️
           </Link>
