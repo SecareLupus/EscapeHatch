@@ -583,6 +583,7 @@ export async function renameServer(input: { serverId: string; name: string }): P
       hub_id: string;
       name: string;
       matrix_space_id: string | null;
+      type: "default" | "dm";
       created_by_user_id: string;
       owner_user_id: string;
       created_at: string;
@@ -603,6 +604,7 @@ export async function renameServer(input: { serverId: string; name: string }): P
       id: value.id,
       hubId: value.hub_id,
       name: value.name,
+      type: value.type,
       matrixSpaceId: value.matrix_space_id,
       createdByUserId: value.created_by_user_id,
       ownerUserId: value.owner_user_id,

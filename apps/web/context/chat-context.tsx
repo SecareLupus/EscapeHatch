@@ -4,6 +4,7 @@ import React, { createContext, useContext, useReducer, ReactNode } from "react";
 import type {
     Category,
     Channel,
+    ChannelType,
     ChatMessage,
     MentionMarker,
     ModerationAction,
@@ -69,7 +70,7 @@ export interface ChatState {
     renameCategoryName: string;
     renameRoomId: string;
     renameRoomName: string;
-    renameRoomType: "text" | "announcement" | "voice";
+    renameRoomType: ChannelType;
     renameRoomCategoryId: string | null;
     selectedCategoryIdForCreate: string;
     isNearBottom: boolean;
@@ -131,7 +132,7 @@ type ChatAction =
     | { type: "SET_CHANNEL_FILTER"; payload: string }
     | { type: "SET_RENAME_SPACE"; payload: { id: string; name: string } }
     | { type: "SET_RENAME_CATEGORY"; payload: { id: string; name: string } }
-    | { type: "SET_RENAME_ROOM"; payload: { id: string; name: string; type: "text" | "announcement" | "voice"; categoryId: string | null } }
+    | { type: "SET_RENAME_ROOM"; payload: { id: string; name: string; type: ChannelType; categoryId: string | null } }
     | { type: "SET_SELECTED_CATEGORY_FOR_CREATE"; payload: string }
     | { type: "SET_NEAR_BOTTOM"; payload: boolean }
     | { type: "SET_PENDING_NEW_MESSAGE_COUNT"; payload: number }

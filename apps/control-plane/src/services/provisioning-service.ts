@@ -74,12 +74,13 @@ export async function createServerWorkflow(input: {
       hub_id: string;
       name: string;
       matrix_space_id: string | null;
+      type: "default" | "dm";
       created_by_user_id: string;
       owner_user_id: string;
       created_at: string;
     }>(
-      `insert into servers (id, hub_id, name, matrix_space_id, created_by_user_id, owner_user_id)
-       values ($1, $2, $3, $4, $5, $6)
+      `insert into servers (id, hub_id, name, type, matrix_space_id, created_by_user_id, owner_user_id)
+       values ($1, $2, $3, 'default', $4, $5, $6)
        returning *`,
       [id, input.hubId, input.name, matrixSpaceId, input.productUserId, input.productUserId]
     );
@@ -93,6 +94,7 @@ export async function createServerWorkflow(input: {
       id: value.id,
       hubId: value.hub_id,
       name: value.name,
+      type: value.type,
       matrixSpaceId: value.matrix_space_id,
       createdByUserId: value.created_by_user_id,
       ownerUserId: value.owner_user_id,
