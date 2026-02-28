@@ -130,7 +130,9 @@ export function ChatClient() {
     deleteSpaceConfirm,
     deleteRoomConfirm,
     sending,
-    updatingControls
+    updatingControls,
+    channelScrollPositions,
+    draftMessagesByChannel
   } = state;
 
   const [mentions, setMentions] = useState<MentionMarker[]>([]);
@@ -500,8 +502,24 @@ export function ChatClient() {
         return;
       }
       dispatch({ type: "SET_MESSAGES", payload: messageItems.map((message) => ({ ...message })) });
+
+      // Load draft message
+      setDraftMessage(draftMessagesByChannel[nextChannelId] ?? "");
+
+      // Restore scroll position
+      setTimeout(() => {
+        const list = messagesRef.current;
+        if (list) {
+          const savedPos = channelScrollPositions[nextChannelId];
+          if (savedPos !== undefined) {
+            list.scrollTop = savedPos;
+          } else {
+            list.scrollTop = list.scrollHeight;
+          }
+        }
+      }, 0);
     }
-  }, [selectedServerId, selectedChannelId, setUrlSelection, urlChannelId, urlServerId, dispatch]);
+  }, [selectedServerId, selectedChannelId, setUrlSelection, urlChannelId, urlServerId, dispatch, draftMessagesByChannel, channelScrollPositions]);
 
   const initialize = useCallback(async (): Promise<void> => {
     dispatch({ type: "SET_LOADING", payload: true });
@@ -530,17 +548,23 @@ export function ChatClient() {
       return;
     }
 
+    const lastServerId = localStorage.getItem("lastServerId");
+    const lastChannelId = localStorage.getItem("lastChannelId");
+
     const loadKey = [
       viewer.productUserId,
-      bootstrapStatus.defaultServerId ?? "",
-      bootstrapStatus.defaultChannelId ?? ""
+      lastServerId ?? bootstrapStatus.defaultServerId ?? "",
+      lastChannelId ?? bootstrapStatus.defaultChannelId ?? ""
     ].join(":");
     if (initialChatLoadKeyRef.current === loadKey) {
       return;
     }
     initialChatLoadKeyRef.current = loadKey;
 
-    void refreshChatState(bootstrapStatus.defaultServerId ?? undefined, bootstrapStatus.defaultChannelId ?? undefined).catch(
+    void refreshChatState(
+      lastServerId ?? bootstrapStatus.defaultServerId ?? undefined,
+      lastChannelId ?? bootstrapStatus.defaultChannelId ?? undefined
+    ).catch(
       (cause) => {
         const msg = cause instanceof Error ? cause.message : "Failed to load chat state.";
         dispatch({ type: "SET_ERROR", payload: msg });
@@ -871,6 +895,7 @@ export function ChatClient() {
 
   async function handleServerChange(serverId: string): Promise<void> {
     dispatch({ type: "SET_SELECTED_SERVER_ID", payload: serverId });
+    localStorage.setItem("lastServerId", serverId);
     dispatch({ type: "SET_CHANNELS", payload: [] });
     dispatch({ type: "SET_CATEGORIES", payload: [] });
     dispatch({ type: "SET_ERROR", payload: null });
@@ -886,12 +911,36 @@ export function ChatClient() {
     if (channel) {
       dispatch({ type: "SET_ACTIVE_CHANNEL_DATA", payload: channel });
     }
+
+    // Save current draft before switching
+    if (selectedChannelId) {
+      dispatch({ type: "SET_CHANNEL_DRAFT", payload: { channelId: selectedChannelId, draft: draftMessage } });
+    }
+
     dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: channelId });
+    localStorage.setItem("lastChannelId", channelId);
+
+    // Load new draft
+    setDraftMessage(draftMessagesByChannel[channelId] ?? "");
+
     dispatch({ type: "SET_ERROR", payload: null });
     try {
       const next = await listMessages(channelId);
       dispatch({ type: "SET_MESSAGES", payload: next.map((message) => ({ ...message })) });
       setUrlSelection(selectedServerId, channelId);
+
+      // Restore scroll position
+      setTimeout(() => {
+        const list = messagesRef.current;
+        if (list) {
+          const savedPos = channelScrollPositions[channelId];
+          if (savedPos !== undefined) {
+            list.scrollTop = savedPos;
+          } else {
+            list.scrollTop = list.scrollHeight;
+          }
+        }
+      }, 0);
 
       // Auto-clear if we are (presumably) at the bottom or latest messages loaded
       // We'll also rely on the scroll event but doing it here handles the initial load
@@ -921,6 +970,11 @@ export function ChatClient() {
     const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
     const nearBottom = distanceFromBottom < 24;
     dispatch({ type: "SET_NEAR_BOTTOM", payload: nearBottom });
+
+    if (selectedChannelId) {
+      dispatch({ type: "SET_CHANNEL_SCROLL_POSITION", payload: { channelId: selectedChannelId, position: list.scrollTop } });
+    }
+
     if (nearBottom) {
       dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: 0 });
       if (selectedChannelId) {

@@ -94,6 +94,8 @@ export interface ChatState {
     savingOnboarding: boolean;
     sending: boolean;
     updatingControls: boolean;
+    channelScrollPositions: Record<string, number>;
+    draftMessagesByChannel: Record<string, string>;
 }
 
 type ChatAction =
@@ -149,7 +151,9 @@ type ChatAction =
     | { type: "SET_SENDING"; payload: boolean }
     | { type: "SET_UPDATING_CONTROLS"; payload: boolean }
     | { type: "SET_NOTIFICATIONS"; payload: Record<string, { unreadCount: number; mentionCount: number }> }
-    | { type: "CLEAR_NOTIFICATIONS"; payload: { channelId: string } };
+    | { type: "CLEAR_NOTIFICATIONS"; payload: { channelId: string } }
+    | { type: "SET_CHANNEL_SCROLL_POSITION"; payload: { channelId: string; position: number } }
+    | { type: "SET_CHANNEL_DRAFT"; payload: { channelId: string; draft: string } };
 
 const initialState: ChatState = {
     viewer: null,
@@ -206,7 +210,9 @@ const initialState: ChatState = {
     creatingCategory: false,
     savingOnboarding: false,
     sending: false,
-    updatingControls: false
+    updatingControls: false,
+    channelScrollPositions: {},
+    draftMessagesByChannel: {}
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -351,6 +357,22 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return { ...state, sending: action.payload };
         case "SET_UPDATING_CONTROLS":
             return { ...state, updatingControls: action.payload };
+        case "SET_CHANNEL_SCROLL_POSITION":
+            return {
+                ...state,
+                channelScrollPositions: {
+                    ...state.channelScrollPositions,
+                    [action.payload.channelId]: action.payload.position
+                }
+            };
+        case "SET_CHANNEL_DRAFT":
+            return {
+                ...state,
+                draftMessagesByChannel: {
+                    ...state.draftMessagesByChannel,
+                    [action.payload.channelId]: action.payload.draft
+                }
+            };
         default:
             return state;
     }
