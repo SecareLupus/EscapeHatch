@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { fetchChannelSettings, updateChannelSettings } from "../../../../lib/control-plane";
 import { useChat } from "../../../../context/chat-context";
 import { useToast } from "../../../../components/toast-provider";
 
 export default function RoomSettingsPage() {
     const params = useParams();
+    const router = useRouter();
     const channelId = params.id as string;
     const { state } = useChat();
     const { channels } = state;
@@ -49,12 +50,35 @@ export default function RoomSettingsPage() {
         }
     };
 
+    const handleRoomSwitch = (id: string) => {
+        router.push(`/settings/rooms/${id}`);
+    };
+
     if (loading) return <p>Loading room settings...</p>;
     if (!channel) return <p>Room not found.</p>;
 
     return (
         <div className="settings-section">
-            <h2>Room Settings: #{channel.name}</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>Room Settings: #{channel.name}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <label htmlFor="room-switcher" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Switch Room:</label>
+                    <select
+                        id="room-switcher"
+                        className="filter-input"
+                        style={{ width: 'auto' }}
+                        value={channelId}
+                        onChange={(e) => handleRoomSwitch(e.target.value)}
+                    >
+                        {channels
+                            .filter(c => c.serverId === channel.serverId)
+                            .map(c => (
+                                <option key={c.id} value={c.id}>#{c.name}</option>
+                            ))
+                        }
+                    </select>
+                </div>
+            </div>
             <p className="settings-description">Configure access and visibility for this specific room.</p>
 
             <div className="settings-grid" style={{ marginTop: '2rem' }}>
@@ -78,17 +102,17 @@ export default function RoomSettingsPage() {
                             className="filter-input"
                             placeholder="e.g. role_admin, role_moderator"
                             value={settings?.allowedRoleIds?.join(", ") || ""}
-                            onChange={(e) => setSettings({ 
-                                ...settings, 
-                                allowedRoleIds: e.target.value.split(",").map(s => s.trim()).filter(Boolean) 
+                            onChange={(e) => setSettings({
+                                ...settings,
+                                allowedRoleIds: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
                             })}
                         />
                         <p className="settings-description">Enter role IDs separated by commas.</p>
                     </section>
                 )}
 
-                <button 
-                    onClick={handleSave} 
+                <button
+                    onClick={handleSave}
                     disabled={saving}
                     style={{ justifySelf: 'start', marginTop: '1rem' }}
                 >

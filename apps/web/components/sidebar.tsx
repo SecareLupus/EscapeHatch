@@ -188,13 +188,7 @@ export function Sidebar({
                         ))}
                     </ul>
 
-                    <div className="sidebar-settings">
-                        {canManageHub && (
-                            <Link href="/admin" className="ghost button-link" style={{ width: '100%' }}>
-                                Admin Console
-                            </Link>
-                        )}
-                    </div>
+
                 </nav>
             ) : (
                 <nav className="channels" aria-label="Channels">

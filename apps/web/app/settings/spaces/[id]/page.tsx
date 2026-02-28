@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { fetchServerSettings, updateServerSettings } from "../../../../lib/control-plane";
 import { useChat } from "../../../../context/chat-context";
 import { useToast } from "../../../../components/toast-provider";
@@ -9,6 +9,7 @@ import BridgeManager from "../../../../components/bridge-manager";
 
 export default function SpaceSettingsPage() {
     const params = useParams();
+    const router = useRouter();
     const serverId = params.id as string;
     const { state } = useChat();
     const { servers, channels } = state;
@@ -47,12 +48,32 @@ export default function SpaceSettingsPage() {
         }
     };
 
+    const handleSpaceSwitch = (id: string) => {
+        router.push(`/settings/spaces/${id}`);
+    };
+
     if (loading) return <p>Loading space settings...</p>;
     if (!server) return <p>Space not found.</p>;
 
     return (
         <div className="settings-section">
-            <h2>Space Settings: {server.name}</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>Space Settings: {server.name}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <label htmlFor="space-switcher" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Switch Space:</label>
+                    <select
+                        id="space-switcher"
+                        className="filter-input"
+                        style={{ width: 'auto' }}
+                        value={serverId}
+                        onChange={(e) => handleSpaceSwitch(e.target.value)}
+                    >
+                        {servers.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
             <p className="settings-description">Manage the configuration for this specific space.</p>
 
             <div className="settings-grid" style={{ marginTop: '2rem' }}>
@@ -96,8 +117,8 @@ export default function SpaceSettingsPage() {
                     </select>
                 </section>
 
-                <button 
-                    onClick={handleSave} 
+                <button
+                    onClick={handleSave}
                     disabled={saving}
                     style={{ justifySelf: 'start', marginTop: '1rem' }}
                 >
@@ -107,9 +128,9 @@ export default function SpaceSettingsPage() {
 
             <hr style={{ margin: '3rem 0', border: 'none', borderTop: '1px solid var(--border)' }} />
 
-            <BridgeManager 
-                serverId={serverId} 
-                hubId={server.hubId} 
+            <BridgeManager
+                serverId={serverId}
+                hubId={server.hubId}
                 returnTo={`/settings/spaces/${serverId}`}
             />
         </div>
