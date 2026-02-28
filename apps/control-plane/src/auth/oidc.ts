@@ -76,7 +76,7 @@ export function createAuthorizationRedirect(input: {
       client_id: config.oidc.discordClientId!,
       redirect_uri: redirectUri,
       response_type: "code",
-      scope: "identify email offline_access",
+      scope: "identify email",
       state,
       code_challenge: challenge,
       code_challenge_method: "S256"
