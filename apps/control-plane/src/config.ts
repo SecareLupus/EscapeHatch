@@ -7,7 +7,7 @@ export const config = {
   webBaseUrl,
   databaseUrl: process.env.DATABASE_URL,
   sessionSecret: process.env.SESSION_SECRET ?? "dev-insecure-session-secret",
-  sessionTtlSeconds: Number(process.env.SESSION_TTL_SECONDS ?? "3600"),
+  sessionTtlSeconds: Number(process.env.SESSION_TTL_SECONDS ?? "604800"), // 7 days
   devAuthBypass: process.env.DEV_AUTH_BYPASS === "true",
   setupBootstrapEnabled: process.env.SETUP_BOOTSTRAP_ENABLED !== "false",
   setupBootstrapToken: process.env.SETUP_BOOTSTRAP_TOKEN ?? "",

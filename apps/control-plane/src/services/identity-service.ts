@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { IdentityMapping } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
+import { isTokenExpired, refreshAccessToken } from "../auth/oidc.js";
 
 function randomId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -233,4 +234,35 @@ export async function updateUserTheme(productUserId: string, theme: string): Pro
       throw new Error("No identities found for user.");
     }
   });
+}
+
+export async function ensureIdentityTokenValid(productUserId: string): Promise<void> {
+  const identity = await getIdentityByProductUserId(productUserId);
+  if (!identity || !identity.refreshToken || !identity.accessToken) {
+    return;
+  }
+
+  if (isTokenExpired(identity.tokenExpiresAt)) {
+    try {
+      // IdentityMapping provider type might be broader than SupportedOidcProvider, but in practice they align for OIDC
+      const refreshed = await refreshAccessToken(
+        identity.provider as any,
+        identity.refreshToken
+      );
+
+      await upsertIdentityMapping({
+        provider: identity.provider,
+        oidcSubject: identity.oidcSubject,
+        email: identity.email,
+        preferredUsername: identity.preferredUsername,
+        avatarUrl: identity.avatarUrl,
+        productUserId: identity.productUserId,
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken ?? identity.refreshToken,
+        tokenExpiresAt: refreshed.tokenExpiresAt
+      });
+    } catch (error) {
+      console.error(`Failed to refresh identity token for user ${productUserId}:`, error);
+    }
+  }
 }

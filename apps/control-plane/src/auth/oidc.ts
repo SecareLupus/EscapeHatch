@@ -76,7 +76,7 @@ export function createAuthorizationRedirect(input: {
       client_id: config.oidc.discordClientId!,
       redirect_uri: redirectUri,
       response_type: "code",
-      scope: "identify email",
+      scope: "identify email offline_access",
       state,
       code_challenge: challenge,
       code_challenge_method: "S256"
@@ -168,6 +168,17 @@ export async function refreshAccessToken(
     return refreshGoogleToken(refreshToken);
   }
   return refreshTwitchToken(refreshToken);
+}
+
+/**
+ * Returns true if the token is expired or will expire within the given buffer seconds.
+ */
+export function isTokenExpired(expiresAt: string | null | undefined, bufferSeconds = 300): boolean {
+  if (!expiresAt) {
+    return false; // If no expiry is set, we assume it's long-lived or handled elsewhere
+  }
+  const expiry = new Date(expiresAt).getTime();
+  return Date.now() + bufferSeconds * 1000 > expiry;
 }
 
 async function exchangeDiscordCode(

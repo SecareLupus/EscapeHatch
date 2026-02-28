@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { withDb } from "../db/client.js";
 import { createMessage } from "./chat-service.js";
 import { getDiscordBotClient } from "./discord-bot-client.js";
+import { isTokenExpired } from "../auth/oidc.js";
 
 function randomId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -249,6 +250,95 @@ async function exchangeDiscordOAuthCode(code: string): Promise<{
   };
 }
 
+async function refreshBridgeToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string | null; expiresAt: string | null }> {
+  if (config.discordBridge.mockMode) {
+    return {
+      accessToken: "mock_refreshed_access_token",
+      refreshToken: "mock_refreshed_refresh_token",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    };
+  }
+
+  if (!config.discordBridge.clientId || !config.discordBridge.clientSecret) {
+    throw new Error("Discord bridge OAuth credentials are not configured.");
+  }
+
+  const response = await fetch(config.discordBridge.tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.discordBridge.clientId,
+      client_secret: config.discordBridge.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Discord bridge token refresh failed (${response.status}).`);
+  }
+
+  const json = (await response.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token ?? null,
+    expiresAt: json.expires_in ? new Date(Date.now() + json.expires_in * 1000).toISOString() : null
+  };
+}
+
+export async function ensureBridgeTokenValid(serverId: string): Promise<string | null> {
+  return withDb(async (db) => {
+    const row = await db.query<{
+      access_token: string | null;
+      refresh_token: string | null;
+      token_expires_at: string | null;
+    }>(
+      "select access_token, refresh_token, token_expires_at from discord_bridge_connections where server_id = $1",
+      [serverId]
+    );
+
+    const connection = row.rows[0];
+    if (!connection || !connection.access_token) {
+      return null;
+    }
+
+    if (!isTokenExpired(connection.token_expires_at)) {
+      return connection.access_token;
+    }
+
+    if (!connection.refresh_token) {
+      return connection.access_token;
+    }
+
+    try {
+      const refreshed = await refreshBridgeToken(connection.refresh_token);
+      await db.query(
+        `update discord_bridge_connections
+         set access_token = $1,
+             refresh_token = $2,
+             token_expires_at = $3,
+             updated_at = now()
+         where server_id = $4`,
+        [
+          refreshed.accessToken,
+          refreshed.refreshToken ?? connection.refresh_token,
+          refreshed.expiresAt,
+          serverId
+        ]
+      );
+      return refreshed.accessToken;
+    } catch (error) {
+      console.error(`Failed to refresh Discord bridge token for server ${serverId}:`, error);
+      return connection.access_token;
+    }
+  });
+}
+
 export async function completeDiscordOauthAndListGuilds(input: {
   serverId: string;
   productUserId: string;
@@ -461,6 +551,7 @@ export async function deleteDiscordChannelMapping(input: { serverId: string; map
 }
 
 export async function retryDiscordBridgeSync(serverId: string): Promise<DiscordBridgeConnection> {
+  await ensureBridgeTokenValid(serverId);
   return withDb(async (db) => {
     const row = await db.query<{
       id: string;

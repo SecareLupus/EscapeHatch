@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { getSession } from "./session.js";
 import { hasInitializedPlatform } from "../services/bootstrap-service.js";
+import { ensureIdentityTokenValid } from "../services/identity-service.js";
 
 export interface ScopedAuthContext {
   productUserId: string;
@@ -32,6 +33,11 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
     provider: session.provider,
     oidcSubject: session.oidcSubject
   };
+
+  // Background token rotation/refresh
+  void ensureIdentityTokenValid(session.productUserId).catch((err: unknown) => {
+    console.error("Delayed identity token refresh check failed:", err);
+  });
 }
 
 export async function requireInitialized(request: FastifyRequest, reply: FastifyReply): Promise<void> {
