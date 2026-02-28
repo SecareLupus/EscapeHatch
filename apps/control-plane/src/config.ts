@@ -74,6 +74,9 @@ export const config = {
   discordBotToken: process.env.DISCORD_BRIDGE_BOT_TOKEN ?? "",
   voice: {
     tokenTtlSeconds: Number(process.env.SFU_TOKEN_TTL_SECONDS ?? "300"),
+    url: process.env.LIVEKIT_URL ?? "ws://localhost:7880",
+    apiKey: process.env.LIVEKIT_API_KEY ?? "devkey",
+    apiSecret: process.env.LIVEKIT_API_SECRET ?? "secret",
   },
   synapse: {
     baseUrl: process.env.SYNAPSE_BASE_URL,

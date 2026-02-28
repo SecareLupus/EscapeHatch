@@ -1623,11 +1623,16 @@ export function ChatClient() {
             sendContentWithOptimistic={sendContentWithOptimistic}
             handleJoinVoice={handleJoinVoice}
             handleLeaveVoice={handleLeaveVoice}
+            handleToggleMuteDeafen={handleToggleMuteDeafen}
+            handleToggleVideo={handleToggleVideo}
             draftMessage={draftMessage}
             setDraftMessage={setDraftMessage}
 
             sending={sending}
             voiceConnected={voiceConnected}
+            voiceMuted={voiceMuted}
+            voiceDeafened={voiceDeafened}
+            voiceVideoEnabled={voiceVideoEnabled}
             voiceGrant={voiceGrant}
             mentions={mentions}
             messagesRef={messagesRef}

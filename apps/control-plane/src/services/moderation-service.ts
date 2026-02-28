@@ -96,7 +96,80 @@ export async function performModerationAction(
     targetUserId: input.targetUserId,
     targetMessageId: input.targetMessageId,
     metadata: input.timeoutSeconds ? { timeoutSeconds: input.timeoutSeconds } : undefined,
-    run: async () => Promise.resolve()
+    run: async () => {
+      const { kickUser, banUser, unbanUser, redactEvent } = await import("../matrix/synapse-adapter.js");
+
+      const matrixIds = await withDb(async (db) => {
+        let channelMatrixId: string | null = null;
+        if (input.channelId) {
+          const chRow = await db.query<{ matrix_room_id: string }>(
+            "select matrix_room_id from channels where id = $1",
+            [input.channelId]
+          );
+          channelMatrixId = chRow.rows[0]?.matrix_room_id ?? null;
+        }
+
+        const srvRow = await db.query<{ matrix_space_id: string }>(
+          "select matrix_space_id from servers where id = $1",
+          [input.serverId]
+        );
+        const serverMatrixId = srvRow.rows[0]?.matrix_space_id ?? null;
+
+        return { channelMatrixId, serverMatrixId };
+      });
+
+      if (!matrixIds.serverMatrixId) {
+        throw new Error("Target server has no associated Matrix Space ID.");
+      }
+
+      // For kick/ban, we usually act on the Server (Space)
+      // For message redaction, we act on the Channel (Room)
+
+      switch (input.action) {
+        case "kick":
+          if (!input.targetUserId) throw new Error("targetUserId is required for kick");
+          await kickUser({
+            roomId: matrixIds.serverMatrixId,
+            userId: input.targetUserId,
+            reason: input.reason
+          });
+          break;
+        case "ban":
+          if (!input.targetUserId) throw new Error("targetUserId is required for ban");
+          await banUser({
+            roomId: matrixIds.serverMatrixId,
+            userId: input.targetUserId,
+            reason: input.reason
+          });
+          break;
+        case "unban":
+          if (!input.targetUserId) throw new Error("targetUserId is required for unban");
+          await unbanUser({
+            roomId: matrixIds.serverMatrixId,
+            userId: input.targetUserId,
+            reason: input.reason
+          });
+          break;
+        case "redact_message":
+          if (!input.targetMessageId) throw new Error("targetMessageId is required for redact");
+          if (!matrixIds.channelMatrixId) throw new Error("Channel has no associated Matrix Room ID.");
+          await redactEvent({
+            roomId: matrixIds.channelMatrixId,
+            eventId: input.targetMessageId,
+            reason: input.reason
+          });
+          break;
+        case "timeout":
+          // Timeout implementation: kick from server with reason
+          if (!input.targetUserId) throw new Error("targetUserId is required for timeout");
+          await kickUser({
+            roomId: matrixIds.serverMatrixId,
+            userId: input.targetUserId,
+            reason: `Timeout (${input.timeoutSeconds ?? 0}s): ${input.reason}`
+          });
+          break;
+      }
+    }
   });
 }
 

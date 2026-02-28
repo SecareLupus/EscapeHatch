@@ -10,6 +10,12 @@ interface CreateRoomInput {
   type: ChannelType;
 }
 
+interface ModerationInput {
+  roomId: string;
+  userId: string;
+  reason?: string;
+}
+
 async function synapseRequest<T>(path: string, body: Record<string, unknown>): Promise<T | null> {
   if (!config.synapse.baseUrl || !config.synapse.accessToken) {
     return null;
@@ -26,9 +32,8 @@ async function synapseRequest<T>(path: string, body: Record<string, unknown>): P
       body: JSON.stringify(body)
     });
   } catch (error) {
-    const message = `Synapse request network failure: ${
-      error instanceof Error ? error.message : "unknown error"
-    }`;
+    const message = `Synapse request network failure: ${error instanceof Error ? error.message : "unknown error"
+      }`;
     if (config.synapse.strictProvisioning) {
       throw new Error(message);
     }
@@ -114,9 +119,8 @@ export async function attachChildRoom(spaceId: string, childRoomId: string): Pro
       }
     );
   } catch (error) {
-    const message = `Synapse linkage network failure: ${
-      error instanceof Error ? error.message : "unknown error"
-    }`;
+    const message = `Synapse linkage network failure: ${error instanceof Error ? error.message : "unknown error"
+      }`;
     if (config.synapse.strictProvisioning) {
       throw new Error(message);
     }
@@ -179,4 +183,38 @@ export async function setRoomServerAcl(
   }
 
   return { ok: true, applied: true };
+}
+
+export async function kickUser(input: ModerationInput): Promise<void> {
+  await synapseRequest(`/_matrix/client/v3/rooms/${encodeURIComponent(input.roomId)}/kick`, {
+    user_id: input.userId,
+    reason: input.reason
+  });
+}
+
+export async function banUser(input: ModerationInput): Promise<void> {
+  await synapseRequest(`/_matrix/client/v3/rooms/${encodeURIComponent(input.roomId)}/ban`, {
+    user_id: input.userId,
+    reason: input.reason
+  });
+}
+
+export async function unbanUser(input: ModerationInput): Promise<void> {
+  await synapseRequest(`/_matrix/client/v3/rooms/${encodeURIComponent(input.roomId)}/unban`, {
+    user_id: input.userId
+  });
+}
+
+export async function redactEvent(input: {
+  roomId: string;
+  eventId: string;
+  reason?: string;
+}): Promise<void> {
+  const txnId = crypto.randomUUID().replaceAll("-", "");
+  await synapseRequest(
+    `/_matrix/client/v3/rooms/${encodeURIComponent(input.roomId)}/redact/${encodeURIComponent(
+      input.eventId
+    )}/${txnId}`,
+    { reason: input.reason }
+  );
 }

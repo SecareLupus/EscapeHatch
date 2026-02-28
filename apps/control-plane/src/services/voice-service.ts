@@ -1,16 +1,8 @@
-import crypto from "node:crypto";
+import { AccessToken } from "livekit-server-sdk";
 import type { VoiceTokenGrant } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
 import { executePrivilegedAction } from "./privileged-gateway.js";
 import { config } from "../config.js";
-
-function signEphemeralToken(payload: Record<string, unknown>): string {
-  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const secret = process.env.SFU_TOKEN_SECRET ?? "dev-sfu-secret";
-  const signature = crypto.createHmac("sha256", secret).update(`${header}.${body}`).digest("base64url");
-  return `${header}.${body}.${signature}`;
-}
 
 export async function issueVoiceToken(input: {
   actorUserId: string;
@@ -43,16 +35,25 @@ export async function issueVoiceToken(input: {
 
       const ttlSeconds = Math.max(60, config.voice.tokenTtlSeconds);
       const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-      const token = signEphemeralToken({
-        sub: input.actorUserId,
-        room: channel.voice_sfu_room_id,
-        video_quality: input.videoQuality ?? "medium",
-        exp: Math.floor(expiresAt.getTime() / 1000)
+
+      const at = new AccessToken(config.voice.apiKey, config.voice.apiSecret, {
+        identity: input.actorUserId,
+        ttl: ttlSeconds,
       });
+
+      at.addGrant({
+        roomJoin: true,
+        room: channel.voice_sfu_room_id,
+        canPublish: true,
+        canSubscribe: true,
+      });
+
+      const token = await at.toJwt();
 
       return {
         channelId: input.channelId,
         serverId: input.serverId,
+        sfuUrl: config.voice.url,
         sfuRoomId: channel.voice_sfu_room_id,
         participantUserId: input.actorUserId,
         token,

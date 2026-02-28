@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 // @ts-ignore - emoji-picker-react types mismatch with Next.js dynamic
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false }) as any;
 import type { EmojiClickData } from "emoji-picker-react";
+import { VoiceRoom } from "./voice-room";
 
 interface ChatWindowProps {
     handleSendMessage: (event: React.FormEvent) => Promise<void>;
@@ -28,8 +29,13 @@ interface ChatWindowProps {
     setDraftMessage: React.Dispatch<React.SetStateAction<string>>;
     sending: boolean;
     voiceConnected: boolean;
-    voiceGrant: any; // Type as needed
-    mentions: any[]; // Type as needed
+    voiceMuted: boolean;
+    voiceDeafened: boolean;
+    voiceVideoEnabled: boolean;
+    voiceGrant: any;
+    mentions: any[];
+    handleToggleMuteDeafen: (muted: boolean, deafened: boolean) => Promise<void>;
+    handleToggleVideo: (enabled: boolean) => Promise<void>;
     handlePerformModerationAction?: (action: ModerationActionType, targetUserId?: string, targetMessageId?: string) => Promise<void>;
 }
 
@@ -54,8 +60,13 @@ export function ChatWindow({
     setDraftMessage,
     sending,
     voiceConnected,
+    voiceMuted,
+    voiceDeafened,
+    voiceVideoEnabled,
     voiceGrant,
-    mentions
+    mentions,
+    handleToggleMuteDeafen,
+    handleToggleVideo
 }: ChatWindowProps) {
     const { state, dispatch } = useChat();
     const {
@@ -395,6 +406,43 @@ export function ChatWindow({
                 <div className="channel-actions">
                     <span className="channel-badge">{activeChannel?.type ?? "none"}</span>
 
+                    {activeChannel?.type === "voice" && voiceConnected && (
+                        <div className="voice-controls inline-buttons">
+                            <button
+                                type="button"
+                                className={`icon-button ${voiceMuted ? "active-toggle" : ""}`}
+                                onClick={() => handleToggleMuteDeafen(!voiceMuted, voiceDeafened)}
+                                title={voiceMuted ? "Unmute" : "Mute"}
+                            >
+                                {voiceMuted ? "🔇" : "🎤"}
+                            </button>
+                            <button
+                                type="button"
+                                className={`icon-button ${voiceDeafened ? "active-toggle" : ""}`}
+                                onClick={() => handleToggleMuteDeafen(voiceMuted, !voiceDeafened)}
+                                title={voiceDeafened ? "Undeafen" : "Deafen"}
+                            >
+                                {voiceDeafened ? "🔈" : "🎧"}
+                            </button>
+                            <button
+                                type="button"
+                                className={`icon-button ${voiceVideoEnabled ? "active-toggle" : ""}`}
+                                onClick={() => handleToggleVideo(!voiceVideoEnabled)}
+                                title={voiceVideoEnabled ? "Disable Video" : "Enable Video"}
+                            >
+                                {voiceVideoEnabled ? "📹" : "📷"}
+                            </button>
+                            <button
+                                type="button"
+                                className="icon-button danger"
+                                onClick={() => handleLeaveVoice()}
+                                title="Leave Voice"
+                            >
+                                📞
+                            </button>
+                        </div>
+                    )}
+
                     <button
                         type="button"
                         className="ghost"
@@ -405,6 +453,16 @@ export function ChatWindow({
                     </button>
                 </div>
             </header>
+
+            {activeChannel?.type === "voice" && voiceConnected && voiceGrant && (
+                <VoiceRoom
+                    grant={voiceGrant}
+                    muted={voiceMuted}
+                    deafened={voiceDeafened}
+                    videoEnabled={voiceVideoEnabled}
+                    onDisconnect={() => handleLeaveVoice()}
+                />
+            )}
 
 
             <ol className="messages" ref={messagesRef} onScroll={handleMessageListScroll}>
