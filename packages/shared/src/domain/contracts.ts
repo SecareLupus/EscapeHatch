@@ -274,13 +274,32 @@ export interface MentionMarker {
     createdAt: string;
 }
 
+export interface Attachment {
+    id: string;
+    url: string;
+    contentType: string;
+    filename: string;
+    size?: number;
+}
+
+export interface Reaction {
+    emoji: string;
+    count: number;
+    me: boolean;
+    userIds: string[];
+}
+
 export interface ChatMessage {
     id: string;
     channelId: string;
     authorUserId: string;
     authorDisplayName: string;
     content: string;
+    attachments?: Attachment[];
+    reactions?: Reaction[];
     createdAt: string;
+    updatedAt?: string;
+    deletedAt?: string;
 }
 
 export interface ChannelMember {

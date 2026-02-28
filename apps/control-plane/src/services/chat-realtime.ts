@@ -1,6 +1,7 @@
 import type { ChatMessage } from "@escapehatch/shared";
 
-type ChatMessageListener = (message: ChatMessage) => void;
+type ChatMessageEvent = "message.created" | "message.updated" | "message.deleted";
+type ChatMessageListener = (event: ChatMessageEvent, message: ChatMessage) => void;
 
 const channelListeners = new Map<string, Set<ChatMessageListener>>();
 
@@ -22,13 +23,13 @@ export function subscribeToChannelMessages(channelId: string, listener: ChatMess
   };
 }
 
-export function publishChannelMessage(message: ChatMessage): void {
+export function publishChannelMessage(message: ChatMessage, event: ChatMessageEvent = "message.created"): void {
   const listeners = channelListeners.get(message.channelId);
   if (!listeners || listeners.size === 0) {
     return;
   }
 
   for (const listener of listeners) {
-    listener(message);
+    listener(event, message);
   }
 }

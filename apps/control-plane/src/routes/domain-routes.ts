@@ -44,7 +44,11 @@ import {
   updateChannel,
   updateChannelVideoControls,
   upsertChannelReadState,
-  getUnreadSummary
+  getUnreadSummary,
+  updateMessage,
+  deleteMessage,
+  addReaction,
+  removeReaction
 } from "../services/chat-service.js";
 import { getBootstrapStatus } from "../services/bootstrap-service.js";
 import { publishChannelMessage, subscribeToChannelMessages } from "../services/chat-realtime.js";
@@ -495,19 +499,121 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
     const payload = z
       .object({
-        content: z.string().trim().min(1).max(2000)
+        content: z.string().trim().min(0).max(2000),
+        attachments: z.array(z.object({
+          id: z.string(),
+          url: z.string().url(),
+          contentType: z.string(),
+          filename: z.string()
+        })).optional()
       })
       .parse(request.body);
 
     const message = await createMessage({
       channelId: params.channelId,
       actorUserId: request.auth!.productUserId,
-      content: payload.content
+      content: payload.content,
+      attachments: payload.attachments
     });
     publishChannelMessage(message);
 
     reply.code(201);
     return message;
+  });
+
+  app.patch("/v1/channels/:channelId/messages/:messageId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({
+      channelId: z.string().min(1),
+      messageId: z.string().min(1)
+    }).parse(request.params);
+    const payload = z.object({
+      content: z.string().trim().max(2000)
+    }).parse(request.body);
+
+    const message = await updateMessage({
+      messageId: params.messageId,
+      actorUserId: request.auth!.productUserId,
+      content: payload.content
+    });
+
+    publishChannelMessage(message, "message.updated");
+    return message;
+  });
+
+  app.delete("/v1/channels/:channelId/messages/:messageId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({
+      channelId: z.string().min(1),
+      messageId: z.string().min(1)
+    }).parse(request.params);
+
+    // Permission check for moderator redact vs author delete
+    const allowed = await isActionAllowed({
+      productUserId: request.auth!.productUserId,
+      action: "moderation.redact",
+      scope: {
+        serverId: (await withDb(async (db) => {
+          const row = await db.query<{ server_id: string }>("select server_id from channels where id = $1", [params.channelId]);
+          return row.rows[0]?.server_id;
+        })) ?? ""
+      }
+    });
+
+    await deleteMessage({
+      messageId: params.messageId,
+      actorUserId: request.auth!.productUserId,
+      isModerator: allowed
+    });
+
+    publishChannelMessage({ id: params.messageId, channelId: params.channelId } as any, "message.deleted");
+    reply.code(204).send();
+  });
+
+  app.post("/v1/channels/:channelId/messages/:messageId/reactions", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({
+      channelId: z.string().min(1),
+      messageId: z.string().min(1)
+    }).parse(request.params);
+    const payload = z.object({
+      emoji: z.string().min(1).max(32)
+    }).parse(request.body);
+
+    await addReaction({
+      messageId: params.messageId,
+      userId: request.auth!.productUserId,
+      emoji: payload.emoji
+    });
+
+    // For reactions, we could publish a message update to refresh counts
+    // In a more optimized version, we'd have a specific reaction event
+    const messages = await listMessages({ channelId: params.channelId, limit: 1, before: undefined, viewerUserId: undefined });
+    const message = messages.find(m => m.id === params.messageId);
+    if (message) {
+      publishChannelMessage(message, "message.updated");
+    }
+
+    reply.code(204).send();
+  });
+
+  app.delete("/v1/channels/:channelId/messages/:messageId/reactions/:emoji", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({
+      channelId: z.string().min(1),
+      messageId: z.string().min(1),
+      emoji: z.string().min(1).max(32)
+    }).parse(request.params);
+
+    await removeReaction({
+      messageId: params.messageId,
+      userId: request.auth!.productUserId,
+      emoji: params.emoji
+    });
+
+    const messages = await listMessages({ channelId: params.channelId, limit: 1, before: undefined, viewerUserId: undefined });
+    const message = messages.find(m => m.id === params.messageId);
+    if (message) {
+      publishChannelMessage(message, "message.updated");
+    }
+
+    reply.code(204).send();
   });
 
   app.post("/v1/hubs/:hubId/dms", initializedAuthHandlers, async (request, reply) => {
@@ -755,8 +861,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       connectedAt: new Date().toISOString()
     });
 
-    const unsubscribe = subscribeToChannelMessages(params.channelId, (message) => {
-      writeEvent("message.created", message);
+    const unsubscribe = subscribeToChannelMessages(params.channelId, (event, message) => {
+      writeEvent(event, message);
     });
 
     const keepAliveTimer = setInterval(() => {

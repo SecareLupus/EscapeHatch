@@ -287,11 +287,39 @@ export async function listMessages(channelId: string): Promise<ChatMessage[]> {
   return json.items;
 }
 
-export async function sendMessage(channelId: string, content: string): Promise<ChatMessage> {
+export async function sendMessage(channelId: string, content: string, attachments?: ChatMessage["attachments"]): Promise<ChatMessage> {
   return apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, attachments })
+  });
+}
+
+export async function updateMessage(channelId: string, messageId: string, content: string): Promise<ChatMessage> {
+  return apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content })
+  });
+}
+
+export async function deleteMessage(channelId: string, messageId: string): Promise<void> {
+  await apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
+  await apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ emoji })
+  });
+}
+
+export async function removeReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
+  await apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeURIComponent(emoji)}`, {
+    method: "DELETE"
   });
 }
 
@@ -648,6 +676,8 @@ export function connectMessageStream(
     onOpen?: () => void;
     onError?: () => void;
     onMessageCreated: (message: ChatMessage) => void;
+    onMessageUpdated?: (message: ChatMessage) => void;
+    onMessageDeleted?: (messageId: string) => void;
   }
 ): () => void {
   const streamUrl = `${controlPlaneBaseUrl}/v1/channels/${encodeURIComponent(channelId)}/stream`;
@@ -664,6 +694,16 @@ export function connectMessageStream(
   source.addEventListener("message.created", (event) => {
     const payload = JSON.parse((event as MessageEvent<string>).data) as ChatMessage;
     handlers.onMessageCreated(payload);
+  });
+
+  source.addEventListener("message.updated", (event) => {
+    const payload = JSON.parse((event as MessageEvent<string>).data) as ChatMessage;
+    handlers.onMessageUpdated?.(payload);
+  });
+
+  source.addEventListener("message.deleted", (event) => {
+    const payload = JSON.parse((event as MessageEvent<string>).data) as { id: string };
+    handlers.onMessageDeleted?.(payload.id);
   });
 
   return () => {

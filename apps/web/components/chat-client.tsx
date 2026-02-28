@@ -822,6 +822,22 @@ export function ChatClient() {
         if (state.selectedChannelId === message.channelId && state.isNearBottom) {
           void markChannelAsRead(message.channelId);
         }
+      },
+      onMessageUpdated: (updatedMessage) => {
+        dispatch({
+          type: "UPDATE_MESSAGES",
+          payload: (current) => {
+            return current.map((item) => (item.id === updatedMessage.id ? updatedMessage : item));
+          }
+        });
+      },
+      onMessageDeleted: (deletedMessageId) => {
+        dispatch({
+          type: "UPDATE_MESSAGES",
+          payload: (current) => {
+            return current.filter((item) => item.id !== deletedMessageId);
+          }
+        });
       }
     });
 

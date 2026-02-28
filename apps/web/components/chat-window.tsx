@@ -4,7 +4,7 @@ import React, { useMemo, useRef, useEffect, useState, useCallback } from "react"
 import { useChat, MessageItem } from "../context/chat-context";
 import type { ChatMessage, ModerationActionType } from "@escapehatch/shared";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
-import { performModerationAction, createReport, uploadMedia } from "../lib/control-plane";
+import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction } from "../lib/control-plane";
 import dynamic from "next/dynamic";
 
 // @ts-ignore - emoji-picker-react types mismatch with Next.js dynamic
@@ -90,6 +90,7 @@ export function ChatWindow({
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
     const [isUploading, setIsUploading] = useState(false);
+    const [reactionTargetMessageId, setReactionTargetMessageId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const activeChannel = activeChannelData;
@@ -179,8 +180,7 @@ export function ChatWindow({
                 label: "Add Reaction",
                 icon: "😀",
                 onClick: () => {
-                    // TODO: Implement reaction picker or quick reactions
-                    console.log("Add reaction to", contextMenu.message?.id);
+                    setReactionTargetMessageId(contextMenu.message?.id || null);
                 }
             },
             {
@@ -489,16 +489,107 @@ export function ChatWindow({
                                         <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
                                     </header>
                                 ) : null}
-                                <p>{message.content}</p>
-                                {mediaUrls.length > 0 && (
-                                    <div className="message-media-container">
-                                        {mediaUrls.map((url, i) => (
-                                            <div key={i} className="message-media">
-                                                <img src={url} alt="Attached media" loading="lazy" />
+                                <div className="message-content-wrapper" style={{ position: "relative" }}>
+                                    {editingMessageId === message.id ? (
+                                        <div className="message-edit-inline" style={{ marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                                            <textarea
+                                                value={editContent}
+                                                onChange={(e) => setEditContent(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        if (editContent.trim()) {
+                                                            void updateMessage(message.channelId, message.id, editContent).then(() => setEditingMessageId(null));
+                                                        }
+                                                    } else if (e.key === "Escape") {
+                                                        setEditingMessageId(null);
+                                                    }
+                                                }}
+                                                className="edit-textarea"
+                                                autoFocus
+                                            />
+                                            <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.8rem" }}>
+                                                <small>escape to cancel, enter to save</small>
+                                                <button type="button" className="inline-action" onClick={() => setEditingMessageId(null)}>Cancel</button>
+                                                <button type="button" className="inline-action" onClick={() => {
+                                                    if (editContent.trim()) {
+                                                        void updateMessage(message.channelId, message.id, editContent).then(() => setEditingMessageId(null));
+                                                    }
+                                                }}>Save</button>
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <p>{message.content}</p>
+                                            {message.updatedAt && <small className="message-meta-edited" style={{ fontSize: "0.75rem", opacity: 0.6 }}>(edited)</small>}
+                                        </>
+                                    )}
+
+                                    {/* Attachments rendering */}
+                                    {message.attachments && message.attachments.length > 0 && (
+                                        <div className="message-attachments-container" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+                                            {message.attachments.map((att) => (
+                                                <div key={att.id} className="attachment" style={{ maxWidth: "300px" }}>
+                                                    {att.contentType.startsWith("image/") ? (
+                                                        <img src={att.url} alt={att.filename} loading="lazy" style={{ maxWidth: "100%", borderRadius: "4px" }} />
+                                                    ) : (
+                                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="attachment-link" style={{ padding: "0.5rem", background: "var(--background-modifier-hover)", borderRadius: "4px", display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none", color: "inherit" }}>
+                                                            <span style={{ fontSize: "1.2rem" }}>📄</span>
+                                                            <span style={{ fontSize: "0.9rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.filename}</span>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Legacy media urls (from content) */}
+                                    {(!message.attachments || message.attachments.length === 0) && mediaUrls.length > 0 && (
+                                        <div className="message-attachments-container" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+                                            {mediaUrls.map((url, i) => (
+                                                <div key={i} className="attachment" style={{ maxWidth: "300px" }}>
+                                                    <img src={url} alt="Attached media" loading="lazy" style={{ maxWidth: "100%", borderRadius: "4px" }} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Reactions rendering */}
+                                    {message.reactions && message.reactions.length > 0 && (
+                                        <div className="message-reactions-container" style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.25rem" }}>
+                                            {message.reactions.map(r => (
+                                                <button
+                                                    key={r.emoji}
+                                                    type="button"
+                                                    className={`interaction-btn ${r.me ? "active" : ""}`}
+                                                    style={{ padding: "1px 6px", borderRadius: "12px", border: "1px solid var(--border-color)", background: r.me ? "var(--accent-color-transparent)" : "var(--surface-color)", fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                                                    onClick={() => r.me ? removeReaction(message.channelId, message.id, r.emoji) : addReaction(message.channelId, message.id, r.emoji)}
+                                                >
+                                                    <span>{r.emoji}</span>
+                                                    <span style={{ fontWeight: 600, opacity: 0.8 }}>{r.count}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Emoji Picker for adding a reaction */}
+                                    {reactionTargetMessageId === message.id && (
+                                        <div className="reaction-picker-overlay" style={{ position: "absolute", zIndex: 50, top: "100%", left: 0 }}>
+                                            <div className="picker-backdrop" style={{ position: "fixed", inset: 0 }} onClick={() => setReactionTargetMessageId(null)} />
+                                            <div style={{ position: "relative" }}>
+                                                <EmojiPicker
+                                                    onEmojiClick={async (emojiData: EmojiClickData) => {
+                                                        await addReaction(message.channelId, message.id, emojiData.emoji);
+                                                        setReactionTargetMessageId(null);
+                                                    }}
+                                                    theme={theme as any}
+                                                    width={300}
+                                                    height={350}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                                 {message.clientState === "sending" ? <small className="message-meta">Sending...</small> : null}
                                 {message.clientState === "failed" ? (
                                     <small className="message-meta message-meta-error">

@@ -158,17 +158,66 @@ export async function listMessages(input: {
       author_user_id: string;
       author_display_name: string;
       content: string;
+      attachments: any;
       created_at: string;
+      updated_at?: string;
+      deleted_at?: string;
     }>(query, params);
 
-    return rows.rows.reverse().map((row) => ({
-      id: row.id,
-      channelId: row.channel_id,
-      authorUserId: row.author_user_id,
-      authorDisplayName: row.author_display_name,
-      content: row.content,
-      createdAt: row.created_at
-    }));
+    const messageIds = rows.rows.map(r => r.id);
+    let reactionsMap: Record<string, any[]> = {};
+
+    if (messageIds.length > 0) {
+      const reactionsResult = await db.query<{
+        message_id: string;
+        emoji: string;
+        user_id: string;
+      }>(
+        `select message_id, emoji, user_id from message_reactions where message_id = any($1)`,
+        [messageIds]
+      );
+
+      for (const r of reactionsResult.rows) {
+        if (!reactionsMap[r.message_id]) {
+          reactionsMap[r.message_id] = [];
+        }
+        reactionsMap[r.message_id]!.push(r);
+      }
+    }
+
+    return rows.rows.reverse().map((row) => {
+      const rawReactions = reactionsMap[row.id] ?? [];
+      const reactionsByEmoji: Record<string, any> = {};
+
+      for (const r of rawReactions) {
+        if (!reactionsByEmoji[r.emoji]) {
+          reactionsByEmoji[r.emoji] = {
+            emoji: r.emoji,
+            count: 0,
+            me: false,
+            userIds: []
+          };
+        }
+        reactionsByEmoji[r.emoji].count++;
+        reactionsByEmoji[r.emoji].userIds.push(r.user_id);
+        if (input.viewerUserId && r.user_id === input.viewerUserId) {
+          reactionsByEmoji[r.emoji].me = true;
+        }
+      }
+
+      return {
+        id: row.id,
+        channelId: row.channel_id,
+        authorUserId: row.author_user_id,
+        authorDisplayName: row.author_display_name,
+        content: row.content,
+        attachments: row.attachments,
+        reactions: Object.values(reactionsByEmoji),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        deletedAt: row.deleted_at
+      };
+    });
   });
 }
 
@@ -176,6 +225,7 @@ export async function createMessage(input: {
   channelId: string;
   actorUserId: string;
   content: string;
+  attachments?: ChatMessage["attachments"];
   isRelay?: boolean;
 }): Promise<ChatMessage> {
   return withDb(async (db) => {
@@ -230,12 +280,20 @@ export async function createMessage(input: {
         author_user_id: string;
         author_display_name: string;
         content: string;
+        attachments: any;
         created_at: string;
       }>(
-        `insert into chat_messages (id, channel_id, author_user_id, author_display_name, content)
-       values ($1, $2, $3, $4, $5)
+        `insert into chat_messages (id, channel_id, author_user_id, author_display_name, content, attachments)
+       values ($1, $2, $3, $4, $5, $6)
        returning *`,
-        [`msg_${crypto.randomUUID().replaceAll("-", "")}`, input.channelId, input.actorUserId, authorDisplayName, input.content]
+        [
+          `msg_${crypto.randomUUID().replaceAll("-", "")}`,
+          input.channelId,
+          input.actorUserId,
+          authorDisplayName,
+          input.content,
+          JSON.stringify(input.attachments ?? [])
+        ]
       );
 
       const row = created.rows[0];
@@ -249,6 +307,8 @@ export async function createMessage(input: {
         authorUserId: row.author_user_id,
         authorDisplayName: row.author_display_name,
         content: row.content,
+        attachments: row.attachments,
+        reactions: [],
         createdAt: row.created_at
       };
 
@@ -757,5 +817,97 @@ export async function getUnreadSummary(productUserId: string): Promise<Record<st
     }
 
     return summary;
+  });
+}
+
+export async function updateMessage(input: {
+  messageId: string;
+  actorUserId: string;
+  content: string;
+}): Promise<ChatMessage> {
+  return withDb(async (db) => {
+    const result = await db.query<{
+      id: string;
+      channel_id: string;
+      author_user_id: string;
+      author_display_name: string;
+      content: string;
+      attachments: any;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `update chat_messages
+       set content = $1, updated_at = now()
+       where id = $2 and author_user_id = $3
+       returning *`,
+      [input.content, input.messageId, input.actorUserId]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error("Message not found or not authored by user.");
+    }
+
+    return {
+      id: row.id,
+      channelId: row.channel_id,
+      authorUserId: row.author_user_id,
+      authorDisplayName: row.author_display_name,
+      content: row.content,
+      attachments: row.attachments,
+      reactions: [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  });
+}
+
+export async function deleteMessage(input: {
+  messageId: string;
+  actorUserId: string;
+  isModerator?: boolean;
+}): Promise<void> {
+  return withDb(async (db) => {
+    let query = "update chat_messages set deleted_at = now() where id = $1";
+    const params = [input.messageId];
+
+    if (!input.isModerator) {
+      query += " and author_user_id = $2";
+      params.push(input.actorUserId);
+    }
+
+    const result = await db.query(query, params);
+    if (result.rowCount === 0) {
+      throw new Error("Message not found or permission denied.");
+    }
+  });
+}
+
+export async function addReaction(input: {
+  messageId: string;
+  userId: string;
+  emoji: string;
+}): Promise<void> {
+  return withDb(async (db) => {
+    await db.query(
+      `insert into message_reactions (id, message_id, user_id, emoji)
+       values ($1, $2, $3, $4)
+       on conflict (message_id, user_id, emoji) do nothing`,
+      [`react_${crypto.randomUUID().replaceAll("-", "")}`, input.messageId, input.userId, input.emoji]
+    );
+  });
+}
+
+export async function removeReaction(input: {
+  messageId: string;
+  userId: string;
+  emoji: string;
+}): Promise<void> {
+  return withDb(async (db) => {
+    await db.query(
+      `delete from message_reactions
+       where message_id = $1 and user_id = $2 and emoji = $3`,
+      [input.messageId, input.userId, input.emoji]
+    );
   });
 }
