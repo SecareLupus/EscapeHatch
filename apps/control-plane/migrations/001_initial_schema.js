@@ -16,9 +16,11 @@ export const up = (pgm) => {
         token_expires_at: { type: 'timestamptz' },
         created_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
         updated_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
-    }, { ifNotExists: true });
-    pgm.addConstraint('identity_mappings', 'identity_mappings_provider_oidc_subject_unique', {
-        unique: ['provider', 'oidc_subject'],
+    }, {
+        ifNotExists: true,
+        constraints: {
+            unique: [['provider', 'oidc_subject']]
+        }
     });
 
     // 2. hubs
@@ -123,9 +125,11 @@ export const up = (pgm) => {
         expires_at: { type: 'timestamptz' },
         created_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
         updated_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
-    }, { ifNotExists: true });
-    pgm.addConstraint('space_admin_assignments', 'space_admin_assignments_server_id_assigned_user_id_unique', {
-        unique: ['server_id', 'assigned_user_id'],
+    }, {
+        ifNotExists: true,
+        constraints: {
+            unique: [['server_id', 'assigned_user_id']]
+        }
     });
 
     // 10. delegation_audit_events
@@ -182,15 +186,12 @@ export const up = (pgm) => {
 
     // 14. channel_read_states
     pgm.createTable('channel_read_states', {
-        product_user_id: { type: 'text', notNull: true },
-        channel_id: { type: 'text', notNull: true, references: 'channels', onDelete: 'CASCADE' },
+        product_user_id: { type: 'text', notNull: true, primaryKey: true },
+        channel_id: { type: 'text', notNull: true, references: 'channels', onDelete: 'CASCADE', primaryKey: true },
         last_read_at: { type: 'timestamptz', notNull: true },
         is_muted: { type: 'boolean', notNull: true, default: false },
         updated_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
     }, { ifNotExists: true });
-    pgm.addConstraint('channel_read_states', 'channel_read_states_pkey', {
-        primaryKey: ['product_user_id', 'channel_id'],
-    });
 
     // 15. mention_markers
     pgm.createTable('mention_markers', {
@@ -203,8 +204,8 @@ export const up = (pgm) => {
 
     // 16. voice_presence
     pgm.createTable('voice_presence', {
-        channel_id: { type: 'text', notNull: true, references: 'channels', onDelete: 'CASCADE' },
-        product_user_id: { type: 'text', notNull: true },
+        channel_id: { type: 'text', notNull: true, references: 'channels', onDelete: 'CASCADE', primaryKey: true },
+        product_user_id: { type: 'text', notNull: true, primaryKey: true },
         muted: { type: 'boolean', notNull: true, default: false },
         deafened: { type: 'boolean', notNull: true, default: false },
         video_enabled: { type: 'boolean', notNull: true, default: false },
@@ -212,9 +213,6 @@ export const up = (pgm) => {
         joined_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
         updated_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
     }, { ifNotExists: true });
-    pgm.addConstraint('voice_presence', 'voice_presence_pkey', {
-        primaryKey: ['channel_id', 'product_user_id'],
-    });
 
     // 17. hub_federation_policies
     pgm.createTable('hub_federation_policies', {
@@ -254,7 +252,7 @@ export const up = (pgm) => {
     // 20. discord_bridge_connections
     pgm.createTable('discord_bridge_connections', {
         id: { type: 'text', primaryKey: true },
-        server_id: { type: 'text', notNull: true, references: 'servers', onDelete: 'CASCADE' },
+        server_id: { type: 'text', notNull: true, references: 'servers', onDelete: 'CASCADE', unique: true },
         connected_by_user_id: { type: 'text', notNull: true },
         discord_user_id: { type: 'text' },
         discord_username: { type: 'text' },
@@ -269,9 +267,6 @@ export const up = (pgm) => {
         created_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
         updated_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
     }, { ifNotExists: true });
-    pgm.addConstraint('discord_bridge_connections', 'discord_bridge_connections_server_id_unique', {
-        unique: ['server_id'],
-    });
 
     // 21. discord_bridge_channel_mappings
     pgm.createTable('discord_bridge_channel_mappings', {
@@ -284,12 +279,11 @@ export const up = (pgm) => {
         enabled: { type: 'boolean', notNull: true, default: true },
         created_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
         updated_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
-    }, { ifNotExists: true });
-    pgm.addConstraint('discord_bridge_channel_mappings', 'discord_bridge_channel_mappings_server_id_discord_channel_id_unique', {
-        unique: ['server_id', 'discord_channel_id'],
-    });
-    pgm.addConstraint('discord_bridge_channel_mappings', 'discord_bridge_channel_mappings_server_id_matrix_channel_id_unique', {
-        unique: ['server_id', 'matrix_channel_id'],
+    }, {
+        ifNotExists: true,
+        constraints: {
+            unique: [['server_id', 'discord_channel_id'], ['server_id', 'matrix_channel_id']]
+        }
     });
 
     // 22. platform_settings

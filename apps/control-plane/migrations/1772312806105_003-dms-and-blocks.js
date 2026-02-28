@@ -16,22 +16,16 @@ export const up = (pgm) => {
 
     // 2. Create channel_members table for private DM visibility
     pgm.createTable('channel_members', {
-        channel_id: { type: 'text', notNull: true, references: 'channels', onDelete: 'CASCADE' },
-        product_user_id: { type: 'text', notNull: true },
+        channel_id: { type: 'text', notNull: true, references: 'channels', onDelete: 'CASCADE', primaryKey: true },
+        product_user_id: { type: 'text', notNull: true, primaryKey: true },
         joined_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
-    });
-    pgm.addConstraint('channel_members', 'channel_members_pkey', {
-        primaryKey: ['channel_id', 'product_user_id'],
     });
 
     // 3. Create user_blocks table
     pgm.createTable('user_blocks', {
-        blocker_user_id: { type: 'text', notNull: true },
-        blocked_user_id: { type: 'text', notNull: true },
+        blocker_user_id: { type: 'text', notNull: true, primaryKey: true },
+        blocked_user_id: { type: 'text', notNull: true, primaryKey: true },
         created_at: { type: 'timestamptz', notNull: true, default: pgm.func('now()') },
-    });
-    pgm.addConstraint('user_blocks', 'user_blocks_pkey', {
-        primaryKey: ['blocker_user_id', 'blocked_user_id'],
     });
 };
 
