@@ -31,6 +31,7 @@ export type ModalType =
     | "rename-space"
     | "rename-category"
     | "rename-room"
+    | "profile"
     | null;
 
 export interface ChatState {
@@ -97,6 +98,7 @@ export interface ChatState {
     updatingControls: boolean;
     channelScrollPositions: Record<string, number>;
     draftMessagesByChannel: Record<string, string>;
+    profileUserId: string | null;
 }
 
 type ChatAction =
@@ -154,7 +156,8 @@ type ChatAction =
     | { type: "SET_NOTIFICATIONS"; payload: Record<string, { unreadCount: number; mentionCount: number; isMuted: boolean }> }
     | { type: "CLEAR_NOTIFICATIONS"; payload: { channelId: string } }
     | { type: "SET_CHANNEL_SCROLL_POSITION"; payload: { channelId: string; position: number } }
-    | { type: "SET_CHANNEL_DRAFT"; payload: { channelId: string; draft: string } };
+    | { type: "SET_CHANNEL_DRAFT"; payload: { channelId: string; draft: string } }
+    | { type: "SET_PROFILE_USER_ID"; payload: string | null };
 
 const initialState: ChatState = {
     viewer: null,
@@ -214,7 +217,8 @@ const initialState: ChatState = {
     sending: false,
     updatingControls: false,
     channelScrollPositions: {},
-    draftMessagesByChannel: {}
+    draftMessagesByChannel: {},
+    profileUserId: null
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -378,6 +382,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                     [action.payload.channelId]: action.payload.draft
                 }
             };
+        case "SET_PROFILE_USER_ID":
+            return { ...state, profileUserId: action.payload };
         default:
             return state;
     }

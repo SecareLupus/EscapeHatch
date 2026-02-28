@@ -14,6 +14,9 @@ interface IdentityRow {
   email: string | null;
   preferred_username: string | null;
   avatar_url: string | null;
+  display_name: string | null;
+  bio: string | null;
+  custom_status: string | null;
   matrix_user_id: string | null;
   product_user_id: string;
   theme: "light" | "dark" | null;
@@ -32,6 +35,9 @@ function mapRow(result: IdentityRow): IdentityMapping {
     email: result.email,
     preferredUsername: result.preferred_username,
     avatarUrl: result.avatar_url,
+    displayName: result.display_name,
+    bio: result.bio,
+    customStatus: result.custom_status,
     matrixUserId: result.matrix_user_id,
     productUserId: result.product_user_id,
     theme: result.theme as "light" | "dark" | null,
@@ -265,4 +271,35 @@ export async function ensureIdentityTokenValid(productUserId: string): Promise<v
       console.error(`Failed to refresh identity token for user ${productUserId}:`, error);
     }
   }
+}
+
+export async function updateUserProfile(productUserId: string, input: {
+  displayName?: string | null;
+  bio?: string | null;
+  customStatus?: string | null;
+  avatarUrl?: string | null;
+}): Promise<void> {
+  await withDb(async (db) => {
+    await db.query(
+      `update identity_mappings
+       set 
+         display_name = case when $2::text is not null or $6::boolean then $2::text else display_name end,
+         bio = case when $3::text is not null or $7::boolean then $3::text else bio end,
+         custom_status = case when $4::text is not null or $8::boolean then $4::text else custom_status end,
+         avatar_url = case when $5::text is not null or $9::boolean then $5::text else avatar_url end,
+         updated_at = now()
+       where product_user_id = $1`,
+      [
+        productUserId,
+        input.displayName === undefined ? null : input.displayName,
+        input.bio === undefined ? null : input.bio,
+        input.customStatus === undefined ? null : input.customStatus,
+        input.avatarUrl === undefined ? null : input.avatarUrl,
+        input.displayName === null,
+        input.bio === null,
+        input.customStatus === null,
+        input.avatarUrl === null
+      ]
+    );
+  });
 }

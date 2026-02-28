@@ -9,6 +9,7 @@ import { ChatWindow } from "./chat-window";
 import Link from "next/link";
 import { useToast } from "./toast-provider";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
+import { ProfileModal } from "./profile-modal";
 import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@escapehatch/shared";
 import {
   bootstrapAdmin,
@@ -132,7 +133,8 @@ export function ChatClient() {
     sending,
     updatingControls,
     channelScrollPositions,
-    draftMessagesByChannel
+    draftMessagesByChannel,
+    profileUserId
   } = state;
 
   const [mentions, setMentions] = useState<MentionMarker[]>([]);
@@ -351,8 +353,8 @@ export function ChatClient() {
         label: "View Profile",
         icon: "👤",
         onClick: () => {
-          // TODO: Implement profile modal
-          dispatch({ type: "SET_ACTIVE_MODAL", payload: "profile" as any }); // Simplified for now
+          dispatch({ type: "SET_PROFILE_USER_ID", payload: userContextMenu.userId });
+          dispatch({ type: "SET_ACTIVE_MODAL", payload: "profile" });
         }
       },
       {
@@ -2023,6 +2025,8 @@ export function ChatClient() {
           onClose={() => setUserContextMenu(null)}
         />
       )}
+
+      {activeModal === "profile" && <ProfileModal />}
     </main>
   );
 }

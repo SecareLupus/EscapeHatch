@@ -34,6 +34,9 @@ export interface ViewerSession {
     preferredUsername: string | null;
     email: string | null;
     avatarUrl?: string | null;
+    displayName?: string | null;
+    bio?: string | null;
+    customStatus?: string | null;
     matrixUserId?: string | null;
     theme?: "light" | "dark" | null;
   } | null;
@@ -228,6 +231,19 @@ export async function updateUserTheme(theme: "light" | "dark"): Promise<void> {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ theme })
+  });
+}
+
+export async function updateUserProfile(input: {
+  displayName?: string | null;
+  bio?: string | null;
+  customStatus?: string | null;
+  avatarUrl?: string | null;
+}): Promise<void> {
+  await apiFetch("/auth/session/me/profile", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
   });
 }
 

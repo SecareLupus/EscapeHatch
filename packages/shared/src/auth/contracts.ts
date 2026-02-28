@@ -8,6 +8,9 @@ export interface IdentityMapping {
   preferredUsername: string | null;
   avatarUrl: string | null;
   matrixUserId: string | null;
+  displayName: string | null;
+  bio: string | null;
+  customStatus: string | null;
   productUserId: string;
   theme?: "light" | "dark" | null;
   settings?: Record<string, any>;
@@ -29,7 +32,7 @@ export interface AuthenticatedViewer {
   productUserId: string;
   identity: Pick<
     IdentityMapping,
-    "provider" | "oidcSubject" | "email" | "preferredUsername" | "avatarUrl" | "matrixUserId"
+    "provider" | "oidcSubject" | "email" | "preferredUsername" | "avatarUrl" | "matrixUserId" | "displayName" | "bio" | "customStatus"
   >;
 }
 

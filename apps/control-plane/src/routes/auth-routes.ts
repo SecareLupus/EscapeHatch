@@ -11,15 +11,16 @@ import {
   listIdentitiesByProductUserId,
   setPreferredUsernameForProductUser,
   upsertIdentityMapping,
-  updateUserTheme
+  updateUserTheme,
+  updateUserProfile
 } from "../services/identity-service.js";
 import { requireAuth } from "../auth/middleware.js";
 import type { AccountLinkingRequirement, IdentityProvider } from "@escapehatch/shared";
 import { config } from "../config.js";
 import { bootstrapAdmin, getBootstrapStatus } from "../services/bootstrap-service.js";
-import { 
-  completeDiscordOauthAndListGuilds, 
-  consumeDiscordOauthState 
+import {
+  completeDiscordOauthAndListGuilds,
+  consumeDiscordOauthState
 } from "../services/discord-bridge-service.js";
 
 const providerSchema = z.enum(["discord", "keycloak", "google", "github", "twitch", "dev"]);
@@ -201,8 +202,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    const query = z.object({ 
-      code: z.string(), 
+    const query = z.object({
+      code: z.string(),
       state: z.string(),
       guild_id: z.string().optional()
     }).parse(request.query);
@@ -341,6 +342,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           email: resolvedIdentity.email,
           preferredUsername: resolvedIdentity.preferredUsername,
           avatarUrl: resolvedIdentity.avatarUrl,
+          displayName: resolvedIdentity.displayName,
+          bio: resolvedIdentity.bio,
+          customStatus: resolvedIdentity.customStatus,
           matrixUserId: resolvedIdentity.matrixUserId,
           theme: resolvedIdentity.theme
         }
@@ -351,6 +355,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         email: identity.email,
         preferredUsername: identity.preferredUsername,
         avatarUrl: identity.avatarUrl,
+        displayName: identity.displayName,
+        bio: identity.bio,
+        customStatus: identity.customStatus,
         theme: identity.theme
       })),
       needsOnboarding: !onboardingComplete
@@ -360,6 +367,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/auth/session/me/theme", { preHandler: requireAuth }, async (request, reply) => {
     const { theme } = z.object({ theme: z.enum(["light", "dark"]) }).parse(request.body);
     await updateUserTheme(request.auth!.productUserId, theme);
+    reply.code(204).send();
+  });
+
+  app.patch("/auth/session/me/profile", { preHandler: requireAuth }, async (request, reply) => {
+    const payload = z.object({
+      displayName: z.string().max(80).nullable().optional(),
+      bio: z.string().max(256).nullable().optional(),
+      customStatus: z.string().max(128).nullable().optional(),
+      avatarUrl: z.string().url().nullable().optional(),
+    }).parse(request.body);
+
+    await updateUserProfile(request.auth!.productUserId, payload);
     reply.code(204).send();
   });
 
