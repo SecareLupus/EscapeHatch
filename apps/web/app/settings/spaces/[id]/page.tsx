@@ -6,7 +6,8 @@ import { fetchServerSettings, updateServerSettings } from "../../../../lib/contr
 import { useChat } from "../../../../context/chat-context";
 import { useToast } from "../../../../components/toast-provider";
 import BridgeManager from "../../../../components/bridge-manager";
-
+import { SpaceDelegationManager } from "../../../../components/space-delegation-manager";
+import { SpaceOwnershipTransfer } from "../../../../components/space-ownership-transfer";
 export default function SpaceSettingsPage() {
     const params = useParams();
     const router = useRouter();
@@ -128,11 +129,19 @@ export default function SpaceSettingsPage() {
 
             <hr style={{ margin: '3rem 0', border: 'none', borderTop: '1px solid var(--border)' }} />
 
+            <SpaceDelegationManager serverId={serverId} />
+
+            <hr style={{ margin: '3rem 0', border: 'none', borderTop: '1px solid var(--border)' }} />
+
             <BridgeManager
                 serverId={serverId}
                 hubId={server.hubId}
                 returnTo={`/settings/spaces/${serverId}`}
             />
+
+            <hr style={{ margin: '3rem 0', border: 'none', borderTop: '1px solid var(--border)' }} />
+
+            <SpaceOwnershipTransfer serverId={serverId} />
         </div>
     );
 }
