@@ -172,8 +172,19 @@ export async function listMessages(input: {
         message_id: string;
         emoji: string;
         user_id: string;
+        display_name: string;
       }>(
-        `select message_id, emoji, user_id from message_reactions where message_id = any($1)`,
+        `select mr.message_id, mr.emoji, mr.user_id, 
+           coalesce(
+             (select preferred_username 
+              from identity_mappings 
+              where product_user_id = mr.user_id 
+              order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+              limit 1),
+             'user-' || substr(mr.user_id, 1, 8)
+           ) as display_name
+         from message_reactions mr 
+         where mr.message_id = any($1)`,
         [messageIds]
       );
 
@@ -195,11 +206,13 @@ export async function listMessages(input: {
             emoji: r.emoji,
             count: 0,
             me: false,
-            userIds: []
+            userIds: [],
+            displayNames: []
           };
         }
         reactionsByEmoji[r.emoji].count++;
         reactionsByEmoji[r.emoji].userIds.push(r.user_id);
+        reactionsByEmoji[r.emoji].displayNames.push(r.display_name);
         if (input.viewerUserId && r.user_id === input.viewerUserId) {
           reactionsByEmoji[r.emoji].me = true;
         }

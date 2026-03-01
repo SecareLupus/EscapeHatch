@@ -460,8 +460,13 @@ export function ChatWindow({
 
 
             <ol className="messages" ref={messagesRef} onScroll={handleMessageListScroll}>
-                {renderedMessages.map(({ message, showHeader, showDateDivider }) => {
+                {renderedMessages.map(({ message, showHeader, showDateDivider }, index) => {
                     const mediaUrls = extractMediaUrls(message.content);
+                    const isNearBottomIndex = index >= renderedMessages.length - 2;
+                    const pickerPositionStyle = isNearBottomIndex
+                        ? { bottom: "100%", left: 0, marginBottom: "0.5rem" }
+                        : { top: "100%", left: 0, marginTop: "0.5rem" };
+
                     return (
                         <li key={message.id}>
                             {showDateDivider ? (
@@ -551,9 +556,10 @@ export function ChatWindow({
                                     {/* Reactions rendering */}
                                     {message.reactions && message.reactions.length > 0 && (
                                         <div className="message-reactions-container" style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.25rem" }}>
-                                            {message.reactions.map(r => (
+                                            {message.reactions.map((r: any) => (
                                                 <button
                                                     key={r.emoji}
+                                                    title={r.displayNames ? r.displayNames.join(', ') : ''}
                                                     type="button"
                                                     className={`interaction-btn ${r.me ? "active" : ""}`}
                                                     style={{ padding: "1px 6px", borderRadius: "12px", border: "1px solid var(--border-color)", background: r.me ? "var(--accent-color-transparent)" : "var(--surface-color)", fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.25rem" }}
@@ -568,7 +574,7 @@ export function ChatWindow({
 
                                     {/* Emoji Picker for adding a reaction */}
                                     {reactionTargetMessageId === message.id && (
-                                        <div className="reaction-picker-overlay" style={{ position: "absolute", zIndex: 50, top: "100%", left: 0 }}>
+                                        <div className="reaction-picker-overlay" style={{ position: "absolute", zIndex: 50, ...pickerPositionStyle }}>
                                             <div className="picker-backdrop" style={{ position: "fixed", inset: 0 }} onClick={() => setReactionTargetMessageId(null)} />
                                             <div className="emoji-picker-container" style={{ position: "absolute", zIndex: 100 }}>
                                                 <EmojiPicker
