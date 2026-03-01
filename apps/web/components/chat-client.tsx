@@ -1398,8 +1398,10 @@ export function ChatClient() {
         videoEnabled: voiceVideoEnabled,
         videoQuality: voiceVideoQuality
       });
-      dispatch({ type: "SET_VOICE_GRANT", payload: grant });
-      dispatch({ type: "SET_VOICE_CONNECTED", payload: true });
+      dispatch({
+        type: "SET_VOICE_SESSION",
+        payload: { connected: true, grant }
+      });
       dispatch({
         type: "SET_VOICE_MEMBERS",
         payload: await listVoicePresence({

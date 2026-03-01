@@ -137,6 +137,7 @@ type ChatAction =
     | { type: "SET_NEAR_BOTTOM"; payload: boolean }
     | { type: "SET_PENDING_NEW_MESSAGE_COUNT"; payload: number }
     | { type: "SET_LAST_SEEN_MESSAGE_ID"; payload: string | null }
+    | { type: "SET_VOICE_SESSION"; payload: { connected: boolean; grant: VoiceTokenGrant | null } }
     | { type: "SET_VOICE_CONNECTED"; payload: boolean }
     | { type: "SET_VOICE_MUTED"; payload: boolean }
     | { type: "SET_VOICE_DEAFENED"; payload: boolean }
@@ -229,6 +230,12 @@ const initialState: ChatState = {
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
     switch (action.type) {
+        case "SET_VOICE_SESSION":
+            return {
+                ...state,
+                voiceConnected: action.payload.connected,
+                voiceGrant: action.payload.grant
+            };
         case "SET_VIEWER":
             return { ...state, viewer: action.payload };
         case "SET_PROVIDERS":

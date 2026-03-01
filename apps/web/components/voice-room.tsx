@@ -58,13 +58,16 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
                 onDisconnect();
             });
 
+        console.log("[VoiceRoom] Mounted effect, token hash:", grant.token.slice(-10));
         async function connect() {
             try {
+                console.log("[VoiceRoom] Connecting to:", (grant as any).sfuUrl);
                 await r.connect((grant as any).sfuUrl, grant.token);
+                console.log("[VoiceRoom] Connected successfully");
                 setRoom(r);
                 setParticipants([r.localParticipant, ...Array.from(r.remoteParticipants.values())]);
             } catch (err) {
-                console.error("Failed to connect to LiveKit:", err);
+                console.error("[VoiceRoom] Failed to connect to LiveKit:", err);
                 setError(err instanceof Error ? err.message : "Failed to connect to SFU");
             }
         }
@@ -72,6 +75,7 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
         void connect();
 
         return () => {
+            console.log("[VoiceRoom] Cleaning up / Unmounting, was room connected?", r.state);
             void r.disconnect();
         };
     }, [(grant as any).sfuUrl, grant.token]);
