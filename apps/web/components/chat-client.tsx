@@ -777,13 +777,13 @@ export function ChatClient() {
       dispatch({ type: "SET_REALTIME_STATE", payload: "polling" });
       pollInterval = setInterval(() => {
         void listMessages(selectedChannelId)
-          .then((next) => {
+          .then((next: MessageItem[]) => {
             dispatch({
               type: "UPDATE_MESSAGES",
-              payload: (current) => {
+              payload: (current: MessageItem[]) => {
                 const map = new Map<string, MessageItem>();
                 // Keep all current sending/failed messages
-                current.forEach(m => {
+                current.forEach((m: MessageItem) => {
                   if (m.clientState === "sending" || m.clientState === "failed") {
                     map.set(m.id, m);
                   }
@@ -791,7 +791,7 @@ export function ChatClient() {
                 // Add all server messages, letting them overwrite if ID matches
                 // (Server messages won't have clientState so they'll overwrite "sending" if ID is same,
                 // but usually tmp IDs are different).
-                next.forEach(m => map.set(m.id, m));
+                next.forEach((m: MessageItem) => map.set(m.id, m));
 
                 return Array.from(map.values()).sort((a, b) =>
                   new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -832,8 +832,8 @@ export function ChatClient() {
       onMessageCreated: (message) => {
         dispatch({
           type: "UPDATE_MESSAGES",
-          payload: (current) => {
-            if (current.some((item) => item.id === message.id)) {
+          payload: (current: MessageItem[]) => {
+            if (current.some((item: MessageItem) => item.id === message.id)) {
               return current;
             }
             return [...current, message];
@@ -847,16 +847,16 @@ export function ChatClient() {
       onMessageUpdated: (updatedMessage) => {
         dispatch({
           type: "UPDATE_MESSAGES",
-          payload: (current) => {
-            return current.map((item) => (item.id === updatedMessage.id ? updatedMessage : item));
+          payload: (current: MessageItem[]) => {
+            return current.map((item: MessageItem) => (item.id === updatedMessage.id ? updatedMessage : item));
           }
         });
       },
       onMessageDeleted: (deletedMessageId) => {
         dispatch({
           type: "UPDATE_MESSAGES",
-          payload: (current) => {
-            return current.filter((item) => item.id !== deletedMessageId);
+          payload: (current: MessageItem[]) => {
+            return current.filter((item: MessageItem) => item.id !== deletedMessageId);
           }
         });
       }
@@ -1537,9 +1537,9 @@ export function ChatClient() {
 
     dispatch({
       type: "UPDATE_MESSAGES",
-      payload: (current) => {
-        if (current.some((item) => item.id === tempId)) {
-          return current.map((item) => (item.id === tempId ? optimisticMessage : item));
+      payload: (current: MessageItem[]) => {
+        if (current.some((item: MessageItem) => item.id === tempId)) {
+          return current.map((item: MessageItem) => (item.id === tempId ? optimisticMessage : item));
         }
         return [...current, optimisticMessage];
       }
@@ -1551,21 +1551,21 @@ export function ChatClient() {
       const persisted = await sendMessage(selectedChannelId, content.trim());
       dispatch({
         type: "UPDATE_MESSAGES",
-        payload: (current) => {
+        payload: (current: MessageItem[]) => {
           // Check if message was already added by streamer
-          if (current.some(m => m.id === persisted.id)) {
+          if (current.some((m: MessageItem) => m.id === persisted.id)) {
             // Remove the temporary message if it still exists
-            return current.filter(m => m.id !== tempId);
+            return current.filter((m: MessageItem) => m.id !== tempId);
           }
           // Replace temp with persisted
-          return current.map((item) => (item.id === tempId ? persisted : item));
+          return current.map((item: MessageItem) => (item.id === tempId ? persisted : item));
         }
       });
     } catch (cause) {
       dispatch({
         type: "UPDATE_MESSAGES",
-        payload: (current) =>
-          current.map((item) =>
+        payload: (current: MessageItem[]) =>
+          current.map((item: MessageItem) =>
             item.id === tempId
               ? {
                 ...item,

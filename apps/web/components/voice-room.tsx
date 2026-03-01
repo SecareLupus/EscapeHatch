@@ -33,6 +33,9 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
         onDisconnectRef.current = onDisconnect;
     }, [onDisconnect]);
 
+    const sfuUrl = (grant as any).sfuUrl as string;
+    const token = grant.token;
+
     useEffect(() => {
         const r = new Room({
             adaptiveStream: true,
@@ -64,11 +67,11 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
             });
 
         let isAborted = false;
-        console.log("[VoiceRoom] Mounted effect, token hash:", grant.token.slice(-10));
+        console.log("[VoiceRoom] Mounted effect, token hash:", token.slice(-10));
         async function connect() {
             try {
-                console.log("[VoiceRoom] Connecting to:", (grant as any).sfuUrl);
-                await r.connect((grant as any).sfuUrl, grant.token);
+                console.log("[VoiceRoom] Connecting to:", sfuUrl);
+                await r.connect(sfuUrl, token);
                 if (isAborted) {
                     console.log("[VoiceRoom] Connection finished but component was unmounted, disconnecting");
                     void r.disconnect();
@@ -91,7 +94,7 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
             console.log("[VoiceRoom] Cleaning up / Unmounting, was room connected?", r.state);
             void r.disconnect();
         };
-    }, [(grant as any).sfuUrl, grant.token]);
+    }, [sfuUrl, token]);
 
     useEffect(() => {
         if (!room) return;
