@@ -143,6 +143,7 @@ export function ChatClient() {
 
   const [mentions, setMentions] = useState<MentionMarker[]>([]);
   const { blockedUserIds } = state;
+  const previousServerIdRef = useRef<string | null>(null);
 
   const filteredChannels = useMemo(() => {
     const term = channelFilter.trim().toLowerCase();
@@ -660,12 +661,18 @@ export function ChatClient() {
     dispatch({ type: "SET_RENAME_SPACE", payload: { id: selectedServer?.id ?? "", name: selectedServer?.name ?? "" } });
     dispatch({ type: "SET_DELETE_TARGET_SPACE_ID", payload: state.deleteTargetSpaceId || selectedServer?.id || servers[0]?.id || "" });
 
-    // Reset voice state when server changes
-    dispatch({ type: "SET_VOICE_CONNECTED", payload: false });
-    dispatch({ type: "SET_VOICE_MUTED", payload: false });
-    dispatch({ type: "SET_VOICE_DEAFENED", payload: false });
-    dispatch({ type: "SET_VOICE_GRANT", payload: null });
-    dispatch({ type: "SET_VOICE_MEMBERS", payload: [] });
+    // Reset voice state ONLY if the server actually changed
+    if (previousServerIdRef.current !== selectedServerId) {
+      console.log("[ChatClient] selectedServerId effect: Server changed (or first load). Resetting voice. Previous:", previousServerIdRef.current, "New:", selectedServerId);
+      dispatch({ type: "SET_VOICE_CONNECTED", payload: false });
+      dispatch({ type: "SET_VOICE_MUTED", payload: false });
+      dispatch({ type: "SET_VOICE_DEAFENED", payload: false });
+      dispatch({ type: "SET_VOICE_GRANT", payload: null });
+      dispatch({ type: "SET_VOICE_MEMBERS", payload: [] });
+      previousServerIdRef.current = selectedServerId;
+    } else {
+      console.log("[ChatClient] selectedServerId effect: Server unchanged. Skipping voice reset.");
+    }
   }, [selectedServerId, servers, dispatch]);
 
   useEffect(() => {
@@ -1381,6 +1388,7 @@ export function ChatClient() {
 
 
   async function handleJoinVoice(): Promise<void> {
+    console.log("[ChatClient] handleJoinVoice called, server:", selectedServerId, "channel:", selectedChannelId);
     if (!selectedServerId || !selectedChannelId || activeChannel?.type !== "voice") {
       return;
     }
