@@ -273,6 +273,10 @@ export async function searchUsers(query: string): Promise<IdentityMapping[]> {
   return json.items;
 }
 
+export async function fetchUser(userId: string): Promise<IdentityMapping> {
+  return apiFetch<IdentityMapping>(`/v1/users/${encodeURIComponent(userId)}`);
+}
+
 export async function listCategories(serverId: string): Promise<Category[]> {
   const json = await apiFetch<{ items: Category[] }>(
     `/v1/servers/${encodeURIComponent(serverId)}/categories`
@@ -846,7 +850,7 @@ export async function assignSpaceOwner(input: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      productUserId: input.productUserId,
+      assignedUserId: input.productUserId,
       expiresAt: input.expiresAt
     })
   });

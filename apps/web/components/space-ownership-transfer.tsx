@@ -5,37 +5,35 @@ import { useRouter } from "next/navigation";
 import {
     transferSpaceOwnership,
     searchUsers,
+    fetchUser,
 } from "../lib/control-plane";
 import { useToast } from "./toast-provider";
+import { UserSelect } from "./user-select";
+import { useChat } from "../context/chat-context";
 
 interface SpaceOwnershipTransferProps {
     serverId: string;
 }
 
 export function SpaceOwnershipTransfer({ serverId }: SpaceOwnershipTransferProps) {
+    const { state } = useChat();
+    const server = state.servers.find(s => s.id === serverId);
+
     const { showToast } = useToast();
     const router = useRouter();
-    const [searchQuery, setSearchQuery] = useState("");
-    const [searchResults, setSearchResults] = useState<any[]>([]);
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [transferring, setTransferring] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
+    const [currentOwner, setCurrentOwner] = useState<any>(null);
+
     useEffect(() => {
-        const debounce = setTimeout(async () => {
-            if (searchQuery.length >= 3) {
-                try {
-                    const results = await searchUsers(searchQuery);
-                    setSearchResults(results);
-                } catch (err) {
-                    console.error("Failed to search users", err);
-                }
-            } else {
-                setSearchResults([]);
-            }
-        }, 300);
-        return () => clearTimeout(debounce);
-    }, [searchQuery]);
+        if (server?.ownerUserId) {
+            fetchUser(server.ownerUserId)
+                .then(user => setCurrentOwner(user))
+                .catch(err => console.error("Could not fetch current owner details", err));
+        }
+    }, [server?.ownerUserId]);
 
     const handleTransfer = async () => {
         if (!selectedUser) return;
@@ -69,48 +67,24 @@ export function SpaceOwnershipTransfer({ serverId }: SpaceOwnershipTransferProps
                 Transferring ownership gives full control of this space to another user. You will lose permanent ownership rights, but the new owner may choose to keep you as a delegated admin.
             </p>
 
+            <div style={{ padding: '1rem', background: 'var(--bg-surface-hover)', borderRadius: '6px', border: '1px solid var(--border)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div>
+                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Current Owner: </span>
+                    <strong style={{ fontSize: '1.1rem' }}>{currentOwner ? (currentOwner.displayName || currentOwner.preferredUsername) : server?.ownerUserId}</strong>
+                </div>
+            </div>
+
             <div className="transfer-form">
-                <div style={{ position: 'relative' }}>
-                    <input
-                        type="text"
-                        placeholder="Search users to transfer ownership to..."
-                        value={selectedUser ? selectedUser.displayName || selectedUser.preferredUsername : searchQuery}
-                        onChange={(e) => {
-                            setSearchQuery(e.target.value);
-                            setSelectedUser(null);
+                <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                    <UserSelect
+                        value={selectedUser}
+                        onChange={(user) => {
+                            setSelectedUser(user);
                             setShowConfirm(false);
                         }}
-                        style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--danger, #ff4d4f)', background: 'var(--bg-input)', color: 'var(--text-main)', marginBottom: '1rem' }}
+                        placeholder="Search users to transfer ownership to..."
+                        style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--danger, #ff4d4f)', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                     />
-
-                    {!selectedUser && searchResults.length > 0 && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-                            {searchResults.map(user => (
-                                <div
-                                    key={user.productUserId}
-                                    onClick={() => {
-                                        setSelectedUser(user);
-                                        setSearchQuery("");
-                                        setSearchResults([]);
-                                    }}
-                                    style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
-                                    className="search-result-item"
-                                >
-                                    {user.avatarUrl ? (
-                                        <img src={user.avatarUrl} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
-                                    ) : (
-                                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'white' }}>
-                                            {(user.displayName || user.preferredUsername || "?")[0].toUpperCase()}
-                                        </div>
-                                    )}
-                                    <div>
-                                        <div style={{ fontWeight: 600 }}>{user.displayName || user.preferredUsername}</div>
-                                        {user.displayName && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{user.preferredUsername}</div>}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
 
                 {!showConfirm ? (
@@ -147,9 +121,6 @@ export function SpaceOwnershipTransfer({ serverId }: SpaceOwnershipTransferProps
                 )}
             </div>
             <style jsx>{`
-                .search-result-item:hover {
-                    background: var(--bg-surface-hover);
-                }
                 button.danger-button {
                     background: var(--danger, #ff4d4f);
                     color: white;
@@ -166,6 +137,6 @@ export function SpaceOwnershipTransfer({ serverId }: SpaceOwnershipTransferProps
                     cursor: not-allowed;
                 }
             `}</style>
-        </section>
+        </section >
     );
 }

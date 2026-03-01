@@ -197,6 +197,16 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     return { items: await searchIdentities(query.q) };
   });
 
+  app.get("/v1/users/:userId", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ userId: z.string().min(1) }).parse(request.params);
+    const user = await getIdentityByProductUserId(params.userId);
+    if (!user) {
+      reply.code(404).send({ message: "User not found." });
+      return;
+    }
+    return user;
+  });
+
   app.get("/v1/servers", initializedAuthHandlers, async () => {
     return { items: await listServers() };
   });

@@ -5,9 +5,10 @@ import {
     listSpaceOwnerAssignments,
     assignSpaceOwner,
     revokeSpaceOwnerAssignment,
-    searchUsers,
+    fetchUser,
 } from "../lib/control-plane";
 import { useToast } from "./toast-provider";
+import { UserSelect } from "./user-select";
 
 interface SpaceDelegationManagerProps {
     serverId: string;
@@ -17,16 +18,24 @@ export function SpaceDelegationManager({ serverId }: SpaceDelegationManagerProps
     const { showToast } = useToast();
     const [assignments, setAssignments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [searchResults, setSearchResults] = useState<any[]>([]);
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [assigning, setAssigning] = useState(false);
     const [revoking, setRevoking] = useState<string | null>(null);
 
     const loadAssignments = async () => {
         try {
-            const data = await listSpaceOwnerAssignments(serverId);
-            setAssignments(data);
+            const allAssignments = await listSpaceOwnerAssignments(serverId);
+            const data = allAssignments.filter((a: any) => a.status === 'active');
+            // Resolve the assigned users to display their names
+            const withUsers = await Promise.all(data.map(async (a) => {
+                try {
+                    const user = await fetchUser(a.assignedUserId);
+                    return { ...a, assignedUser: user };
+                } catch (e) {
+                    return a;
+                }
+            }));
+            setAssignments(withUsers);
         } catch (err) {
             console.error("Failed to load space owner assignments", err);
             showToast("Failed to load delegated admins", "error");
@@ -41,21 +50,7 @@ export function SpaceDelegationManager({ serverId }: SpaceDelegationManagerProps
         }
     }, [serverId]);
 
-    useEffect(() => {
-        const debounce = setTimeout(async () => {
-            if (searchQuery.length >= 3) {
-                try {
-                    const results = await searchUsers(searchQuery);
-                    setSearchResults(results);
-                } catch (err) {
-                    console.error("Failed to search users", err);
-                }
-            } else {
-                setSearchResults([]);
-            }
-        }, 300);
-        return () => clearTimeout(debounce);
-    }, [searchQuery]);
+
 
     const handleAssign = async () => {
         if (!selectedUser) return;
@@ -66,9 +61,7 @@ export function SpaceDelegationManager({ serverId }: SpaceDelegationManagerProps
                 productUserId: selectedUser.productUserId,
             });
             showToast("Admin assigned successfully", "success");
-            setSearchQuery("");
             setSelectedUser(null);
-            setSearchResults([]);
             await loadAssignments();
         } catch (err: any) {
             showToast(err.message || "Failed to assign admin", "error");
@@ -109,7 +102,7 @@ export function SpaceDelegationManager({ serverId }: SpaceDelegationManagerProps
                         {assignments.map(a => (
                             <li key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'var(--bg-input)', borderRadius: '6px', border: '1px solid var(--border)' }}>
                                 <div>
-                                    <div style={{ fontWeight: 600 }}>{a.assignedUserId}</div>
+                                    <div style={{ fontWeight: 600 }}>{a.assignedUser ? (a.assignedUser.displayName || a.assignedUser.preferredUsername) : a.assignedUserId}</div>
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Assigned by {a.actorUserId} on {new Date(a.createdAt).toLocaleDateString()}</div>
                                 </div>
                                 <button
@@ -128,46 +121,13 @@ export function SpaceDelegationManager({ serverId }: SpaceDelegationManagerProps
 
             <div className="assign-form" style={{ background: 'var(--bg-surface-hover)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <h4 style={{ margin: '0 0 1rem 0' }}>Assign New Admin</h4>
-                <div style={{ position: 'relative' }}>
-                    <input
-                        type="text"
-                        placeholder="Search users..."
-                        value={selectedUser ? selectedUser.displayName || selectedUser.preferredUsername : searchQuery}
-                        onChange={(e) => {
-                            setSearchQuery(e.target.value);
-                            setSelectedUser(null);
-                        }}
-                        style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-main)', marginBottom: '1rem' }}
+                <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                    <UserSelect
+                        value={selectedUser}
+                        onChange={setSelectedUser}
+                        placeholder="Search users to assign..."
+                        style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                     />
-
-                    {!selectedUser && searchResults.length > 0 && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '6px', zIndex: 10, maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-                            {searchResults.map(user => (
-                                <div
-                                    key={user.productUserId}
-                                    onClick={() => {
-                                        setSelectedUser(user);
-                                        setSearchQuery("");
-                                        setSearchResults([]);
-                                    }}
-                                    style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
-                                    className="search-result-item"
-                                >
-                                    {user.avatarUrl ? (
-                                        <img src={user.avatarUrl} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
-                                    ) : (
-                                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'white' }}>
-                                            {(user.displayName || user.preferredUsername || "?")[0].toUpperCase()}
-                                        </div>
-                                    )}
-                                    <div>
-                                        <div style={{ fontWeight: 600 }}>{user.displayName || user.preferredUsername}</div>
-                                        {user.displayName && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{user.preferredUsername}</div>}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
 
                 <button
