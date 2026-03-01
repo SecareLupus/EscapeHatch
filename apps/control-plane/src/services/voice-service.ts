@@ -3,6 +3,7 @@ import type { VoiceTokenGrant } from "@escapehatch/shared";
 import { withDb } from "../db/client.js";
 import { executePrivilegedAction } from "./privileged-gateway.js";
 import { config } from "../config.js";
+import { getIdentityByProductUserId } from "./identity-service.js";
 
 export async function issueVoiceToken(input: {
   actorUserId: string;
@@ -36,8 +37,16 @@ export async function issueVoiceToken(input: {
       const ttlSeconds = Math.max(60, config.voice.tokenTtlSeconds);
       const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
+      const identity = await getIdentityByProductUserId(input.actorUserId);
+      const displayName = identity?.displayName || identity?.preferredUsername || input.actorUserId;
+      const metadata = JSON.stringify({
+        avatarUrl: identity?.avatarUrl ?? null,
+      });
+
       const at = new AccessToken(config.voice.apiKey, config.voice.apiSecret, {
         identity: input.actorUserId,
+        name: displayName,
+        metadata,
         ttl: ttlSeconds,
       });
 

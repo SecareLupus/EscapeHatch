@@ -175,18 +175,35 @@ function ParticipantView({ participant }: { participant: Participant }) {
         (p) => p.kind === Track.Kind.Video
     );
 
+    const displayLabel = participant.name || participant.identity;
+    let avatarUrl: string | null = null;
+    try {
+        if (participant.metadata) {
+            const data = JSON.parse(participant.metadata);
+            avatarUrl = data.avatarUrl;
+        }
+    } catch (e) {
+        // Ignore parse errors
+    }
+
+    const initials = (participant.name || participant.identity).slice(0, 2).toUpperCase();
+
     return (
         <div className={`participant-card ${isSpeaking ? "speaking" : ""}`}>
             {videoPub?.isSubscribed && videoPub.track ? (
                 <video ref={videoRef} autoPlay playsInline />
             ) : (
                 <div className="avatar-placeholder">
-                    {participant.identity.slice(0, 2).toUpperCase()}
+                    {avatarUrl ? (
+                        <img src={avatarUrl} alt={displayLabel} className="participant-avatar" />
+                    ) : (
+                        initials
+                    )}
                 </div>
             )}
             <audio ref={audioRef} autoPlay />
             <div className="participant-info">
-                <span className="name">{participant.identity}</span>
+                <span className="name">{displayLabel}</span>
                 {participant.isMicrophoneEnabled ? null : <span className="muted-icon">🔇</span>}
             </div>
         </div>
