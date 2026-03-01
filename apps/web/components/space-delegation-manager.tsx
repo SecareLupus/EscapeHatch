@@ -132,7 +132,7 @@ export function SpaceDelegationManager({ serverId }: SpaceDelegationManagerProps
                     <input
                         type="text"
                         placeholder="Search users..."
-                        value={selectedUser ? selectedUser.displayName || selectedUser.username : searchQuery}
+                        value={selectedUser ? selectedUser.displayName || selectedUser.preferredUsername : searchQuery}
                         onChange={(e) => {
                             setSearchQuery(e.target.value);
                             setSelectedUser(null);
@@ -157,12 +157,12 @@ export function SpaceDelegationManager({ serverId }: SpaceDelegationManagerProps
                                         <img src={user.avatarUrl} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
                                     ) : (
                                         <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'white' }}>
-                                            {(user.displayName || user.username || "?")[0].toUpperCase()}
+                                            {(user.displayName || user.preferredUsername || "?")[0].toUpperCase()}
                                         </div>
                                     )}
                                     <div>
-                                        <div style={{ fontWeight: 600 }}>{user.displayName || user.username}</div>
-                                        {user.displayName && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{user.username}</div>}
+                                        <div style={{ fontWeight: 600 }}>{user.displayName || user.preferredUsername}</div>
+                                        {user.displayName && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{user.preferredUsername}</div>}
                                     </div>
                                 </div>
                             ))}

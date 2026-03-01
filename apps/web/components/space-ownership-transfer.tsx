@@ -74,7 +74,7 @@ export function SpaceOwnershipTransfer({ serverId }: SpaceOwnershipTransferProps
                     <input
                         type="text"
                         placeholder="Search users to transfer ownership to..."
-                        value={selectedUser ? selectedUser.displayName || selectedUser.username : searchQuery}
+                        value={selectedUser ? selectedUser.displayName || selectedUser.preferredUsername : searchQuery}
                         onChange={(e) => {
                             setSearchQuery(e.target.value);
                             setSelectedUser(null);
@@ -100,12 +100,12 @@ export function SpaceOwnershipTransfer({ serverId }: SpaceOwnershipTransferProps
                                         <img src={user.avatarUrl} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
                                     ) : (
                                         <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'white' }}>
-                                            {(user.displayName || user.username || "?")[0].toUpperCase()}
+                                            {(user.displayName || user.preferredUsername || "?")[0].toUpperCase()}
                                         </div>
                                     )}
                                     <div>
-                                        <div style={{ fontWeight: 600 }}>{user.displayName || user.username}</div>
-                                        {user.displayName && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{user.username}</div>}
+                                        <div style={{ fontWeight: 600 }}>{user.displayName || user.preferredUsername}</div>
+                                        {user.displayName && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>@{user.preferredUsername}</div>}
                                     </div>
                                 </div>
                             ))}
@@ -125,7 +125,7 @@ export function SpaceOwnershipTransfer({ serverId }: SpaceOwnershipTransferProps
                 ) : (
                     <div className="confirm-box" style={{ padding: '1rem', background: 'var(--bg-surface)', border: '1px solid var(--danger, #ff4d4f)', borderRadius: '6px', marginTop: '1rem' }}>
                         <p style={{ margin: '0 0 1rem 0', fontWeight: 'bold', color: 'var(--danger, #ff4d4f)' }}>Are you absolutely sure?</p>
-                        <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>This action cannot be undone. You are transferring full ownership to <strong>{selectedUser.displayName || selectedUser.username}</strong>.</p>
+                        <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>This action cannot be undone. You are transferring full ownership to <strong>{selectedUser.displayName || selectedUser.preferredUsername}</strong>.</p>
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button
                                 className="danger-button"
