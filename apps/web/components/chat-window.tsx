@@ -162,11 +162,16 @@ export function ChatWindow({
     };
 
     const isMediaUrl = (url: string) => {
-        return /\.(jpeg|jpg|gif|png|webp)$/i.test(url) || /media\.giphy\.com|tenor\.com\/view/i.test(url);
+        return (
+            /\.(jpeg|jpg|gif|png|webp|svg)$/i.test(url) ||
+            url.includes("/_matrix/media/v3/download/") ||
+            /media\.giphy\.com|tenor\.com\/view/i.test(url)
+        );
     };
 
     const extractMediaUrls = (content: string) => {
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        // Detect URLs, stopping at a trailing parenthesis which is common in markdown image syntax
+        const urlRegex = /(https?:\/\/[^\s)]+)/g;
         return content.match(urlRegex)?.filter(isMediaUrl) || [];
     };
 
@@ -519,7 +524,7 @@ export function ChatWindow({
                                         </div>
                                     ) : (
                                         <>
-                                            <p>{message.content}</p>
+                                            <p>{message.content.replace(/!\[image\]\(https?:\/\/[^\s)]+\)/g, "").trim()}</p>
                                             {message.updatedAt && <small className="message-meta-edited" style={{ fontSize: "0.75rem", opacity: 0.6 }}>(edited)</small>}
                                         </>
                                     )}

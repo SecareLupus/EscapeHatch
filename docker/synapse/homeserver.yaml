@@ -1,26 +1,14 @@
 # Configuration file for Synapse.
-#
-# This is a YAML file: see [1] for a quick introduction. Note in particular
-# that *indentation is important*: all the elements of a list or dictionary
-# should have the same indentation.
-#
-# [1] https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html
-#
-# For more information on how to configure Synapse, including a complete accounting of
-# each option, go to docs/usage/configuration/config_documentation.md or
-# https://element-hq.github.io/synapse/latest/usage/configuration/config_documentation.html
 server_name: "hub-localhost"
 pid_file: /data/homeserver.pid
 listeners:
   - port: 8008
     resources:
-    - compress: false
-      names:
-      - client
-      - federation
+      - names: [client, federation, media]
+        compress: false
     tls: false
     type: http
-    x_forwarded: true
+    x_forwarded: false
 database:
   name: sqlite3
   args:
@@ -35,5 +23,5 @@ signing_key_path: "/data/hub-localhost.signing.key"
 trusted_key_servers:
   - server_name: "matrix.org"
 
-
+enable_authenticated_media: false
 # vim:ft=yaml

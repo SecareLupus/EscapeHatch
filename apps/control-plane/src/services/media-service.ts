@@ -69,11 +69,23 @@ export async function uploadMedia(input: {
 
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`Synapse upload failed (${response.status}): ${errText}`);
+        const requestId = response.headers.get("x-request-id");
+        const maskedToken = config.synapse.accessToken
+          ? `${config.synapse.accessToken.slice(0, 4)}...${config.synapse.accessToken.slice(-4)}`
+          : "missing";
+
+        console.error(`Synapse upload failed [${response.status}]: ${errText}`, {
+          requestId,
+          baseUrl: config.synapse.baseUrl,
+          tokenLength: config.synapse.accessToken?.length,
+          maskedToken
+        });
+
+        throw new Error(`Synapse upload failed (${response.status}): ${errText} (request ${requestId ?? "unknown"})`);
       }
 
       const data = await response.json() as { content_uri: string };
-      
+
       // We could return the mxc:// URI directly, but browsers can't render it.
       // We need to convert it to an HTTP URL using Synapse's download endpoint.
       // Format: mxc://server.name/mediaId

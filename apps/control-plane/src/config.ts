@@ -79,8 +79,8 @@ export const config = {
     apiSecret: process.env.LIVEKIT_API_SECRET ?? "secret",
   },
   synapse: {
-    baseUrl: process.env.SYNAPSE_BASE_URL,
-    accessToken: process.env.SYNAPSE_ACCESS_TOKEN,
+    baseUrl: process.env.SYNAPSE_BASE_URL?.trim(),
+    accessToken: process.env.SYNAPSE_ACCESS_TOKEN?.trim(),
     strictProvisioning: process.env.SYNAPSE_STRICT_PROVISIONING === "true",
   },
   s3: {
