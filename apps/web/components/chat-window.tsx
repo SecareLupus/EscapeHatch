@@ -576,7 +576,7 @@ export function ChatWindow({
                                     {reactionTargetMessageId === message.id && (
                                         <div className="reaction-picker-overlay" style={{ position: "absolute", zIndex: 50, ...pickerPositionStyle }}>
                                             <div className="picker-backdrop" style={{ position: "fixed", inset: 0 }} onClick={() => setReactionTargetMessageId(null)} />
-                                            <div className="emoji-picker-container" style={{ position: "absolute", zIndex: 100 }}>
+                                            <div className="emoji-picker-container" style={{ position: "relative", zIndex: 100 }}>
                                                 <EmojiPicker
                                                     onEmojiClick={async (emojiData: EmojiClickData) => {
                                                         await addReaction(message.channelId, message.id, emojiData.emoji);
