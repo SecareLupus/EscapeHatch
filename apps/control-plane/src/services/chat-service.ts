@@ -135,7 +135,7 @@ export async function listMessages(input: {
   return withDb(async (db) => {
     let query = `
       select * from chat_messages
-      where channel_id = $1
+      where channel_id = $1 and deleted_at is null
     `;
     const params: any[] = [input.channelId];
 

@@ -570,7 +570,7 @@ export function ChatWindow({
                                     {reactionTargetMessageId === message.id && (
                                         <div className="reaction-picker-overlay" style={{ position: "absolute", zIndex: 50, top: "100%", left: 0 }}>
                                             <div className="picker-backdrop" style={{ position: "fixed", inset: 0 }} onClick={() => setReactionTargetMessageId(null)} />
-                                            <div style={{ position: "relative" }}>
+                                            <div className="emoji-picker-container" style={{ position: "absolute", zIndex: 100 }}>
                                                 <EmojiPicker
                                                     onEmojiClick={async (emojiData: EmojiClickData) => {
                                                         await addReaction(message.channelId, message.id, emojiData.emoji);
@@ -656,7 +656,7 @@ export function ChatWindow({
                         disabled={!activeChannel || isUploading}
                     />
                     {showEmojiPicker && (
-                        <div className="emoji-picker-container">
+                        <div className="emoji-picker-container composer-emoji-picker">
                             <EmojiPicker
                                 onEmojiClick={(emojiData: EmojiClickData) => {
                                     setDraftMessage(prev => prev + emojiData.emoji);

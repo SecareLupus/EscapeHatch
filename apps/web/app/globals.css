@@ -418,6 +418,7 @@ textarea:focus-visible,
 }
 
 @media (min-width: 769px) {
+
   .sidebar-overlay,
   .details-overlay {
     display: none !important;
@@ -1443,7 +1444,7 @@ textarea:focus-visible,
   background: var(--surface-alt);
 }
 
-.emoji-picker-container {
+.composer-emoji-picker {
   position: absolute;
   bottom: 100%;
   right: 0;
