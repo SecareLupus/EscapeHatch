@@ -45,9 +45,7 @@ export function SpaceOwnershipTransfer({ serverId }: SpaceOwnershipTransferProps
             });
             showToast("Space ownership transferred successfully", "success");
             setShowConfirm(false);
-            setSearchQuery("");
             setSelectedUser(null);
-            setSearchResults([]);
             // Reload the page or redirect, as they might have lost access
             router.refresh();
         } catch (err: any) {
