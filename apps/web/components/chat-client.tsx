@@ -672,10 +672,12 @@ export function ChatClient() {
     const selectedServer = servers.find((server) => server.id === selectedServerId);
     dispatch({ type: "SET_RENAME_SPACE", payload: { id: selectedServer?.id ?? "", name: selectedServer?.name ?? "" } });
     dispatch({ type: "SET_DELETE_TARGET_SPACE_ID", payload: state.deleteTargetSpaceId || selectedServer?.id || servers[0]?.id || "" });
+  }, [selectedServerId, servers, dispatch]);
 
+  useEffect(() => {
     // Reset voice state ONLY if the server actually changed
     if (previousServerIdRef.current !== selectedServerId) {
-      console.log("[ChatClient] selectedServerId effect: Server changed (or first load). Resetting voice. Previous:", previousServerIdRef.current, "New:", selectedServerId);
+      console.log("[ChatClient] Voice reset effect: Server changed. Previous:", previousServerIdRef.current, "New:", selectedServerId);
       dispatch({ type: "SET_VOICE_CONNECTED", payload: false });
       dispatch({ type: "SET_VOICE_MUTED", payload: false });
       dispatch({ type: "SET_VOICE_DEAFENED", payload: false });
@@ -683,9 +685,9 @@ export function ChatClient() {
       dispatch({ type: "SET_VOICE_MEMBERS", payload: [] });
       previousServerIdRef.current = selectedServerId;
     } else {
-      console.log("[ChatClient] selectedServerId effect: Server unchanged. Skipping voice reset.");
+      console.log("[ChatClient] Voice reset effect: Server unchanged. Skipping reset.");
     }
-  }, [selectedServerId, servers, dispatch]);
+  }, [selectedServerId, dispatch]);
 
   useEffect(() => {
     const selected = channels.find((channel) => channel.id === selectedChannelId);
@@ -1437,7 +1439,9 @@ export function ChatClient() {
   }, [selectedServerId, selectedChannelId, activeChannel?.type, voiceVideoQuality, voiceMuted, voiceDeafened, voiceVideoEnabled, dispatch]);
 
   const handleLeaveVoice = useCallback(async (): Promise<void> => {
+    console.log("[ChatClient] handleLeaveVoice called. Connected:", voiceConnected, "Server:", selectedServerId, "Channel:", selectedChannelId);
     if (!selectedServerId || !selectedChannelId || !voiceConnected) {
+      console.log("[ChatClient] handleLeaveVoice early exit - not connected or missing IDs.");
       return;
     }
 

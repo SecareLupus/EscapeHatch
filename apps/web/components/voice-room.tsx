@@ -63,6 +63,10 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
             .on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected)
             .on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
             .on(RoomEvent.Disconnected, () => {
+                if (isAborted) {
+                    console.log("[VoiceRoom] Disconnected event received during unmount/abort. Skipping onDisconnect call.");
+                    return;
+                }
                 onDisconnectRef.current();
             });
 
