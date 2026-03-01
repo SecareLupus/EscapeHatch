@@ -83,7 +83,14 @@ export function ChatClient() {
   const urlChannelId = searchParams.get("channel");
   const suggestedUsername = searchParams.get("suggestedUsername");
 
-  const { state, dispatch } = useChat();
+  const { state, dispatch: originalDispatch } = useChat();
+  const dispatch = useCallback((action: any) => {
+    if (action.type?.startsWith("SET_VOICE_") || action.type === "SET_LOADING") {
+      console.log("[ChatClient] DISPATCH:", action.type, action.payload);
+    }
+    originalDispatch(action);
+  }, [originalDispatch]);
+
   const { showToast } = useToast();
   const {
     viewer,
@@ -150,6 +157,11 @@ export function ChatClient() {
     if (!term) return channels;
     return channels.filter((channel) => channel.name.toLowerCase().includes(term));
   }, [channels, channelFilter]);
+
+  useEffect(() => {
+    console.log("[ChatClient] Component Mounted");
+    return () => console.log("[ChatClient] Component Unmounted");
+  }, []);
 
   const groupedChannels = useMemo(() => {
     const byCategory = new Map<string | null, Channel[]>();
@@ -1387,7 +1399,7 @@ export function ChatClient() {
   }
 
 
-  async function handleJoinVoice(): Promise<void> {
+  const handleJoinVoice = useCallback(async (): Promise<void> => {
     console.log("[ChatClient] handleJoinVoice called, server:", selectedServerId, "channel:", selectedChannelId);
     if (!selectedServerId || !selectedChannelId || activeChannel?.type !== "voice") {
       return;
@@ -1422,9 +1434,9 @@ export function ChatClient() {
     } catch (cause) {
       dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to join voice." });
     }
-  }
+  }, [selectedServerId, selectedChannelId, activeChannel?.type, voiceVideoQuality, voiceMuted, voiceDeafened, voiceVideoEnabled, dispatch]);
 
-  async function handleLeaveVoice(): Promise<void> {
+  const handleLeaveVoice = useCallback(async (): Promise<void> => {
     if (!selectedServerId || !selectedChannelId || !voiceConnected) {
       return;
     }
@@ -1441,7 +1453,7 @@ export function ChatClient() {
     } catch (cause) {
       dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to leave voice." });
     }
-  }
+  }, [selectedServerId, selectedChannelId, voiceConnected, dispatch]);
 
   async function handleToggleMuteDeafen(nextMuted: boolean, nextDeafened: boolean): Promise<void> {
     if (!selectedServerId || !selectedChannelId || !voiceConnected) {

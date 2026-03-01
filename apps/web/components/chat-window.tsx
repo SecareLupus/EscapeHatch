@@ -454,7 +454,7 @@ export function ChatWindow({
                     muted={voiceMuted}
                     deafened={voiceDeafened}
                     videoEnabled={voiceVideoEnabled}
-                    onDisconnect={() => handleLeaveVoice()}
+                    onDisconnect={handleLeaveVoice}
                 />
             )}
 

@@ -28,6 +28,11 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [error, setError] = useState<string | null>(null);
 
+    const onDisconnectRef = useRef(onDisconnect);
+    useEffect(() => {
+        onDisconnectRef.current = onDisconnect;
+    }, [onDisconnect]);
+
     useEffect(() => {
         const r = new Room({
             adaptiveStream: true,
@@ -55,7 +60,7 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
             .on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected)
             .on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
             .on(RoomEvent.Disconnected, () => {
-                onDisconnect();
+                onDisconnectRef.current();
             });
 
         let isAborted = false;
