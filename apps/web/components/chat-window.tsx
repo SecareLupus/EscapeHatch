@@ -4,7 +4,7 @@ import React, { useMemo, useRef, useEffect, useState, useCallback } from "react"
 import { useChat, MessageItem } from "../context/chat-context";
 import type { ChatMessage, ModerationActionType } from "@escapehatch/shared";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
-import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction } from "../lib/control-plane";
+import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage } from "../lib/control-plane";
 import dynamic from "next/dynamic";
 
 // @ts-ignore - emoji-picker-react types mismatch with Next.js dynamic
@@ -210,13 +210,7 @@ export function ChatWindow({
                 danger: true,
                 onClick: () => {
                     if (confirm("Are you sure you want to delete this message?")) {
-                        void performModerationAction({
-                            action: "redact_message",
-                            serverId: selectedServerId || "",
-                            channelId: selectedChannelId || "",
-                            targetMessageId: contextMenu.message?.id,
-                            reason: "Manually deleted by user/mod"
-                        });
+                        void deleteMessage(contextMenu.message?.channelId || "", contextMenu.message?.id || "");
                     }
                 }
             });
@@ -583,8 +577,8 @@ export function ChatWindow({
                                                         setReactionTargetMessageId(null);
                                                     }}
                                                     theme={theme as any}
-                                                    width={300}
-                                                    height={350}
+                                                    width={350}
+                                                    height={400}
                                                 />
                                             </div>
                                         </div>
