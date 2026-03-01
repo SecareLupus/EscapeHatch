@@ -653,17 +653,19 @@ export function ChatClient() {
     dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: 0 });
     dispatch({ type: "SET_LAST_SEEN_MESSAGE_ID", payload: null });
     dispatch({ type: "SET_NEAR_BOTTOM", payload: true });
-    dispatch({ type: "SET_VOICE_CONNECTED", payload: false });
-    dispatch({ type: "SET_VOICE_MUTED", payload: false });
-    dispatch({ type: "SET_VOICE_DEAFENED", payload: false });
-    dispatch({ type: "SET_VOICE_GRANT", payload: null });
-    dispatch({ type: "SET_VOICE_MEMBERS", payload: [] });
   }, [selectedChannelId, dispatch]);
 
   useEffect(() => {
     const selectedServer = servers.find((server) => server.id === selectedServerId);
     dispatch({ type: "SET_RENAME_SPACE", payload: { id: selectedServer?.id ?? "", name: selectedServer?.name ?? "" } });
     dispatch({ type: "SET_DELETE_TARGET_SPACE_ID", payload: state.deleteTargetSpaceId || selectedServer?.id || servers[0]?.id || "" });
+
+    // Reset voice state when server changes
+    dispatch({ type: "SET_VOICE_CONNECTED", payload: false });
+    dispatch({ type: "SET_VOICE_MUTED", payload: false });
+    dispatch({ type: "SET_VOICE_DEAFENED", payload: false });
+    dispatch({ type: "SET_VOICE_GRANT", payload: null });
+    dispatch({ type: "SET_VOICE_MEMBERS", payload: [] });
   }, [selectedServerId, servers, dispatch]);
 
   useEffect(() => {
