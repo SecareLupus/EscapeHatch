@@ -25,16 +25,6 @@ services:
     volumes:
       - ./docker/synapse:/data
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    env_file:
-      - .env
-    command: [ "start-dev" ]
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
-    # Port 8080 is now internal only
-
   livekit:
     image: livekit/livekit-server:v1.9.11
     env_file:
