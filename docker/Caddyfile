@@ -7,7 +7,7 @@
 # it's often easier to just use plain HTTP or trust Caddy's local CA.
 # We'll use the provided domain directly; Caddy will use HTTP for localhost/127.0.0.1 automatically.
 
-http://{$NEXT_PUBLIC_BASE_DOMAIN}, http://localhost, http://127.0.0.1 {
+{$NEXT_PUBLIC_BASE_DOMAIN}, http://localhost, http://127.0.0.1 {
     handle /auth/* {
         reverse_proxy control-plane:4000
     }
@@ -26,10 +26,10 @@ http://{$NEXT_PUBLIC_BASE_DOMAIN}, http://localhost, http://127.0.0.1 {
 }
 
 
-http://matrix.{$NEXT_PUBLIC_BASE_DOMAIN}, http://matrix.localhost, http://matrix.127.0.0.1 {
+matrix.{$NEXT_PUBLIC_BASE_DOMAIN}, http://matrix.localhost, http://matrix.127.0.0.1 {
     reverse_proxy synapse:8008
 }
 
-http://livekit.{$NEXT_PUBLIC_BASE_DOMAIN}, http://livekit.localhost, http://livekit.127.0.0.1 {
+livekit.{$NEXT_PUBLIC_BASE_DOMAIN}, http://livekit.localhost, http://livekit.127.0.0.1 {
     reverse_proxy livekit:7880
 }
