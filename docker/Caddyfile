@@ -1,0 +1,24 @@
+{
+    email {$EMAIL}
+}
+
+# If BASE_DOMAIN is localhost, we shouldn't attempt to get real SSL certs.
+# Caddy handles "localhost" automatically, but for subdomains like api.localhost,
+# it's often easier to just use plain HTTP or trust Caddy's local CA.
+# We'll use the provided domain directly; Caddy will use HTTP for localhost/127.0.0.1 automatically.
+
+{$BASE_DOMAIN} {
+    reverse_proxy web:3000
+}
+
+api.{$BASE_DOMAIN} {
+    reverse_proxy control-plane:4000
+}
+
+matrix.{$BASE_DOMAIN} {
+    reverse_proxy synapse:8008
+}
+
+livekit.{$BASE_DOMAIN} {
+    reverse_proxy livekit:7880
+}
