@@ -10,14 +10,7 @@ WORKDIR /app
 FROM base AS build
 ARG NEXT_PUBLIC_BASE_DOMAIN
 # Create a .env file for the build to ensure Next.js picks it up.
-# This is more reliable than 'export' when using pnpm workspace builds.
-RUN if [ "$NEXT_PUBLIC_BASE_DOMAIN" = "localhost" ] || [ "$NEXT_PUBLIC_BASE_DOMAIN" = "127.0.0.1" ] || [ -z "$NEXT_PUBLIC_BASE_DOMAIN" ]; then \
-    URL=""; \
-    else \
-    URL=https://${NEXT_PUBLIC_BASE_DOMAIN}; \
-    fi && \
-    echo "NEXT_PUBLIC_CONTROL_PLANE_URL=$URL" > .env && \
-    echo "NEXT_PUBLIC_BASE_DOMAIN=${NEXT_PUBLIC_BASE_DOMAIN:-localhost}" >> .env && \
+RUN echo "NEXT_PUBLIC_BASE_DOMAIN=${NEXT_PUBLIC_BASE_DOMAIN:-localhost}" > .env && \
     pnpm install --frozen-lockfile && \
     pnpm run build
 
