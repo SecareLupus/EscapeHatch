@@ -62,13 +62,13 @@ export const config = {
   voice: {
     tokenTtlSeconds: Number(process.env.SFU_TOKEN_TTL_SECONDS ?? "300"),
     url: process.env.LIVEKIT_URL ?? "ws://livekit:7880",
-    publicUrl: process.env.LIVEKIT_PUBLIC_URL || (baseDomain ? `wss://livekit.${baseDomain}` : "ws://localhost:7880"),
+    publicUrl: process.env.LIVEKIT_PUBLIC_URL || (baseDomain ? `${protocol === "https" ? "wss" : "ws"}://${baseDomain}` : "ws://localhost:7880"),
     apiKey: process.env.LIVEKIT_API_KEY ?? "devkey",
     apiSecret: process.env.LIVEKIT_API_SECRET ?? "secret",
   },
   synapse: {
     baseUrl: (process.env.SYNAPSE_BASE_URL ?? "http://synapse:8008").trim(),
-    publicBaseUrl: (process.env.SYNAPSE_PUBLIC_URL || (baseDomain ? `${protocol}://matrix.${baseDomain}` : "http://localhost:8008"))?.trim(),
+    publicBaseUrl: (process.env.SYNAPSE_PUBLIC_URL || (baseDomain ? `${protocol}://${baseDomain}` : "http://localhost:8008"))?.trim(),
     accessToken: process.env.SYNAPSE_ACCESS_TOKEN?.trim(),
     strictProvisioning: process.env.SYNAPSE_STRICT_PROVISIONING === "true",
   },
