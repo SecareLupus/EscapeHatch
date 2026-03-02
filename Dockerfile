@@ -14,7 +14,7 @@ ARG NEXT_PUBLIC_BASE_DOMAIN
 RUN if [ "$NEXT_PUBLIC_BASE_DOMAIN" = "localhost" ] || [ "$NEXT_PUBLIC_BASE_DOMAIN" = "127.0.0.1" ] || [ -z "$NEXT_PUBLIC_BASE_DOMAIN" ]; then \
     URL=""; \
     else \
-    URL=https://api.${NEXT_PUBLIC_BASE_DOMAIN}; \
+    URL=https://${NEXT_PUBLIC_BASE_DOMAIN}; \
     fi && \
     echo "NEXT_PUBLIC_CONTROL_PLANE_URL=$URL" > .env && \
     echo "NEXT_PUBLIC_BASE_DOMAIN=${NEXT_PUBLIC_BASE_DOMAIN:-localhost}" >> .env && \
@@ -25,10 +25,10 @@ RUN if [ "$NEXT_PUBLIC_BASE_DOMAIN" = "localhost" ] || [ "$NEXT_PUBLIC_BASE_DOMA
 FROM base AS control-plane
 COPY --from=build /app /app
 EXPOSE 4000
-CMD [ "pnpm", "--filter", "@escapehatch/control-plane", "dev" ]
+CMD [ "pnpm", "--filter", "@escapehatch/control-plane", "start" ]
 
 # --- Web App Runtime ---
 FROM base AS web
 COPY --from=build /app /app
 EXPOSE 3000
-CMD [ "pnpm", "--filter", "@escapehatch/web", "dev" ]
+CMD [ "pnpm", "--filter", "@escapehatch/web", "start" ]

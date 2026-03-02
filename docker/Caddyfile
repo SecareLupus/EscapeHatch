@@ -25,9 +25,6 @@ http://{$NEXT_PUBLIC_BASE_DOMAIN}, http://localhost, http://127.0.0.1 {
     }
 }
 
-http://api.{$NEXT_PUBLIC_BASE_DOMAIN}, http://api.localhost, http://api.127.0.0.1 {
-    reverse_proxy control-plane:4000
-}
 
 http://matrix.{$NEXT_PUBLIC_BASE_DOMAIN}, http://matrix.localhost, http://matrix.127.0.0.1 {
     reverse_proxy synapse:8008

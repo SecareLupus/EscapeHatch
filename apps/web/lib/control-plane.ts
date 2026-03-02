@@ -25,11 +25,14 @@ import type {
 
 const publicBaseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "localhost";
 const isLocal = publicBaseDomain === "localhost" || publicBaseDomain === "127.0.0.1";
-const protocol = isLocal ? "http" : "https";
+
+// SSR needs to talk to the control-plane container directly via Docker network.
+// Browser can use relative paths since Caddy proxies /v1 and /auth to the control-plane.
+const isServer = typeof window === "undefined";
 
 export const controlPlaneBaseUrl =
-  process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ??
-  (publicBaseDomain === "localhost" ? "" : `${protocol}://api.${publicBaseDomain}`);
+  process.env.NEXT_PUBLIC_CONTROL_PLANE_URL ||
+  (isServer ? "http://control-plane:4000" : "");
 
 export interface ViewerSession {
   productUserId: string;
