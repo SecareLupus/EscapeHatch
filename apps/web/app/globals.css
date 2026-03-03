@@ -726,6 +726,31 @@ textarea:focus-visible,
   background: var(--surface-alt);
 }
 
+.discord-badge-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: help;
+}
+
+.discord-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #5865F2;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.discord-badge:hover {
+    transform: scale(1.1);
+    background: #4752C4;
+}
+
 .channel-controls {
   border: 1px solid var(--border);
   border-radius: 0.65rem;

@@ -11,7 +11,9 @@ import type {
     ModerationReport,
     Server,
     VoicePresenceMember,
-    VoiceTokenGrant
+    VoiceTokenGrant,
+    DiscordBridgeChannelMapping,
+    DiscordBridgeConnection
 } from "@escapehatch/shared";
 import type {
     AuthProvidersResponse,
@@ -57,6 +59,8 @@ export interface ChatState {
     isAddMenuOpen: boolean;
     theme: "light" | "dark";
     activeChannelData: Channel | null;
+    discordMappings: DiscordBridgeChannelMapping[];
+    discordConnection: DiscordBridgeConnection | null;
     // UI states that might be useful globally
     lastReadByChannel: Record<string, string>;
     mentionCountByChannel: Record<string, number>;
@@ -125,6 +129,8 @@ type ChatAction =
     | { type: "SET_ADD_MENU_OPEN"; payload: boolean }
     | { type: "SET_THEME"; payload: "light" | "dark" }
     | { type: "SET_ACTIVE_CHANNEL_DATA"; payload: Channel | null }
+    | { type: "SET_DISCORD_MAPPINGS"; payload: DiscordBridgeChannelMapping[] }
+    | { type: "SET_DISCORD_CONNECTION"; payload: DiscordBridgeConnection | null }
     | { type: "UPDATE_MESSAGES"; payload: (current: MessageItem[]) => MessageItem[] }
     | { type: "SET_LAST_READ"; payload: { channelId: string; lastSeenId: string } }
     | { type: "SET_MENTION_COUNTS"; payload: Record<string, number> }
@@ -187,6 +193,8 @@ const initialState: ChatState = {
     isAddMenuOpen: false,
     theme: "light",
     activeChannelData: null,
+    discordMappings: [],
+    discordConnection: null,
     lastReadByChannel: {},
     mentionCountByChannel: {},
     unreadCountByChannel: {},
@@ -278,6 +286,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return { ...state, theme: action.payload };
         case "SET_ACTIVE_CHANNEL_DATA":
             return { ...state, activeChannelData: action.payload };
+        case "SET_DISCORD_MAPPINGS":
+            return { ...state, discordMappings: action.payload };
+        case "SET_DISCORD_CONNECTION":
+            return { ...state, discordConnection: action.payload };
         case "SET_CHANNEL_FILTER":
             return { ...state, channelFilter: action.payload };
         case "SET_RENAME_SPACE":

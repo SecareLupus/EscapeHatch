@@ -61,6 +61,8 @@ import {
   blockUser,
   unblockUser,
   listBlocks,
+  listDiscordBridgeMappings,
+  fetchDiscordBridgeHealth,
   type AuthProvidersResponse,
   type BootstrapStatus,
   type ViewerRoleBinding,
@@ -141,6 +143,8 @@ export function ChatClient() {
     deleteTargetSpaceId,
     deleteSpaceConfirm,
     deleteRoomConfirm,
+    discordMappings,
+    discordConnection,
     sending,
     updatingControls,
     channelScrollPositions,
@@ -499,6 +503,14 @@ export function ChatClient() {
     }
     dispatch({ type: "SET_CHANNELS", payload: channelItems });
     dispatch({ type: "SET_CATEGORIES", payload: categoryItems });
+
+    void listDiscordBridgeMappings(nextServerId)
+      .then((items) => dispatch({ type: "SET_DISCORD_MAPPINGS", payload: items }))
+      .catch(() => dispatch({ type: "SET_DISCORD_MAPPINGS", payload: [] }));
+
+    void fetchDiscordBridgeHealth(nextServerId)
+      .then((health) => dispatch({ type: "SET_DISCORD_CONNECTION", payload: health.connection }))
+      .catch(() => dispatch({ type: "SET_DISCORD_CONNECTION", payload: null }));
 
     const textChannels = channelItems.filter((channel) => channel.type === "text" || channel.type === "announcement");
 
