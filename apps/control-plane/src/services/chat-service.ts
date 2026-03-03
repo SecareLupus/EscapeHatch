@@ -17,6 +17,7 @@ interface ChannelRow {
   video_enabled: boolean;
   video_max_participants: number | null;
   position: number;
+  topic: string | null;
   created_at: string;
 }
 
@@ -50,6 +51,7 @@ function mapChannel(row: ChannelRow): Channel {
         }
         : null,
     position: row.position,
+    topic: row.topic,
     createdAt: row.created_at
   };
 }
@@ -395,7 +397,7 @@ export async function getOrCreateDMChannel(hubId: string, productUserIds: string
     const channelId = `chn_${crypto.randomUUID().replaceAll("-", "")}`;
     const name = `DM: ${sortedUserIds.length} members`;
     await db.query(
-      "insert into channels (id, server_id, name, type) values ($1, $2, $3, 'dm')",
+      "insert into channels (id, server_id, name, type, topic) values ($1, $2, $3, 'dm', null)",
       [channelId, dmServerId, name]
     );
 
@@ -600,6 +602,7 @@ export async function updateChannel(input: {
   name?: string;
   type?: Channel["type"];
   categoryId?: string | null;
+  topic?: string | null;
   position?: number;
 }): Promise<Channel> {
   return withDb(async (db) => {
@@ -618,7 +621,8 @@ export async function updateChannel(input: {
        set name = coalesce($1, name),
            type = coalesce($2, type),
            category_id = case when $3 = 'REMOVED_VAL' then null else coalesce($4, category_id) end,
-           position = coalesce($5, position)
+           position = coalesce($5, position),
+           topic = case when $8 = 'REMOVED_VAL' then null else coalesce($9, topic) end
        where id = $6 and server_id = $7
        returning *`,
       [
@@ -628,7 +632,9 @@ export async function updateChannel(input: {
         input.categoryId ?? null,
         input.position ?? null,
         input.channelId,
-        input.serverId
+        input.serverId,
+        input.topic === null ? "REMOVED_VAL" : "NORMAL",
+        input.topic ?? null
       ]
     );
 
@@ -747,6 +753,70 @@ export async function updateChannelVideoControls(input: {
       throw new Error("Voice channel not found.");
     }
     return mapChannel(updated);
+  });
+}
+
+export async function listChannelMembers(channelId: string): Promise<{ channelId: string; productUserId: string; createdAt: string; displayName: string }[]> {
+  return withDb(async (db) => {
+    const rows = await db.query<{
+      channel_id: string;
+      product_user_id: string;
+      created_at: string;
+      display_name: string;
+    }>(
+      `select cm.channel_id, cm.product_user_id, cm.joined_at as created_at,
+         coalesce(
+           (select preferred_username 
+            from identity_mappings 
+            where product_user_id = cm.product_user_id 
+            order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+            limit 1),
+           'user-' || substr(cm.product_user_id, 1, 8)
+         ) as display_name
+       from channel_members cm
+       where cm.channel_id = $1`,
+      [channelId]
+    );
+
+    return rows.rows.map(r => ({
+      channelId: r.channel_id,
+      productUserId: r.product_user_id,
+      createdAt: r.created_at,
+      displayName: r.display_name
+    }));
+  });
+}
+
+export async function inviteToChannel(channelId: string, productUserId: string): Promise<void> {
+  await withDb(async (db) => {
+    // 1. Check if channel exists and get Matrix room ID
+    const chRow = await db.query<{ matrix_room_id: string | null }>(
+      "select matrix_room_id from channels where id = $1 limit 1",
+      [channelId]
+    );
+    if (!chRow.rows[0]) {
+      throw new Error("Channel not found.");
+    }
+
+    // 2. Add to channel_members in DB
+    await db.query(
+      "insert into channel_members (channel_id, product_user_id) values ($1, $2) on conflict do nothing",
+      [channelId, productUserId]
+    );
+
+    // 3. Matrix invite if room ID exists
+    const matrixRoomId = chRow.rows[0].matrix_room_id;
+    if (matrixRoomId) {
+      const { inviteUser } = await import("../matrix/synapse-adapter.js");
+      const { getIdentityByProductUserId } = await import("./identity-service.js");
+      const identity = await getIdentityByProductUserId(productUserId);
+
+      // If the user has a matrix ID, invite them. 
+      // In a real scenario, we might need more logic or mapping.
+      if (identity?.matrixUserId) {
+        await inviteUser({ roomId: matrixRoomId, userId: identity.matrixUserId });
+      }
+    }
   });
 }
 

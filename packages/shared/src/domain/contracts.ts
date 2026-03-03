@@ -94,6 +94,7 @@ export interface Channel {
     voiceMetadata: VoiceMetadata | null;
     restrictedVisibility?: boolean;
     allowedRoleIds?: string[];
+    topic: string | null;
     createdAt: string;
 }
 

@@ -4,7 +4,7 @@ import React, { useMemo, useRef, useEffect, useState, useCallback } from "react"
 import { useChat, MessageItem } from "../context/chat-context";
 import type { ChatMessage, ModerationActionType } from "@escapehatch/shared";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
-import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage } from "../lib/control-plane";
+import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage, listChannelMembers, inviteToChannel, updateChannel, searchUsers } from "../lib/control-plane";
 import dynamic from "next/dynamic";
 
 // @ts-ignore - emoji-picker-react types mismatch with Next.js dynamic
@@ -93,6 +93,12 @@ export function ChatWindow({
     const [editContent, setEditContent] = useState("");
     const [isUploading, setIsUploading] = useState(false);
     const [reactionTargetMessageId, setReactionTargetMessageId] = useState<string | null>(null);
+    const [channelMembers, setChannelMembers] = useState<{ productUserId: string; displayName: string }[]>([]);
+    const [isEditingTopic, setIsEditingTopic] = useState(false);
+    const [newTopic, setNewTopic] = useState("");
+    const [isInviting, setIsInviting] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState("");
+    const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const activeChannel = activeChannelData;
@@ -162,6 +168,70 @@ export function ChatWindow({
 
         return grouped;
     }, [messages]);
+
+    useEffect(() => {
+        if (selectedChannelId && activeChannelData?.type === "dm") {
+            void listChannelMembers(selectedChannelId).then(setChannelMembers);
+        } else {
+            setChannelMembers([]);
+        }
+        setIsEditingTopic(false);
+        setIsInviting(false);
+    }, [selectedChannelId, activeChannelData?.type]);
+
+    const dmTitle = useMemo(() => {
+        if (!activeChannelData || activeChannelData.type !== "dm") return null;
+        if (activeChannelData.topic) return activeChannelData.topic;
+        const others = channelMembers.filter((m) => m.productUserId !== viewer?.productUserId);
+        if (others.length === 0) return "Direct Message";
+        return others.map((m) => m.displayName).join(", ");
+    }, [activeChannelData, channelMembers, viewer]);
+
+    const dmSubtitle = useMemo(() => {
+        if (!activeChannelData || activeChannelData.type !== "dm" || !activeChannelData.topic) return null;
+        return `${channelMembers.length} members`;
+    }, [activeChannelData, channelMembers]);
+
+    const handleInviteUser = async (userId: string) => {
+        if (!selectedChannelId) return;
+        try {
+            await inviteToChannel(selectedChannelId, userId);
+            const members = await listChannelMembers(selectedChannelId);
+            setChannelMembers(members);
+            setIsInviting(false);
+        } catch (error) {
+            console.error("Invite failed", error);
+            alert("Failed to invite user.");
+        }
+    };
+
+    const handleSaveTopic = async () => {
+        if (!selectedChannelId || !activeServer?.id) return;
+        try {
+            await updateChannel(selectedChannelId, {
+                serverId: activeServer.id,
+                topic: newTopic.trim() || null
+            });
+            // The activeChannelData should update via SSE/context if implemented, 
+            // but we might need a local refresh or dispatch if not.
+            // For now, assume context handles it or user re-selects.
+            setIsEditingTopic(false);
+        } catch (error) {
+            console.error("Topic update failed", error);
+            alert("Failed to update topic.");
+        }
+    };
+
+    useEffect(() => {
+        if (userSearchQuery.length > 1) {
+            const timer = setTimeout(() => {
+                void searchUsers(userSearchQuery).then(setUserSearchResults);
+            }, 300);
+            return () => clearTimeout(timer);
+        } else {
+            setUserSearchResults([]);
+        }
+    }, [userSearchQuery]);
 
     const handleContextMenu = (event: React.MouseEvent, message: MessageItem) => {
         event.preventDefault();
@@ -401,11 +471,17 @@ export function ChatWindow({
                         ☰
                     </button>
                     <div>
-                        <h2>{activeServer ? `${activeServer.name} - ` : ""}{activeChannel ? `#${activeChannel.name}` : "No channel selected"}</h2>
+                        <h2>
+                            {activeChannel?.type === "dm"
+                                ? dmTitle
+                                : `${activeServer ? `${activeServer.name} - ` : ""}${activeChannel ? `#${activeChannel.name}` : "No channel selected"}`}
+                        </h2>
                         <p>
-                            {activeChannel
-                                ? `${messages.length} messages · slow mode ${activeChannel.slowModeSeconds}s`
-                                : "Select a channel to start chatting"}
+                            {activeChannel?.type === "dm"
+                                ? dmSubtitle || `${channelMembers.length} members`
+                                : activeChannel
+                                    ? `${messages.length} messages · slow mode ${activeChannel.slowModeSeconds}s`
+                                    : "Select a channel to start chatting"}
                         </p>
                     </div>
                 </div>
@@ -420,6 +496,29 @@ export function ChatWindow({
                                     <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.086 2.157 2.419c0 1.334-.947 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.086 2.157 2.419c0 1.334-.946 2.419-2.157 2.419z" />
                                 </svg>
                             </div>
+                        </div>
+                    )}
+                    {activeChannel?.type === "dm" && (
+                        <div className="dm-controls inline-buttons">
+                            <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => {
+                                    setNewTopic(activeChannel.topic || "");
+                                    setIsEditingTopic(true);
+                                }}
+                                title="Set DM Topic"
+                            >
+                                📝
+                            </button>
+                            <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => setIsInviting(true)}
+                                title="Invite Participants"
+                            >
+                                👤+
+                            </button>
                         </div>
                     )}
                     <span className="channel-badge">{activeChannel?.type ?? "none"}</span>
@@ -740,6 +839,62 @@ export function ChatWindow({
                     </button>
                 </div>
             </form>
+            {/* Topic Edit Modal */}
+            {isEditingTopic && (
+                <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+                    <div className="modal-content panel" style={{ width: "400px", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
+                        <h3>Edit DM Topic</h3>
+                        <p style={{ fontSize: "0.9rem", opacity: 0.8, marginBottom: "1rem" }}>Set a topic for this conversation. It will be shown as the title.</p>
+                        <input
+                            type="text"
+                            className="input"
+                            value={newTopic}
+                            onChange={(e) => setNewTopic(e.target.value)}
+                            placeholder="e.g. Project Planning"
+                            autoFocus
+                            onKeyDown={(e) => e.key === "Enter" && handleSaveTopic()}
+                            style={{ width: "100%", marginBottom: "1rem" }}
+                        />
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                            <button className="ghost" onClick={() => setIsEditingTopic(false)}>Cancel</button>
+                            <button className="primary" onClick={handleSaveTopic}>Save Topic</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Invite Modal */}
+            {isInviting && (
+                <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+                    <div className="modal-content panel" style={{ width: "400px", minHeight: "300px", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column" }}>
+                        <h3>Invite to DM</h3>
+                        <input
+                            type="text"
+                            className="input"
+                            value={userSearchQuery}
+                            onChange={(e) => setUserSearchQuery(e.target.value)}
+                            placeholder="Search by username..."
+                            autoFocus
+                            style={{ width: "100%", marginBottom: "1rem" }}
+                        />
+                        <div className="search-results" style={{ flex: 1, overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "4px" }}>
+                            {userSearchResults.length > 0 ? (
+                                userSearchResults.map((user) => (
+                                    <div key={user.productUserId} style={{ padding: "0.5rem", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                        <span>{user.preferredUsername}</span>
+                                        <button className="inline-action" onClick={() => handleInviteUser(user.productUserId)}>Invite</button>
+                                    </div>
+                                ))
+                            ) : (
+                                <p style={{ padding: "1rem", textAlign: "center", opacity: 0.6 }}>No users found</p>
+                            )}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
+                            <button className="ghost" onClick={() => setIsInviting(false)}>Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </section>
     );
 }

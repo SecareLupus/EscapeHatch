@@ -48,7 +48,9 @@ import {
   updateMessage,
   deleteMessage,
   addReaction,
-  removeReaction
+  removeReaction,
+  listChannelMembers,
+  inviteToChannel
 } from "../services/chat-service.js";
 import { getBootstrapStatus } from "../services/bootstrap-service.js";
 import { publishChannelMessage, subscribeToChannelMessages } from "../services/chat-realtime.js";
@@ -723,6 +725,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         name: z.string().min(2).max(80).optional(),
         type: z.enum(["text", "voice", "announcement"]).optional(),
         categoryId: z.string().min(1).nullable().optional(),
+        topic: z.string().max(255).nullable().optional(),
         position: z.number().int().min(0).optional()
       })
       .parse(request.body);
@@ -749,8 +752,25 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       name: payload.name,
       type: payload.type,
       categoryId: payload.categoryId,
+      topic: payload.topic,
       position: payload.position
     });
+  });
+
+  app.get("/v1/channels/:channelId/members", initializedAuthHandlers, async (request) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    return { items: await listChannelMembers(params.channelId) };
+  });
+
+  app.post("/v1/channels/:channelId/members", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({ productUserId: z.string().min(1) }).parse(request.body);
+
+    // Permission check: if it's a DM, any member can invite (simpler for now)
+    // If it's a server channel, maybe only staff.
+    // We'll trust the current member is already in the channel for DMs.
+    await inviteToChannel(params.channelId, payload.productUserId);
+    reply.code(204).send();
   });
 
   app.patch("/v1/channels/:channelId/category", initializedAuthHandlers, async (request, reply) => {

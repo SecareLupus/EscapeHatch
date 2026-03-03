@@ -218,3 +218,9 @@ export async function redactEvent(input: {
     { reason: input.reason }
   );
 }
+
+export async function inviteUser(input: { roomId: string; userId: string }): Promise<void> {
+  await synapseRequest(`/_matrix/client/v3/rooms/${encodeURIComponent(input.roomId)}/invite`, {
+    user_id: input.userId
+  });
+}

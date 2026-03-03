@@ -447,24 +447,38 @@ export async function deleteServer(serverId: string): Promise<void> {
   });
 }
 
-export async function renameChannel(input: {
-  channelId: string;
-  serverId: string;
-  name?: string;
-  type?: ChannelType;
-  categoryId?: string | null;
-  position?: number;
-}): Promise<Channel> {
-  return apiFetch<Channel>(`/v1/channels/${encodeURIComponent(input.channelId)}`, {
+export async function updateChannel(
+  channelId: string,
+  payload: {
+    serverId: string;
+    name?: string;
+    type?: ChannelType;
+    categoryId?: string | null;
+    topic?: string | null;
+    position?: number;
+  }
+): Promise<Channel> {
+  return apiFetch<Channel>(`/v1/channels/${encodeURIComponent(channelId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      serverId: input.serverId,
-      name: input.name,
-      type: input.type,
-      categoryId: input.categoryId,
-      position: input.position
-    })
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function listChannelMembers(
+  channelId: string
+): Promise<{ channelId: string; productUserId: string; createdAt: string; displayName: string }[]> {
+  const json = await apiFetch<{
+    items: { channelId: string; productUserId: string; createdAt: string; displayName: string }[];
+  }>(`/v1/channels/${encodeURIComponent(channelId)}/members`);
+  return json.items;
+}
+
+export async function inviteToChannel(channelId: string, productUserId: string): Promise<void> {
+  await apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ productUserId })
   });
 }
 
