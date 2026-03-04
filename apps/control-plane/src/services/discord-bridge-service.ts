@@ -633,9 +633,7 @@ export async function relayDiscordMessageToMappedChannel(input: {
     return { relayed: false, limitation: "Mapped Matrix channel no longer exists." };
   }
 
-  // Use a Discord logo icon (Markdown) for better visual indicator in Matrix
-  const discordLogo = "![Discord](https://raw.githubusercontent.com/adapter-hub/adapter-hub/master/static/discord.png)";
-  const body = [`**${discordLogo} ${input.authorName}**: ${input.content.trim()}`];
+  const body = [`${input.authorName}: ${input.content.trim()}`];
   if (input.mediaUrls?.length) {
     body.push(`\n_Media relay is URL-only:_ ${input.mediaUrls.join(", ")}`);
   }

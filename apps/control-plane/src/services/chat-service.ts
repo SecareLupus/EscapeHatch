@@ -196,6 +196,7 @@ export async function listMessages(input: {
       author_display_name: string;
       content: string;
       attachments: any;
+      is_relay: boolean;
       created_at: string;
       updated_at?: string;
       deleted_at?: string;
@@ -263,6 +264,7 @@ export async function listMessages(input: {
         content: row.content,
         attachments: row.attachments,
         reactions: Object.values(reactionsByEmoji),
+        isRelay: row.is_relay,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         deletedAt: row.deleted_at
@@ -333,10 +335,11 @@ export async function createMessage(input: {
         author_display_name: string;
         content: string;
         attachments: any;
+        is_relay: boolean;
         created_at: string;
       }>(
-        `insert into chat_messages (id, channel_id, author_user_id, author_display_name, content, attachments)
-       values ($1, $2, $3, $4, $5, $6)
+        `insert into chat_messages (id, channel_id, author_user_id, author_display_name, content, attachments, is_relay)
+       values ($1, $2, $3, $4, $5, $6, $7)
        returning *`,
         [
           `msg_${crypto.randomUUID().replaceAll("-", "")}`,
@@ -344,7 +347,8 @@ export async function createMessage(input: {
           input.actorUserId,
           authorDisplayName,
           input.content,
-          JSON.stringify(input.attachments ?? [])
+          JSON.stringify(input.attachments ?? []),
+          Boolean(input.isRelay)
         ]
       );
 
@@ -361,6 +365,7 @@ export async function createMessage(input: {
         content: row.content,
         attachments: row.attachments,
         reactions: [],
+        isRelay: row.is_relay,
         createdAt: row.created_at
       };
 

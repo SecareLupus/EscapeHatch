@@ -299,6 +299,7 @@ export interface ChatMessage {
     content: string;
     attachments?: Attachment[];
     reactions?: Reaction[];
+    isRelay?: boolean;
     createdAt: string;
     updatedAt?: string;
     deletedAt?: string;
