@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Channel, ChannelType, Server } from "@escapehatch/shared";
+import type { Channel, ChannelType, Server } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 import { attachChildRoom, createChannelRoom, createSpace } from "../matrix/synapse-adapter.js";
 import { withRetry } from "./retry.js";

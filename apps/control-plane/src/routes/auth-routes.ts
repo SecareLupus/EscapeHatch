@@ -18,7 +18,7 @@ import {
   listBlocks
 } from "../services/identity-service.js";
 import { requireAuth } from "../auth/middleware.js";
-import type { AccountLinkingRequirement, IdentityProvider } from "@escapehatch/shared";
+import type { AccountLinkingRequirement, IdentityProvider } from "@skerry/shared";
 import { config } from "../config.js";
 import { bootstrapAdmin, getBootstrapStatus } from "../services/bootstrap-service.js";
 import {

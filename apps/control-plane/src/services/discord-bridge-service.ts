@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { ChannelType } from "discord.js";
-import type { DiscordBridgeChannelMapping, DiscordBridgeConnection } from "@escapehatch/shared";
+import type { DiscordBridgeChannelMapping, DiscordBridgeConnection } from "@skerry/shared";
 import { config } from "../config.js";
 import { withDb } from "../db/client.js";
 import { createMessage } from "./chat-service.js";

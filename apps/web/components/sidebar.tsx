@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 import { useChat, ModalType } from "../context/chat-context";
-import { Channel } from "@escapehatch/shared";
+import { Channel } from "@skerry/shared";
 
 const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(" ");
 

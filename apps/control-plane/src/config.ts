@@ -19,7 +19,7 @@ export const config = {
   logFilePath: process.env.LOG_FILE_PATH ?? "",
   rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE ?? "240"),
   oidc: {
-    keycloakIssuer: process.env.OIDC_KEYCLOAK_ISSUER ?? (baseDomain ? `https://keycloak.${baseDomain}/realms/escapehatch` : "http://keycloak:8080/realms/escapehatch"),
+    keycloakIssuer: process.env.OIDC_KEYCLOAK_ISSUER ?? (baseDomain ? `https://keycloak.${baseDomain}/realms/skerry` : "http://keycloak:8080/realms/skerry"),
     keycloakClientId: process.env.OIDC_KEYCLOAK_CLIENT_ID,
     keycloakClientSecret: process.env.OIDC_KEYCLOAK_CLIENT_SECRET,
     discordClientId: process.env.OIDC_DISCORD_CLIENT_ID,

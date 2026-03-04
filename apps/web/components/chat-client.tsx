@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useToast } from "./toast-provider";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { ProfileModal } from "./profile-modal";
-import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@escapehatch/shared";
+import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
 import {
   bootstrapAdmin,
   createReport,

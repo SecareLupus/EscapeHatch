@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { FederationPolicyEvent, FederationPolicyStatus, HubFederationPolicy } from "@escapehatch/shared";
+import type { FederationPolicyEvent, FederationPolicyStatus, HubFederationPolicy } from "@skerry/shared";
 import { config } from "../config.js";
 import { setRoomServerAcl } from "../matrix/synapse-adapter.js";
 import { withDb } from "../db/client.js";

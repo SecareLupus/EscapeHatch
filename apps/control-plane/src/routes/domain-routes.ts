@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { DEFAULT_SERVER_BLUEPRINT } from "@escapehatch/shared";
+import { DEFAULT_SERVER_BLUEPRINT } from "@skerry/shared";
 import { config } from "../config.js";
 import { requireAuth, requireInitialized } from "../auth/middleware.js";
 import { createChannelWorkflow, createServerWorkflow } from "../services/provisioning-service.js";

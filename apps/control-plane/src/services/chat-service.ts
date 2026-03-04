@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Category, Channel, ChannelReadState, ChatMessage, MentionMarker, Server } from "@escapehatch/shared";
+import type { Category, Channel, ChannelReadState, ChatMessage, MentionMarker, Server } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 
 interface ChannelRow {

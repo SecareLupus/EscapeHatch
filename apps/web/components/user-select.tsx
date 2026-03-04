@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { searchUsers } from "../lib/control-plane";
-import type { IdentityMapping } from "@escapehatch/shared";
+import type { IdentityMapping } from "@skerry/shared";
 
 interface UserSelectProps {
     value: IdentityMapping | null;

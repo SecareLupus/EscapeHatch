@@ -1,6 +1,8 @@
-# EscapeHatch
+![Skerry Full Width Logo](Skerry_FullWidth.png)
 
-EscapeHatch is the monorepo for the **Creator Co-Op Hub Chat Platform**: a Matrix-based, Discord-like community product for creator collectives.
+# Skerry
+
+Skerry (or **Skerry Chat**) is the monorepo for the **Skerry Collective Hub Chat Platform**: a Matrix-based, Discord-like community product for creator collectives.
 
 ## Current Capability
 
@@ -35,14 +37,14 @@ The platform provides a complete community experience with high-level abstractio
 
 When running via Docker Compose, services reside on a shared network (`escapehatch_default`) and communicate using their service names as hostnames:
 
-| Service | Internal URL | Purpose |
-| :--- | :--- | :--- |
-| **Caddy** | Port 80/443 | Public entry point & path-based routing |
-| **Web UI** | `web:3000` | Frontend Next.js application |
-| **Control Plane** | `control-plane:4000` | Fastify API & provisioning gateway |
-| **Matrix** | `synapse:8008` | Matrix homeserver (Synapse) |
-| **LiveKit** | `livekit:7880` | Real-time voice/video signaling |
-| **Database** | `postgres:5432` | Persistence layer |
+| Service           | Internal URL         | Purpose                                 |
+| :---------------- | :------------------- | :-------------------------------------- |
+| **Caddy**         | Port 80/443          | Public entry point & path-based routing |
+| **Web UI**        | `web:3000`           | Frontend Next.js application            |
+| **Control Plane** | `control-plane:4000` | Fastify API & provisioning gateway      |
+| **Matrix**        | `synapse:8008`       | Matrix homeserver (Synapse)             |
+| **LiveKit**       | `livekit:7880`       | Real-time voice/video signaling         |
+| **Database**      | `postgres:5432`      | Persistence layer                       |
 
 ## Quick Start (Docker)
 

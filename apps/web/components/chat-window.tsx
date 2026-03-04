@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { useChat, MessageItem } from "../context/chat-context";
-import type { ChatMessage, ModerationActionType } from "@escapehatch/shared";
+import type { ChatMessage, ModerationActionType } from "@skerry/shared";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage, listChannelMembers, inviteToChannel, updateChannel, searchUsers } from "../lib/control-plane";
 import dynamic from "next/dynamic";

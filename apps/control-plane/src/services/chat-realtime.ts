@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@escapehatch/shared";
+import type { ChatMessage } from "@skerry/shared";
 
 type ChatMessageEvent = "message.created" | "message.updated" | "message.deleted";
 type ChatMessageListener = (event: ChatMessageEvent, message: ChatMessage) => void;

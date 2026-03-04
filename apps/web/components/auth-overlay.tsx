@@ -62,7 +62,7 @@ export function AuthOverlay() {
         return (
             <div className="login-container">
                 <div className="login-card">
-                    <h2>EscapeHatch</h2>
+                    <h2>Skerry</h2>
                     <p>Log in to access your workspace</p>
                     <div className="stack">
                         {enabledLoginProviders.length > 0 ? (

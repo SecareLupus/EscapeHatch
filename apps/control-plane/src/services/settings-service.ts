@@ -1,5 +1,5 @@
 import { withDb } from "../db/client.js";
-import type { Hub, Server, Channel } from "@escapehatch/shared";
+import type { Hub, Server, Channel } from "@skerry/shared";
 
 export async function getHubSettings(hubId: string): Promise<Partial<Hub>> {
   return withDb(async (db) => {

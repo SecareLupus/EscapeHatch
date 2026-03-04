@@ -1,4 +1,4 @@
-import type { Hub, Role } from "@escapehatch/shared";
+import type { Hub, Role } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 
 const MANAGER_ROLES: Role[] = ["hub_admin", "space_owner"];

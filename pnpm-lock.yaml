@@ -13,15 +13,15 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.998.0
         version: 3.998.0
-      '@escapehatch/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@fastify/cors':
         specifier: ^10.0.2
         version: 10.1.0
       '@fastify/sensible':
         specifier: ^6.0.2
         version: 6.0.4
+      '@skerry/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       discord.js:
         specifier: ^14.25.1
         version: 14.25.1
@@ -62,12 +62,12 @@ importers:
 
   apps/web:
     dependencies:
-      '@escapehatch/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@matrix-org/matrix-sdk-crypto-wasm':
         specifier: ^17.1.0
         version: 17.1.0
+      '@skerry/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       emoji-picker-react:
         specifier: ^4.18.0
         version: 4.18.0(react@18.3.1)

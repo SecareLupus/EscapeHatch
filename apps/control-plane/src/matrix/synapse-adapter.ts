@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import type { ChannelType } from "@escapehatch/shared";
+import type { ChannelType } from "@skerry/shared";
 
 interface CreateSpaceInput {
   name: string;

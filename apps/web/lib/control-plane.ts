@@ -20,7 +20,7 @@ import type {
   IdentityMapping,
   VoicePresenceMember,
   VoiceTokenGrant
-} from "@escapehatch/shared";
+} from "@skerry/shared";
 
 
 const publicBaseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "localhost";

@@ -13,7 +13,7 @@ import {
     RemoteTrackPublication,
     LocalParticipant,
 } from "livekit-client";
-import type { VoiceTokenGrant } from "@escapehatch/shared";
+import type { VoiceTokenGrant } from "@skerry/shared";
 
 interface VoiceRoomProps {
     grant: VoiceTokenGrant;

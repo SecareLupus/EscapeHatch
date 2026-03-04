@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Role, PrivilegedAction } from "@escapehatch/shared";
+import type { Role, PrivilegedAction } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 import { expireSpaceOwnerAssignments } from "./delegation-service.js";
 

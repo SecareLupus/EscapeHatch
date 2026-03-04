@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { IdentityMapping } from "@escapehatch/shared";
+import type { IdentityMapping } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 import { isTokenExpired, refreshAccessToken } from "../auth/oidc.js";
 

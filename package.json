@@ -1,12 +1,12 @@
 {
-  "name": "escapehatch",
+  "name": "skerry",
   "version": "0.1.0",
   "private": true,
-  "description": "Creator Co-Op Hub platform monorepo",
+  "description": "Skerry Collective platform monorepo",
   "packageManager": "pnpm@9.12.2",
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm --parallel --filter @escapehatch/control-plane --filter @escapehatch/web dev",
+    "dev": "pnpm --parallel --filter @skerry/control-plane --filter @skerry/web dev",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

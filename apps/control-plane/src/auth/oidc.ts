@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { config } from "../config.js";
-import type { IdentityProvider } from "@escapehatch/shared";
+import type { IdentityProvider } from "@skerry/shared";
 
 type SupportedOidcProvider = "discord" | "google" | "twitch";
 type OidcIntent = "login" | "link";

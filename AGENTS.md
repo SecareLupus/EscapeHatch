@@ -1,12 +1,15 @@
 # AGENTS.md
 
 ## Project Scope
-These instructions apply to the entire EscapeHatch repository.
+
+These instructions apply to the entire Skerry repository.
 
 ## Mission
+
 Build a Matrix-based Creator Co-Op Hub platform with Discord-like semantics (servers, channels, scoped moderation, voice/video conferencing, Discord bridging), following the reference architecture.
 
 ## Engineering Guardrails
+
 - **Single-Domain Routing**: Maintain the path-based routing strategy implemented via Caddy (`/auth`, `/v1`, `/_matrix`, etc.). Do not introduce new subdomains.
 - **Control Plane Authority**: The control plane remains the primary policy gate for all privileged operations.
 - **Resource Lifecycle**: Ensure Matrix rooms and LiveKit tokens are managed via the control plane workflows.
@@ -15,6 +18,7 @@ Build a Matrix-based Creator Co-Op Hub platform with Discord-like semantics (ser
 - **Type Safety**: Maintain strict TypeScript settings; avoid `any` wherever possible.
 
 ## Repository Conventions
+
 - **Monorepo**: Uses pnpm workspaces.
   - `apps/web`: Next.js web client.
   - `apps/control-plane`: Fastify provisioning/policy API.
@@ -23,7 +27,9 @@ Build a Matrix-based Creator Co-Op Hub platform with Discord-like semantics (ser
 - **Deployment**: The primary deployment target is Docker Compose, managing the full stack of services.
 
 ## Validation Checklist
+
 Before submitting changes, ensure the following pass:
+
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm build`

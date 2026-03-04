@@ -14,7 +14,7 @@ import {
     listChannels,
     fetchHubSettings
 } from "../lib/control-plane";
-import { DiscordBridgeConnection, DiscordBridgeChannelMapping, Channel } from "@escapehatch/shared";
+import { DiscordBridgeConnection, DiscordBridgeChannelMapping, Channel } from "@skerry/shared";
 import { useToast } from "./toast-provider";
 
 interface BridgeManagerProps {

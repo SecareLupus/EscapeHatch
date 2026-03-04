@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { ModerationActionType, PrivilegedAction } from "@escapehatch/shared";
+import type { ModerationActionType, PrivilegedAction } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 import { isActionAllowed } from "./policy-service.js";
 

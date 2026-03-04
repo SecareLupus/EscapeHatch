@@ -14,7 +14,7 @@ import type {
     VoiceTokenGrant,
     DiscordBridgeChannelMapping,
     DiscordBridgeConnection
-} from "@escapehatch/shared";
+} from "@skerry/shared";
 import type {
     AuthProvidersResponse,
     BootstrapStatus,

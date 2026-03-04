@@ -1,5 +1,5 @@
 import { AccessToken } from "livekit-server-sdk";
-import type { VoiceTokenGrant } from "@escapehatch/shared";
+import type { VoiceTokenGrant } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 import { executePrivilegedAction } from "./privileged-gateway.js";
 import { config } from "../config.js";

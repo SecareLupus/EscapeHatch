@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EscapeHatch Hub",
-  description: "Creator co-op Matrix hub"
+  title: "Skerry Chat",
+  description: "Skerry Collective Matrix hub"
 };
 
 import { ToastProvider } from "../components/toast-provider";

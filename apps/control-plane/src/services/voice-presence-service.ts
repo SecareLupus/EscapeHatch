@@ -1,4 +1,4 @@
-import type { VoicePresenceMember } from "@escapehatch/shared";
+import type { VoicePresenceMember } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 import { isActionAllowed } from "./policy-service.js";
 

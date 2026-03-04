@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { DelegationAuditEvent, SpaceOwnerAssignment } from "@escapehatch/shared";
+import type { DelegationAuditEvent, SpaceOwnerAssignment } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 
 function randomId(prefix: string): string {
