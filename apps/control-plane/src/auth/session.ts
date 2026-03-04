@@ -45,7 +45,7 @@ export function setSessionCookie(reply: FastifyReply, payload: Omit<SessionPaylo
   const ttlSeconds = Math.max(60, config.sessionTtlSeconds);
   const expiresAt = Date.now() + ttlSeconds * 1000;
   const token = createSessionToken({ ...payload, expiresAt });
-  let cookie = `escapehatch_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}`;
+  let cookie = `skerry_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}`;
   
   // Use Domain if it's a real-ish domain or localhost (to share across subdomains)
   if (config.baseDomain && config.baseDomain !== "127.0.0.1") {
@@ -57,7 +57,7 @@ export function setSessionCookie(reply: FastifyReply, payload: Omit<SessionPaylo
 }
 
 export function clearSessionCookie(reply: FastifyReply): void {
-  let cookie = "escapehatch_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+  let cookie = "skerry_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
   if (config.baseDomain && config.baseDomain !== "127.0.0.1") {
     cookie += `; Domain=${config.baseDomain}`;
   }
@@ -74,14 +74,14 @@ export function getSession(request: FastifyRequest): SessionPayload | null {
   const raw = cookieHeader
     .split(";")
     .map((part) => part.trim())
-    .find((part) => part.startsWith("escapehatch_session="));
+    .find((part) => part.startsWith("skerry_session="));
 
   if (!raw) {
-    console.log(`[AUTH DEBUG] escapehatch_session missing in header for ${request.method} ${request.url} id=${request.id}. Cookie header: ${cookieHeader}`);
+    console.log(`[AUTH DEBUG] skerry_session missing in header for ${request.method} ${request.url} id=${request.id}. Cookie header: ${cookieHeader}`);
     return null;
   }
 
-  const token = raw.replace("escapehatch_session=", "");
+  const token = raw.replace("skerry_session=", "");
   const payload = verify(token);
   if (!payload) {
     console.log(`[AUTH DEBUG] Session token verification failed for ${request.method} ${request.url} id=${request.id}`);

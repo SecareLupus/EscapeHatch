@@ -1630,7 +1630,7 @@ export function ChatClient() {
     return (
       <main className="app">
         <section className="panel">
-          <h1>EscapeHatch</h1>
+          <h1>Skerry</h1>
           <p>Loading local workspace...</p>
         </section>
       </main>
@@ -1640,7 +1640,7 @@ export function ChatClient() {
   return (
     <main className="app">
       <header className="topbar">
-        <h1>EscapeHatch Local Chat</h1>
+        <h1>Skerry Local Chat</h1>
         <div className="topbar-meta">
           <button
             type="button"
