@@ -1533,6 +1533,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const payload = z
       .object({
         discordChannelId: z.string().min(1),
+        authorId: z.string().min(1),
         authorName: z.string().min(1),
         content: z.string().min(1).max(2000),
         mediaUrls: z.array(z.string().url()).max(8).optional()

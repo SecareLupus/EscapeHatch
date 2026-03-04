@@ -945,8 +945,18 @@ export async function listChannelMembers(channelId: string): Promise<{
     const mappings = await listDiscordChannelMappings(channel.server_id);
     const mapping = mappings.find(m => m.matrixChannelId === channelId && m.enabled);
 
-    let bridgedMembers: typeof localMembers = [];
-    let externalOfflineMembers: typeof localMembers = [];
+    type Member = { 
+      productUserId: string; 
+      displayName: string; 
+      avatarUrl?: string;
+      isOnline: boolean; 
+      lastSeenAt?: string;
+      isBridged?: boolean;
+      bridgedUserStatus?: string;
+    };
+
+    let bridgedMembers: Member[] = [];
+    let externalOfflineMembers: Member[] = [];
 
     if (mapping) {
       const discordPresences = await getDiscordGuildPresence(mapping.guildId);
