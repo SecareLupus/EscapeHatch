@@ -1722,6 +1722,7 @@ export function ChatClient() {
             mentions={mentions}
             messagesRef={messagesRef}
             messageInputRef={messageInputRef}
+            refreshChatState={refreshChatState}
           />
 
           <div className="details-drawer-container">

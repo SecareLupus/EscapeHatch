@@ -107,7 +107,42 @@ export async function listChannels(serverId: string, productUserId?: string): Pr
          order by ch.position asc, ch.created_at asc`,
         [serverId, productUserId]
       );
-      return rows.rows.map(mapChannel);
+      const channels = rows.rows.map(mapChannel);
+
+      if (channels.length > 0) {
+        const channelIds = channels.map(c => c.id);
+        const memberRows = await db.query<{
+          channel_id: string;
+          product_user_id: string;
+          display_name: string;
+        }>(
+          `select cm.channel_id, cm.product_user_id,
+             coalesce(
+               (select preferred_username 
+                from identity_mappings 
+                where product_user_id = cm.product_user_id 
+                order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+                limit 1),
+               'user-' || substr(cm.product_user_id, 1, 8)
+             ) as display_name
+           from channel_members cm
+           where cm.channel_id = any($1)`,
+          [channelIds]
+        );
+
+        const memberMap = new Map<string, { productUserId: string; displayName: string }[]>();
+        for (const row of memberRows.rows) {
+          const list = memberMap.get(row.channel_id) ?? [];
+          list.push({ productUserId: row.product_user_id, displayName: row.display_name });
+          memberMap.set(row.channel_id, list);
+        }
+
+        for (const channel of channels) {
+          channel.participants = memberMap.get(channel.id) ?? [];
+        }
+      }
+
+      return channels;
     }
 
     const rows = await db.query<ChannelRow>(
@@ -390,8 +425,33 @@ export async function getOrCreateDMChannel(hubId: string, productUserIds: string
     );
 
     if (existingRow.rows[0]) {
-      const chRow = await db.query<ChannelRow>("select * from channels where id = $1", [existingRow.rows[0].id]);
-      return mapChannel(chRow.rows[0]!);
+      const channelId = existingRow.rows[0].id;
+      const chRow = await db.query<ChannelRow>("select * from channels where id = $1", [channelId]);
+      const channel = mapChannel(chRow.rows[0]!);
+
+      const memberRows = await db.query<{
+        product_user_id: string;
+        display_name: string;
+      }>(
+        `select cm.product_user_id,
+           coalesce(
+             (select preferred_username 
+              from identity_mappings 
+              where product_user_id = cm.product_user_id 
+              order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+              limit 1),
+             'user-' || substr(cm.product_user_id, 1, 8)
+           ) as display_name
+         from channel_members cm
+         where cm.channel_id = $1`,
+        [channelId]
+      );
+      channel.participants = memberRows.rows.map(r => ({
+        productUserId: r.product_user_id,
+        displayName: r.display_name
+      }));
+
+      return channel;
     }
 
     const channelId = `chn_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -409,7 +469,31 @@ export async function getOrCreateDMChannel(hubId: string, productUserIds: string
     }
 
     const chRow = await db.query<ChannelRow>("select * from channels where id = $1", [channelId]);
-    return mapChannel(chRow.rows[0]!);
+    const channel = mapChannel(chRow.rows[0]!);
+
+    const memberRows = await db.query<{
+      product_user_id: string;
+      display_name: string;
+    }>(
+      `select cm.product_user_id,
+         coalesce(
+           (select preferred_username 
+            from identity_mappings 
+            where product_user_id = cm.product_user_id 
+            order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+            limit 1),
+           'user-' || substr(cm.product_user_id, 1, 8)
+         ) as display_name
+       from channel_members cm
+       where cm.channel_id = $1`,
+      [channelId]
+    );
+    channel.participants = memberRows.rows.map(r => ({
+      productUserId: r.product_user_id,
+      displayName: r.display_name
+    }));
+
+    return channel;
   });
 }
 

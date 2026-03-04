@@ -37,7 +37,8 @@ export function Sidebar({
         messages,
         lastReadByChannel,
         mentionCountByChannel,
-        blockedUserIds
+        blockedUserIds,
+        viewer
     } = state;
 
     const sortedServers = useMemo(() => {
@@ -106,6 +107,17 @@ export function Sidebar({
     }, [selectedServerId]);
 
     const activeServer = useMemo(() => servers.find(s => s.id === selectedServerId), [servers, selectedServerId]);
+
+    const getChannelName = (channel: Channel) => {
+        if (channel.type !== 'dm') return channel.name;
+        if (channel.topic) return channel.topic;
+        if (channel.participants) {
+            const others = channel.participants.filter(p => p.productUserId !== viewer?.productUserId);
+            if (others.length === 0) return "Direct Message";
+            return others.map(p => p.displayName).join(", ");
+        }
+        return channel.name;
+    };
 
     return (
         <aside className="unified-sidebar panel">
@@ -306,7 +318,7 @@ export function Sidebar({
                                                 >
                                                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                         {channel.type === 'voice' ? '🔊' : '#'}
-                                                        {channel.name}
+                                                        {getChannelName(channel)}
                                                     </span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                         {(unreadCountByChannel[channel.id] ?? 0) > 0 ? (

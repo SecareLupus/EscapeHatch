@@ -95,6 +95,7 @@ export interface Channel {
     restrictedVisibility?: boolean;
     allowedRoleIds?: string[];
     topic: string | null;
+    participants?: { productUserId: string; displayName: string }[];
     createdAt: string;
 }
 

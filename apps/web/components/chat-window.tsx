@@ -37,6 +37,7 @@ interface ChatWindowProps {
     handleToggleMuteDeafen: (muted: boolean, deafened: boolean) => Promise<void>;
     handleToggleVideo: (enabled: boolean) => Promise<void>;
     handlePerformModerationAction?: (action: ModerationActionType, targetUserId?: string, targetMessageId?: string) => Promise<void>;
+    refreshChatState: (serverId?: string, channelId?: string) => Promise<void>;
 }
 
 function formatMessageTime(value: string): string {
@@ -66,7 +67,9 @@ export function ChatWindow({
     voiceGrant,
     mentions,
     handleToggleMuteDeafen,
-    handleToggleVideo
+    handleToggleVideo,
+    handlePerformModerationAction,
+    refreshChatState
 }: ChatWindowProps) {
     const { state, dispatch } = useChat();
     const {
@@ -198,6 +201,7 @@ export function ChatWindow({
             await inviteToChannel(selectedChannelId, userId);
             const members = await listChannelMembers(selectedChannelId);
             setChannelMembers(members);
+            await refreshChatState(activeServer?.id, selectedChannelId);
             setIsInviting(false);
         } catch (error) {
             console.error("Invite failed", error);
@@ -212,9 +216,7 @@ export function ChatWindow({
                 serverId: activeServer.id,
                 topic: newTopic.trim() || null
             });
-            // The activeChannelData should update via SSE/context if implemented, 
-            // but we might need a local refresh or dispatch if not.
-            // For now, assume context handles it or user re-selects.
+            await refreshChatState(activeServer.id, selectedChannelId);
             setIsEditingTopic(false);
         } catch (error) {
             console.error("Topic update failed", error);
