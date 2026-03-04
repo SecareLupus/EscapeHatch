@@ -484,9 +484,25 @@ export async function updateChannel(
 
 export async function listChannelMembers(
   channelId: string
-): Promise<{ channelId: string; productUserId: string; createdAt: string; displayName: string }[]> {
+): Promise<{ 
+  productUserId: string; 
+  displayName: string; 
+  avatarUrl?: string;
+  isOnline: boolean; 
+  lastSeenAt?: string;
+  isBridged?: boolean;
+  bridgedUserStatus?: string;
+}[]> {
   const json = await apiFetch<{
-    items: { channelId: string; productUserId: string; createdAt: string; displayName: string }[];
+    items: { 
+      productUserId: string; 
+      displayName: string; 
+      avatarUrl?: string;
+      isOnline: boolean; 
+      lastSeenAt?: string;
+      isBridged?: boolean;
+      bridgedUserStatus?: string;
+    }[];
   }>(`/v1/channels/${encodeURIComponent(channelId)}/members`);
   return json.items;
 }
