@@ -18,10 +18,10 @@ RUN echo "NEXT_PUBLIC_BASE_DOMAIN=${NEXT_PUBLIC_BASE_DOMAIN:-localhost}" > .env 
 FROM base AS control-plane
 COPY --from=build /app /app
 EXPOSE 4000
-CMD [ "pnpm", "--filter", "@escapehatch/control-plane", "start" ]
+CMD [ "pnpm", "--filter", "@skerry/control-plane", "start" ]
 
 # --- Web App Runtime ---
 FROM base AS web
 COPY --from=build /app /app
 EXPOSE 3000
-CMD [ "pnpm", "--filter", "@escapehatch/web", "start" ]
+CMD [ "pnpm", "--filter", "@skerry/web", "start" ]
