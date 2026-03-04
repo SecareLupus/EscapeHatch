@@ -155,6 +155,7 @@ export function ChatWindow({
             const showHeader =
                 !previous ||
                 previous.authorUserId !== message.authorUserId ||
+                Boolean(previous.isRelay) !== Boolean(message.isRelay) ||
                 previousTime === null ||
                 currentTime - previousTime > 5 * 60 * 1000;
 

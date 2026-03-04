@@ -633,7 +633,7 @@ export async function relayDiscordMessageToMappedChannel(input: {
     return { relayed: false, limitation: "Mapped Matrix channel no longer exists." };
   }
 
-  const body = [`${input.authorName}: ${input.content.trim()}`];
+  const body = [input.content.trim()];
   if (input.mediaUrls?.length) {
     body.push(`\n_Media relay is URL-only:_ ${input.mediaUrls.join(", ")}`);
   }
