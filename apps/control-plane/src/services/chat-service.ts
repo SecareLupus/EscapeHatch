@@ -901,7 +901,13 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
        union
        select owner_user_id from hubs where id = $3
        union
-       select product_user_id from channel_members where channel_id = $2`,
+       select product_user_id from channel_members where channel_id = $2
+       union
+       select author_user_id from chat_messages
+         where channel_id = $2
+           and is_relay = false
+           and (external_provider is null or external_provider = '')
+           and author_user_id not like 'discord_%'`,
       [channel.server_id, channelId, server.hub_id]
     );
     localProductUserIds = members.rows.map(m => m.product_user_id).filter(Boolean);
