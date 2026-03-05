@@ -635,14 +635,21 @@ export async function relayDiscordMessageToMappedChannel(input: {
     return { relayed: false, limitation: "Mapped Matrix channel no longer exists." };
   }
 
-  const body = [input.content.trim()];
-  if (input.mediaUrls?.length) {
-    body.push(`\n_Media relay is URL-only:_ ${input.mediaUrls.join(", ")}`);
-  }
+  const attachments = (input.mediaUrls ?? []).map((url) => {
+    const filename = url.split("/").pop()?.split("?")[0] || "image.png";
+    return {
+      id: `att_${crypto.randomUUID().replaceAll("-", "")}`,
+      url,
+      contentType: "image/any", // We don't know the exact content type from just a URL
+      filename
+    };
+  });
+
   const message = await createMessage({
     channelId: mapping.matrixChannelId,
     actorUserId: connection.connectedByUserId,
-    content: body.join("\n"),
+    content: input.content.trim(),
+    attachments: attachments.length > 0 ? attachments : undefined,
     isRelay: true,
     externalAuthorId: input.authorId,
     externalProvider: "discord",

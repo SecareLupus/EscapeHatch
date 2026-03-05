@@ -12,6 +12,7 @@ docker/synapse/*.pid
 docker/synapse/media_store/
 docker/synapse/*.signing.key
 docker/synapse/homeserver.db-*
+docker/synapse/skerry-appservice.yaml
 
 # Synapse Config
 !docker/synapse/homeserver.yaml

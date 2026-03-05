@@ -54,14 +54,14 @@ export async function uploadMedia(input: {
       return { url: `${prefix}${filename}` };
     } else {
       // Fallback to Synapse Media Repository
-      if (!config.synapse.baseUrl || !config.synapse.accessToken) {
+      if (!config.synapse.baseUrl || !config.synapse.asToken) {
         throw new Error("Synapse configuration is missing and no S3 config is provided.");
       }
 
       const response = await fetch(`${config.synapse.baseUrl}/_matrix/media/v3/upload?filename=${encodeURIComponent(filename)}`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${config.synapse.accessToken}`,
+          Authorization: `Bearer ${config.synapse.asToken}`,
           "Content-Type": input.contentType
         },
         body: buffer
@@ -70,18 +70,27 @@ export async function uploadMedia(input: {
       if (!response.ok) {
         const errText = await response.text();
         const requestId = response.headers.get("x-request-id");
-        const maskedToken = config.synapse.accessToken
-          ? `${config.synapse.accessToken.slice(0, 4)}...${config.synapse.accessToken.slice(-4)}`
+        let maskedToken = config.synapse.asToken
+          ? `${config.synapse.asToken.slice(0, 4)}...${config.synapse.asToken.slice(-4)}`
           : "missing";
 
-        console.error(`Synapse upload failed [${response.status}]: ${errText}`, {
-          requestId,
-          baseUrl: config.synapse.baseUrl,
-          tokenLength: config.synapse.accessToken?.length,
-          maskedToken
-        });
+        if (response.status === 401 || response.status === 403) {
+          console.error(`Synapse upload failed [${response.status}]: ${errText}. This usually indicates an invalid or expired SYNAPSE_AS_TOKEN.`, {
+            requestId,
+            baseUrl: config.synapse.baseUrl,
+            tokenLength: config.synapse.asToken?.length,
+            maskedToken
+          });
+        } else {
+          console.error(`Synapse upload failed [${response.status}]: ${errText}`, {
+            requestId,
+            baseUrl: config.synapse.baseUrl,
+            tokenLength: config.synapse.asToken?.length,
+            maskedToken
+          });
+        }
 
-        throw new Error(`Synapse upload failed (${response.status}): ${errText} (request ${requestId ?? "unknown"})`);
+        throw new Error(`Synapse upload failed (${response.status}): ${errText} (request ${requestId ?? "unknown"})${response.status === 401 ? ". Please check if your SYNAPSE_AS_TOKEN is valid." : ""}`);
       }
 
       const data = await response.json() as { content_uri: string };

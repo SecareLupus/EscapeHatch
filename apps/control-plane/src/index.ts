@@ -4,7 +4,12 @@ import { config } from "./config.js";
 import { startDiscordBot } from "./services/discord-bot-client.js";
 import { initDb } from "./db/client.js";
 
+import { ensureAppserviceRegistration } from "./matrix/synapse-bootstrap.js";
+
 async function start() {
+  // Ensure Appservice registration is in sync with environment
+  await ensureAppserviceRegistration();
+
   // Ensure DB schema is initialized
   await initDb();
 

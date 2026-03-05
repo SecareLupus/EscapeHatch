@@ -16,20 +16,29 @@ interface ModerationInput {
   reason?: string;
 }
 
-async function synapseRequest<T>(path: string, body: Record<string, unknown>): Promise<T | null> {
-  if (!config.synapse.baseUrl || !config.synapse.accessToken) {
+async function synapseRequest<T>(
+  path: string, 
+  body: Record<string, unknown>, 
+  options: { userId?: string; method?: string } = {}
+): Promise<T | null> {
+  if (!config.synapse.baseUrl || !config.synapse.asToken) {
     return null;
+  }
+
+  const url = new URL(`${config.synapse.baseUrl}${path}`);
+  url.searchParams.set("access_token", config.synapse.asToken);
+  if (options.userId) {
+    url.searchParams.set("user_id", options.userId);
   }
 
   let response: Response;
   try {
-    response = await fetch(`${config.synapse.baseUrl}${path}`, {
-      method: "POST",
+    response = await fetch(url.toString(), {
+      method: options.method ?? "POST",
       headers: {
-        Authorization: `Bearer ${config.synapse.accessToken}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body)
+      body: body ? JSON.stringify(body) : undefined
     });
   } catch (error) {
     const message = `Synapse request network failure: ${error instanceof Error ? error.message : "unknown error"
@@ -42,7 +51,7 @@ async function synapseRequest<T>(path: string, body: Record<string, unknown>): P
   }
 
   if (!response.ok) {
-    const message = `Synapse request failed: ${response.status}`;
+    const message = `Synapse request failed: ${response.status} ${await response.text()}`;
     if (config.synapse.strictProvisioning) {
       throw new Error(message);
     }
@@ -99,87 +108,29 @@ export async function createChannelRoom(input: CreateRoomInput): Promise<string 
 }
 
 export async function attachChildRoom(spaceId: string, childRoomId: string): Promise<void> {
-  if (!config.synapse.baseUrl || !config.synapse.accessToken) {
-    return;
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(
-      `${config.synapse.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(
-        spaceId
-      )}/state/m.space.child/${encodeURIComponent(childRoomId)}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${config.synapse.accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ via: [new URL(config.synapse.baseUrl).hostname] })
-      }
-    );
-  } catch (error) {
-    const message = `Synapse linkage network failure: ${error instanceof Error ? error.message : "unknown error"
-      }`;
-    if (config.synapse.strictProvisioning) {
-      throw new Error(message);
-    }
-    console.warn(`${message}; continuing without Synapse linkage.`);
-    return;
-  }
-
-  if (!response.ok) {
-    const message = `Failed to attach child room to space (${response.status})`;
-    if (config.synapse.strictProvisioning) {
-      throw new Error(message);
-    }
-    console.warn(`${message}; continuing without Synapse linkage.`);
-  }
+  await synapseRequest(
+    `/_matrix/client/v3/rooms/${encodeURIComponent(spaceId)}/state/m.space.child/${encodeURIComponent(childRoomId)}`,
+    { via: [new URL(config.synapse.baseUrl).hostname] },
+    { method: "PUT" }
+  );
 }
 
 export async function setRoomServerAcl(
   roomId: string,
   allowlist: string[]
 ): Promise<{ ok: boolean; applied: boolean; error?: string }> {
-  if (!config.synapse.baseUrl || !config.synapse.accessToken) {
-    return { ok: true, applied: false };
-  }
+  const response = await synapseRequest(
+    `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.server_acl/`,
+    {
+      allow: [...new Set(allowlist.filter(Boolean))],
+      deny: ["*"],
+      allow_ip_literals: false
+    },
+    { method: "PUT" }
+  );
 
-  let response: Response;
-  try {
-    response = await fetch(
-      `${config.synapse.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(
-        roomId
-      )}/state/m.room.server_acl/`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${config.synapse.accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          allow: [...new Set(allowlist.filter(Boolean))],
-          deny: ["*"],
-          allow_ip_literals: false
-        })
-      }
-    );
-  } catch (error) {
-    const message = `Failed to apply room ACL: ${error instanceof Error ? error.message : "unknown error"}`;
-    if (config.synapse.strictProvisioning) {
-      throw new Error(message);
-    }
-    console.warn(`${message}; continuing without ACL application.`);
-    return { ok: false, applied: false, error: message };
-  }
-
-  if (!response.ok) {
-    const message = `Failed to apply room ACL (${response.status})`;
-    if (config.synapse.strictProvisioning) {
-      throw new Error(message);
-    }
-    console.warn(`${message}; continuing without ACL application.`);
-    return { ok: false, applied: false, error: message };
+  if (!response) {
+    return { ok: false, applied: false, error: "Synapse request failed" };
   }
 
   return { ok: true, applied: true };
@@ -223,4 +174,30 @@ export async function inviteUser(input: { roomId: string; userId: string }): Pro
   await synapseRequest(`/_matrix/client/v3/rooms/${encodeURIComponent(input.roomId)}/invite`, {
     user_id: input.userId
   });
+}
+
+export async function registerUser(input: { userId: string; displayName?: string }): Promise<void> {
+  // Matrix Appservice can register users without passwords
+  const localpart = (input.userId.split(":")[0] || "").replace("@", "");
+  await synapseRequest("/_matrix/client/v3/register", {
+    type: "m.login.application_service",
+    username: localpart,
+    displayname: input.displayName
+  });
+}
+
+export async function setUserDisplayName(userId: string, displayName: string): Promise<void> {
+  await synapseRequest(
+    `/_matrix/client/v3/profile/${encodeURIComponent(userId)}/displayname`,
+    { displayname: displayName },
+    { method: "PUT", userId }
+  );
+}
+
+export async function setUserAvatar(userId: string, avatarUrl: string): Promise<void> {
+  await synapseRequest(
+    `/_matrix/client/v3/profile/${encodeURIComponent(userId)}/avatar_url`,
+    { avatar_url: avatarUrl },
+    { method: "PUT", userId }
+  );
 }

@@ -72,6 +72,8 @@ services:
       - livekit
     networks:
       - default
+    volumes:
+      - ./docker/synapse:/docker/synapse
 
   web:
     build:

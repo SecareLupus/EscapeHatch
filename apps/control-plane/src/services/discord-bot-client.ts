@@ -113,6 +113,7 @@ export async function relayMatrixMessageToDiscord(input: {
     authorName: string;
     content: string;
     avatarUrl?: string; // Optional avatar from Matrix
+    attachments?: Array<{ url: string; contentType: string; filename: string }>;
 }) {
     if (!client || !client.isReady()) {
         // Try to start the bot if it's not ready
@@ -149,15 +150,21 @@ export async function relayMatrixMessageToDiscord(input: {
         const guild = textChannel.guild;
         const emojis = await guild.emojis.fetch();
         const skerryEmoji = emojis.find(e => e.name === "skerry");
-        
+
         if (skerryEmoji) {
             content = `${skerryEmoji} ${content}`;
         }
 
+        const files = input.attachments?.map(a => ({
+            attachment: a.url,
+            name: a.filename
+        }));
+
         await webhook.send({
             username: skerryEmoji ? input.authorName : `${input.authorName} ${config.discordBridge.icon}`,
-            content: content,
-            avatarURL: input.avatarUrl
+            content: content || (files && files.length > 0 ? "" : undefined),
+            avatarURL: input.avatarUrl,
+            files: files
         });
     } catch (error) {
         logEvent("error", "discord_outbound_relay_failed", { error: String(error) });

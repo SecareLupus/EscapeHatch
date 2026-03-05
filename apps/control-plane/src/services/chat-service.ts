@@ -322,7 +322,8 @@ export async function createMessage(input: {
                 discordChannelId: m.discordChannelId,
                 authorName: authorDisplayName,
                 content: input.content,
-                avatarUrl
+                avatarUrl,
+                attachments: input.attachments
               });
             }
           }

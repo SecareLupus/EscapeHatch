@@ -71,7 +71,9 @@ export const config = {
   synapse: {
     baseUrl: (process.env.SYNAPSE_BASE_URL ?? "http://synapse:8008").trim(),
     publicBaseUrl: (process.env.SYNAPSE_PUBLIC_URL || (baseDomain ? `${protocol}://${baseDomain}` : "http://localhost:8008"))?.trim(),
-    accessToken: process.env.SYNAPSE_ACCESS_TOKEN?.trim(),
+    asToken: process.env.SYNAPSE_AS_TOKEN?.trim(),
+    hsToken: process.env.SYNAPSE_HS_TOKEN?.trim(),
+    serverName: (process.env.SYNAPSE_SERVER_NAME ?? "hub-localhost").trim(),
     strictProvisioning: process.env.SYNAPSE_STRICT_PROVISIONING === "true",
   },
   s3: {

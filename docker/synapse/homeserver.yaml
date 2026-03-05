@@ -25,4 +25,6 @@ trusted_key_servers:
   - server_name: "matrix.org"
 
 enable_authenticated_media: false
+app_service_config_files:
+  - /data/skerry-appservice.yaml
 # vim:ft=yaml

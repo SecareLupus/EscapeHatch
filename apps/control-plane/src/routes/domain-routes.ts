@@ -1560,9 +1560,12 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       serverId: payload.serverId
     });
 
-    if (!allowed && !(await listRoleBindings({ productUserId: request.auth!.productUserId })).length) {
-      // Basic fallback check: must have some role in the setup or be server manager
-      reply.code(403).send({ message: "Forbidden: Not part of any hubs or servers." });
+    // We allow media upload if the user can manage the server OR if they are simply a registered user on the platform.
+    // This allows regular users to upload images even if they don't have management roles yet (e.g. for profile sync).
+    const hasAnyIdentity = !!(await getIdentityByProductUserId(request.auth!.productUserId));
+
+    if (!allowed && !hasAnyIdentity) {
+      reply.code(403).send({ message: "Forbidden: Not part of any hubs or servers or missing identity." });
       return;
     }
 

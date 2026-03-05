@@ -49,6 +49,29 @@ function mapRow(result: IdentityRow): IdentityMapping {
   };
 }
 
+import { registerUser, setUserDisplayName } from "../matrix/synapse-adapter.js";
+import { config } from "../config.js";
+
+export async function syncMatrixUser(identity: IdentityMapping): Promise<void> {
+  if (!identity.matrixUserId) return;
+  
+  try {
+    await registerUser({ 
+      userId: identity.matrixUserId, 
+      displayName: identity.preferredUsername || identity.displayName || undefined 
+    });
+    
+    if (identity.preferredUsername || identity.displayName) {
+      await setUserDisplayName(
+        identity.matrixUserId, 
+        identity.preferredUsername || identity.displayName || ""
+      );
+    }
+  } catch (error) {
+    console.error(`Failed to sync Matrix user ${identity.matrixUserId}:`, error);
+  }
+}
+
 export async function upsertIdentityMapping(input: {
   provider: IdentityMapping["provider"];
   oidcSubject: string;
@@ -60,7 +83,10 @@ export async function upsertIdentityMapping(input: {
   refreshToken?: string | null;
   tokenExpiresAt?: string | null;
 }): Promise<IdentityMapping> {
-  return withDb(async (db) => {
+  const productUserId = input.productUserId ?? randomId("usr");
+  const matrixUserId = `@${productUserId}:${config.synapse.serverName}`;
+
+  const identity = await withDb(async (db) => {
     const row = await db.query<IdentityRow>(
       `insert into identity_mappings
        (id, provider, oidc_subject, email, preferred_username, avatar_url, matrix_user_id, product_user_id, access_token, refresh_token, token_expires_at)
@@ -82,8 +108,8 @@ export async function upsertIdentityMapping(input: {
         input.email,
         input.preferredUsername,
         input.avatarUrl,
-        null,
-        input.productUserId ?? randomId("usr"),
+        matrixUserId,
+        productUserId,
         input.accessToken ?? null,
         input.refreshToken ?? null,
         input.tokenExpiresAt ?? null
@@ -97,6 +123,9 @@ export async function upsertIdentityMapping(input: {
 
     return mapRow(result);
   });
+
+  await syncMatrixUser(identity);
+  return identity;
 }
 
 export async function getIdentityByProductUserId(productUserId: string): Promise<IdentityMapping | null> {
@@ -302,6 +331,11 @@ export async function updateUserProfile(productUserId: string, input: {
       ]
     );
   });
+
+  const identity = await getIdentityByProductUserId(productUserId);
+  if (identity) {
+    await syncMatrixUser(identity);
+  }
 }
 export async function blockUser(blockerUserId: string, blockedUserId: string): Promise<void> {
   await withDb(async (db) => {
