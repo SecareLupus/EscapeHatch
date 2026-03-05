@@ -53,7 +53,7 @@ export async function startDiscordBot() {
                 try {
                     const mediaUrls = [
                         ...message.attachments.map(a => a.url),
-                        ...message.embeds.map(e => e.image?.url || e.thumbnail?.url || (e.type === 'gifv' ? e.url : null)).filter(Boolean) as string[]
+                        ...message.embeds.map(e => e.image?.url || e.thumbnail?.url || e.video?.url || (e.data.type === 'gifv' ? e.url : null)).filter(Boolean) as string[]
                     ];
 
                     await relayDiscordMessageToMappedChannel({
