@@ -51,6 +51,11 @@ export async function startDiscordBot() {
 
             for (const serverId of serverIds) {
                 try {
+                    const mediaUrls = [
+                        ...message.attachments.map(a => a.url),
+                        ...message.embeds.map(e => e.image?.url || e.thumbnail?.url || (e.type === 'gifv' ? e.url : null)).filter(Boolean) as string[]
+                    ];
+
                     await relayDiscordMessageToMappedChannel({
                         serverId,
                         discordChannelId: message.channelId,
@@ -58,7 +63,7 @@ export async function startDiscordBot() {
                         authorName: message.author.username,
                         authorAvatarUrl: message.author.displayAvatarURL() ?? undefined,
                         content: message.content,
-                        mediaUrls: message.attachments.map((a: { url: string }) => a.url)
+                        mediaUrls: [...new Set(mediaUrls)]
                     });
                 } catch (error) {
                     logEvent("error", "discord_relay_failed", { serverId, messageId: message.id, error: String(error) });

@@ -18,8 +18,8 @@ interface ChatWindowProps {
     handleSetLock: (locked: boolean) => Promise<void>;
     handleMessageListScroll: (event: React.UIEvent<HTMLOListElement>) => void;
     jumpToLatest: () => void;
-    submitDraftMessage: () => Promise<void>;
-    sendContentWithOptimistic: (content: string, failedId?: string) => Promise<void>;
+    submitDraftMessage: (attachments?: any[]) => Promise<void>;
+    sendContentWithOptimistic: (content: string, attachments?: any[], failedId?: string) => Promise<void>;
     handleJoinVoice: () => Promise<void>;
     handleLeaveVoice: () => Promise<void>;
     messagesRef: React.RefObject<HTMLOListElement>;
@@ -98,6 +98,7 @@ export function ChatWindow({
     const [reactionTargetMessageId, setReactionTargetMessageId] = useState<string | null>(null);
     const [channelMembers, setChannelMembers] = useState<{ productUserId: string; displayName: string }[]>([]);
     const [isEditingTopic, setIsEditingTopic] = useState(false);
+    const [attachments, setAttachments] = useState<any[]>([]);
     const [newTopic, setNewTopic] = useState("");
     const [isInviting, setIsInviting] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -421,8 +422,13 @@ export function ChatWindow({
 
         setIsUploading(true);
         try {
-            const { url } = await uploadMedia(activeServer.id, file);
-            setDraftMessage((prev) => (prev ? `${prev}\n![image](${url})` : `![image](${url})`));
+            const res = await uploadMedia(activeServer.id, file);
+            setAttachments((prev) => [...prev, {
+                id: `att_tmp_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+                url: res.url,
+                contentType: file.type,
+                filename: file.name
+            }]);
         } catch (error) {
             console.error("Upload failed", error);
             alert("Failed to upload image.");
@@ -731,7 +737,7 @@ export function ChatWindow({
                                             type="button"
                                             className="inline-action"
                                             onClick={() => {
-                                                void sendContentWithOptimistic(message.content, message.id);
+                                                void sendContentWithOptimistic(message.content, message.attachments, message.id);
                                             }}
                                         >
                                             Retry
@@ -770,11 +776,33 @@ export function ChatWindow({
                 </div>
             ) : null}
 
-            <form onSubmit={handleSendMessage} className="composer">
+            <form onSubmit={(e) => {
+                e.preventDefault();
+                if (draftMessage.trim() || attachments.length > 0) {
+                    void submitDraftMessage(attachments);
+                    setAttachments([]);
+                }
+            }} className="composer">
                 <label htmlFor="message-input" className="sr-only">
                     Message
                 </label>
                 <div className="input-wrapper">
+                    {attachments.length > 0 && (
+                        <div className="composer-attachments-preview" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", padding: "0.5rem", borderBottom: "1px solid var(--border-color)" }}>
+                            {attachments.map((att) => (
+                                <div key={att.id} className="attachment-preview" style={{ position: "relative", width: "60px", height: "60px" }}>
+                                    <img src={att.url} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "4px" }} />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setAttachments(prev => prev.filter(p => p.id !== att.id))}
+                                        style={{ position: "absolute", top: "-5px", right: "-5px", background: "rgba(0,0,0,0.5)", color: "white", border: "none", borderRadius: "50%", width: "18px", height: "18px", cursor: "pointer", fontSize: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                     <textarea
                         id="message-input"
                         ref={messageInputRef}
@@ -784,8 +812,9 @@ export function ChatWindow({
                         onKeyDown={(event) => {
                             if (event.key === "Enter" && !event.shiftKey) {
                                 event.preventDefault();
-                                if (draftMessage.trim()) {
-                                    void submitDraftMessage();
+                                if (draftMessage.trim() || attachments.length > 0) {
+                                    void submitDraftMessage(attachments);
+                                    setAttachments([]);
                                 }
                             }
                         }}

@@ -1564,8 +1564,8 @@ export function ChatClient() {
   }
 
 
-  async function sendContentWithOptimistic(content: string, existingMessageId?: string): Promise<void> {
-    if (!selectedChannelId || !viewer || !content.trim()) {
+  async function sendContentWithOptimistic(content: string, attachments: any[] = [], existingMessageId?: string): Promise<void> {
+    if (!selectedChannelId || !viewer || (!content.trim() && attachments.length === 0)) {
       return;
     }
 
@@ -1576,6 +1576,7 @@ export function ChatClient() {
       authorUserId: viewer.productUserId,
       authorDisplayName: viewer.identity?.preferredUsername ?? "You",
       content,
+      attachments,
       createdAt: new Date().toISOString(),
       clientState: "sending"
     };
@@ -1593,7 +1594,7 @@ export function ChatClient() {
     dispatch({ type: "SET_SENDING", payload: true });
     dispatch({ type: "SET_ERROR", payload: null });
     try {
-      const persisted = await sendMessage(selectedChannelId, content.trim());
+      const persisted = await sendMessage(selectedChannelId, content.trim(), attachments);
       dispatch({
         type: "UPDATE_MESSAGES",
         payload: (current: MessageItem[]) => {
@@ -1625,15 +1626,15 @@ export function ChatClient() {
     }
   }
 
-  async function submitDraftMessage(): Promise<void> {
-    if (!selectedChannelId || !draftMessage.trim()) {
+  async function submitDraftMessage(attachments: any[] = []): Promise<void> {
+    if (!selectedChannelId || (!draftMessage.trim() && attachments.length === 0)) {
       return;
     }
 
     const content = draftMessage.trim();
     setDraftMessage("");
     messageInputRef.current?.focus();
-    await sendContentWithOptimistic(content);
+    await sendContentWithOptimistic(content, attachments);
   }
 
   async function handleSendMessage(event: React.FormEvent): Promise<void> {
