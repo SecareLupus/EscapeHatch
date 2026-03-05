@@ -282,6 +282,7 @@ export interface Attachment {
     contentType: string;
     filename: string;
     size?: number;
+    sourceUrl?: string;
 }
 
 export interface Reaction {

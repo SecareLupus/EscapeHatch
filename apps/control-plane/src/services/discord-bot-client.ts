@@ -51,9 +51,18 @@ export async function startDiscordBot() {
 
             for (const serverId of serverIds) {
                 try {
-                    const mediaUrls = [
-                        ...message.attachments.map(a => a.url),
-                        ...message.embeds.map(e => e.image?.url || e.thumbnail?.url || e.video?.url || (e.data.type === 'gifv' ? e.url : null)).filter(Boolean) as string[]
+                    const media = [
+                        ...message.attachments.map(a => ({ url: a.url, sourceUrl: a.url })),
+                        ...message.embeds.map(e => {
+                            let url = e.image?.url || e.thumbnail?.url || e.video?.url;
+                            
+                            // If it's a Giphy gifv, try to ensure we have the .gif version if possible
+                            if (e.data.type === 'gifv' && url && url.includes('giphy.com') && url.endsWith('.mp4')) {
+                                url = url.replace('.mp4', '.gif');
+                            }
+                            
+                            return url ? { url, sourceUrl: e.url || url } : null;
+                        }).filter(Boolean) as Array<{ url: string; sourceUrl: string }>
                     ];
 
                     await relayDiscordMessageToMappedChannel({
@@ -63,7 +72,7 @@ export async function startDiscordBot() {
                         authorName: message.author.username,
                         authorAvatarUrl: message.author.displayAvatarURL() ?? undefined,
                         content: message.content,
-                        mediaUrls: [...new Set(mediaUrls)]
+                        media
                     });
                 } catch (error) {
                     logEvent("error", "discord_relay_failed", { serverId, messageId: message.id, error: String(error) });

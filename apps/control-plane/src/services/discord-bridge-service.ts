@@ -606,7 +606,7 @@ export async function relayDiscordMessageToMappedChannel(input: {
   authorName: string;
   authorAvatarUrl?: string;
   content: string;
-  mediaUrls?: string[];
+  media?: Array<{ url: string; sourceUrl: string }>;
 }): Promise<{ relayed: boolean; matrixChannelId?: string; limitation?: string }> {
   const mappings = await listDiscordChannelMappings(input.serverId);
   const mapping = mappings.find((item) => item.discordChannelId === input.discordChannelId && item.enabled);
@@ -635,12 +635,25 @@ export async function relayDiscordMessageToMappedChannel(input: {
     return { relayed: false, limitation: "Mapped Matrix channel no longer exists." };
   }
 
-  const attachments = (input.mediaUrls ?? []).map((url) => {
+  let finalContent = input.content.trim();
+  const attachments = (input.media ?? []).map((item) => {
+    const url = item.url;
     const filename = url.split("/").pop()?.split("?")[0] || "image.png";
+    const isGif = url.toLowerCase().includes(".gif");
+    
+    // Clean up content: if the message content contains the media or source URL, strip it
+    if (item.sourceUrl && finalContent.includes(item.sourceUrl)) {
+        finalContent = finalContent.replace(item.sourceUrl, "").trim();
+    }
+    if (url && finalContent.includes(url)) {
+        finalContent = finalContent.replace(url, "").trim();
+    }
+
     return {
       id: `att_${crypto.randomUUID().replaceAll("-", "")}`,
       url,
-      contentType: "image/any", // We don't know the exact content type from just a URL
+      sourceUrl: item.sourceUrl,
+      contentType: isGif ? "image/gif" : "image/any",
       filename
     };
   });
@@ -648,7 +661,7 @@ export async function relayDiscordMessageToMappedChannel(input: {
   const message = await createMessage({
     channelId: mapping.matrixChannelId,
     actorUserId: connection.connectedByUserId,
-    content: input.content.trim(),
+    content: finalContent,
     attachments: attachments.length > 0 ? attachments : undefined,
     isRelay: true,
     externalAuthorId: input.authorId,

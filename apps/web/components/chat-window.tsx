@@ -668,14 +668,16 @@ export function ChatWindow({
                                         <div className="message-attachments-container" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
                                             {message.attachments.map((att) => (
                                                 <div key={att.id} className="attachment" style={{ maxWidth: "300px" }}>
-                                                    {att.contentType.startsWith("image/") ? (
-                                                        <img src={att.url} alt={att.filename} loading="lazy" style={{ maxWidth: "100%", borderRadius: "4px" }} />
-                                                    ) : (
-                                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="attachment-link" style={{ padding: "0.5rem", background: "var(--background-modifier-hover)", borderRadius: "4px", display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none", color: "inherit" }}>
-                                                            <span style={{ fontSize: "1.2rem" }}>📄</span>
-                                                            <span style={{ fontSize: "0.9rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.filename}</span>
-                                                        </a>
-                                                    )}
+                                                    <a href={att.sourceUrl || att.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none" }}>
+                                                        {att.contentType.startsWith("image/") ? (
+                                                            <img src={att.url} alt={att.filename} loading="lazy" style={{ maxWidth: "100%", borderRadius: "4px", display: "block", cursor: "pointer" }} />
+                                                        ) : (
+                                                            <div className="attachment-link" style={{ background: "var(--bg-accent)", padding: "0.5rem", borderRadius: "4px", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                                                <span style={{ fontSize: "0.9rem", color: "var(--text-primary)" }}>{att.filename}</span>
+                                                            </div>
+                                                        )}
+                                                    </a>
                                                 </div>
                                             ))}
                                         </div>
@@ -873,7 +875,7 @@ export function ChatWindow({
                 </div>
                 <div className="composer-actions">
                     <small className="char-count">{draftMessage.length}/2000</small>
-                    <button type="submit" disabled={!activeChannel || sending || isUploading || (!draftMessage.trim() && !isUploading)}>
+                    <button type="submit" disabled={!activeChannel || sending || isUploading || (!draftMessage.trim() && attachments.length === 0)}>
                         {sending ? "Sending..." : isUploading ? "Uploading..." : "Send"}
                     </button>
                 </div>
