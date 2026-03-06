@@ -1036,6 +1036,11 @@ export function ChatClient() {
       dispatch({ type: "SET_MESSAGES", payload: next.map((message) => ({ ...message })) });
       setUrlSelection(selectedServerId, channelId);
 
+      // Refresh members immediately on channel switch
+      void listChannelMembers(channelId)
+        .then((items) => dispatch({ type: "SET_MEMBERS", payload: items }))
+        .catch((e) => console.error("Failed to fetch members on channel change:", e));
+
       // Restore scroll position
       setTimeout(() => {
         const list = messagesRef.current;
