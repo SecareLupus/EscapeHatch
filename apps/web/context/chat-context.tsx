@@ -117,6 +117,7 @@ export interface ChatState {
     blockedUserIds: string[];
     members: ChatMember[];
     allDmChannels: Channel[];
+    lastChannelByServer: Record<string, string>;
 }
 
 type ChatAction =
@@ -183,7 +184,8 @@ type ChatAction =
     | { type: "BLOCK_USER"; payload: string }
     | { type: "UNBLOCK_USER"; payload: string }
     | { type: "SET_MEMBERS"; payload: ChatMember[] }
-    | { type: "SET_ALL_DM_CHANNELS"; payload: Channel[] };
+    | { type: "SET_ALL_DM_CHANNELS", payload: Channel[] }
+    | { type: "SET_LAST_CHANNEL_BY_SERVER", payload: { serverId: string; channelId: string } };
 
 const initialState: ChatState = {
     viewer: null,
@@ -249,7 +251,8 @@ const initialState: ChatState = {
     profileUserId: null,
     blockedUserIds: [],
     members: [],
-    allDmChannels: []
+    allDmChannels: [],
+    lastChannelByServer: {}
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -435,6 +438,14 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return { ...state, members: action.payload };
         case "SET_ALL_DM_CHANNELS":
             return { ...state, allDmChannels: action.payload };
+        case "SET_LAST_CHANNEL_BY_SERVER":
+            return {
+                ...state,
+                lastChannelByServer: {
+                    ...state.lastChannelByServer,
+                    [action.payload.serverId]: action.payload.channelId
+                }
+            };
         default:
             return state;
     }

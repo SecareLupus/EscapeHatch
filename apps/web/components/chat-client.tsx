@@ -1018,16 +1018,41 @@ export function ChatClient() {
   }
 
   async function handleServerChange(serverId: string, channelId?: string): Promise<void> {
+    const targetServer = servers.find(s => s.id === serverId);
+    const currentChannel = channels.find(c => c.id === selectedChannelId);
+
+    // If channelId is explicitly provided (e.g. from state restoration or direct link), use it.
+    let targetChannelId = channelId;
+
+    if (!targetChannelId) {
+      // EXCEPTION: If we are clicking a DM space, OR if the current channel is a DM,
+      // do not change the channel.
+      const isTargetDm = targetServer?.type === 'dm';
+      const isCurrentDm = currentChannel?.type === 'dm';
+
+      if (isTargetDm || isCurrentDm) {
+        // Keep current channel if possible, or don't set one yet if switching TO DM list
+        targetChannelId = selectedChannelId ?? undefined;
+      } else {
+        // Standard Space switch: try to find last viewed channel for this server
+        targetChannelId = state.lastChannelByServer[serverId];
+      }
+    }
+
     dispatch({ type: "SET_SELECTED_SERVER_ID", payload: serverId });
     localStorage.setItem("lastServerId", serverId);
-    if (channelId) {
-      localStorage.setItem("lastChannelId", channelId);
+
+    // Only update lastChannelId in localStorage if we actually have a target channel
+    if (targetChannelId) {
+      localStorage.setItem("lastChannelId", targetChannelId);
     }
+
     dispatch({ type: "SET_CHANNELS", payload: [] });
     dispatch({ type: "SET_CATEGORIES", payload: [] });
     dispatch({ type: "SET_ERROR", payload: null });
+
     try {
-      await refreshChatState(serverId, channelId);
+      await refreshChatState(serverId, targetChannelId);
     } catch (cause) {
       dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to load channels." });
     }
@@ -1046,6 +1071,11 @@ export function ChatClient() {
 
     dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: channelId });
     localStorage.setItem("lastChannelId", channelId);
+
+    // Save as last viewed channel for this server, unless it's a DM
+    if (selectedServerId && channel?.type !== 'dm') {
+      dispatch({ type: "SET_LAST_CHANNEL_BY_SERVER", payload: { serverId: selectedServerId, channelId } });
+    }
 
     // Load new draft
     setDraftMessage(draftMessagesByChannel[channelId] ?? "");
