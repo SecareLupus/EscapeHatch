@@ -11,6 +11,7 @@ import { useToast } from "./toast-provider";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { ProfileModal } from "./profile-modal";
 import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
+import { getChannelName } from "../lib/channel-utils";
 import {
   bootstrapAdmin,
   createReport,
@@ -1733,7 +1734,7 @@ export function ChatClient() {
                 {activeChannel ? (
                   <>
                     <p className="context-line">
-                      <strong>Name:</strong> #{activeChannel.name}
+                      <strong>Name:</strong> #{getChannelName(activeChannel, viewer?.productUserId, members)}
                     </p>
                     <p className="context-line">
                       <strong>Type:</strong> {activeChannel.type}

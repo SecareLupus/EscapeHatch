@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import Link from "next/link";
 import { useChat, ModalType } from "../context/chat-context";
 import { Channel } from "@skerry/shared";
+import { getChannelName } from "../lib/channel-utils";
 
 const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(" ");
 
@@ -108,16 +109,6 @@ export function Sidebar({
 
     const activeServer = useMemo(() => servers.find(s => s.id === selectedServerId), [servers, selectedServerId]);
 
-    const getChannelName = (channel: Channel) => {
-        if (channel.type !== 'dm') return channel.name;
-        if (channel.topic) return channel.topic;
-        if (channel.participants) {
-            const others = channel.participants.filter(p => p.productUserId !== viewer?.productUserId);
-            if (others.length === 0) return "Direct Message";
-            return others.map(p => p.displayName).join(", ");
-        }
-        return channel.name;
-    };
 
     return (
         <aside className="unified-sidebar panel">
@@ -224,7 +215,7 @@ export function Sidebar({
                                                         💬
                                                     </span>
                                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        {getChannelName(dm)}
+                                                        {getChannelName(dm, viewer?.productUserId)}
                                                     </span>
                                                 </div>
                                                 {(() => {
@@ -351,7 +342,7 @@ export function Sidebar({
                                                 >
                                                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                         {channel.type === 'voice' ? '🔊' : '#'}
-                                                        {getChannelName(channel)}
+                                                        {getChannelName(channel, viewer?.productUserId)}
                                                     </span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                         {(unreadCountByChannel[channel.id] ?? 0) > 0 ? (

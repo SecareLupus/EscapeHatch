@@ -3,6 +3,7 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { useChat, MessageItem } from "../context/chat-context";
 import type { ChatMessage, ModerationActionType } from "@skerry/shared";
+import { getChannelName } from "../lib/channel-utils";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage, listChannelMembers, inviteToChannel, updateChannel, searchUsers } from "../lib/control-plane";
 import dynamic from "next/dynamic";
@@ -182,10 +183,7 @@ export function ChatWindow({
 
     const dmTitle = useMemo(() => {
         if (!activeChannelData || activeChannelData.type !== "dm") return null;
-        if (activeChannelData.topic) return activeChannelData.topic;
-        const others = channelMembers.filter((m) => m.productUserId !== viewer?.productUserId);
-        if (others.length === 0) return "Direct Message";
-        return others.map((m) => m.displayName).join(", ");
+        return getChannelName(activeChannelData, viewer?.productUserId, channelMembers);
     }, [activeChannelData, channelMembers, viewer]);
 
     const dmSubtitle = useMemo(() => {
