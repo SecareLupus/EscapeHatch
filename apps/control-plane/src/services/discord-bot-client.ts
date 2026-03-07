@@ -183,6 +183,7 @@ export async function relayMatrixMessageToDiscord(input: {
     attachments?: Array<{ url: string; contentType: string; filename: string }>;
     parentId?: string; // Skerry parent message ID
     externalThreadId?: string; // Discord thread ID
+    messageId?: string; // Skerry message ID
 }) {
     if (!client || !client.isReady()) {
         // Try to start the bot if it's not ready
@@ -196,7 +197,8 @@ export async function relayMatrixMessageToDiscord(input: {
             ChannelType.GuildAnnouncement,
             ChannelType.GuildForum,
             ChannelType.PublicThread,
-            ChannelType.PrivateThread
+            ChannelType.PrivateThread,
+            ChannelType.AnnouncementThread
         ];
 
         let targetChannel = await client.channels.fetch(input.discordChannelId);
@@ -208,7 +210,7 @@ export async function relayMatrixMessageToDiscord(input: {
             if (input.externalThreadId) {
                 // We have a thread ID, try to find it
                 const thread = await client.channels.fetch(input.externalThreadId);
-                if (thread && (thread.type === ChannelType.PublicThread || thread.type === ChannelType.PrivateThread)) {
+                if (thread && (thread.type === ChannelType.PublicThread || thread.type === ChannelType.PrivateThread || thread.type === ChannelType.AnnouncementThread)) {
                     targetChannel = thread;
                 }
             } else {
@@ -223,9 +225,15 @@ export async function relayMatrixMessageToDiscord(input: {
                     reason: "Skerry root message pinned to forum"
                 });
 
-                // We should ideally callback to Skerry to update the mapping for this message 
-                // but for now we just return as the thread creation sent the initial message.
-                // NOTE: We need a way to store this mapping back in Skerry.
+                // Crucial: Store the thread ID back in Skerry so replies can find it
+                if (input.messageId) {
+                    await withDb(async (db) => {
+                        await db.query(
+                            "update chat_messages set external_thread_id = $1 where id = $2",
+                            [thread.id, input.messageId]
+                        );
+                    });
+                }
                 return;
             }
         }
@@ -236,25 +244,25 @@ export async function relayMatrixMessageToDiscord(input: {
         if (!("send" in channel) && channel.type !== ChannelType.GuildForum) return;
 
         const textChannel = channel as any;
-        let webhook = webhookCache.get(input.discordChannelId);
+        const isThread = [ChannelType.PublicThread, ChannelType.PrivateThread, ChannelType.AnnouncementThread].includes(textChannel.type);
+        const parentChannel = (isThread && textChannel.parent) ? textChannel.parent : textChannel;
+
+        let webhook = webhookCache.get(parentChannel.id);
 
         if (!webhook) {
-            // Webhooks can't be created on Forum channels directly (only threads)
-            if (textChannel.type === ChannelType.GuildForum) return;
-
-            const webhooks = await textChannel.fetchWebhooks();
+            const webhooks = await (parentChannel as any).fetchWebhooks();
             const existing = webhooks.find((wh: any) => wh.name === "EscapeHatch Bridge");
 
             if (existing) {
                 webhook = new WebhookClient({ id: existing.id, token: existing.token! });
             } else {
-                const created = await textChannel.createWebhook({
+                const created = await (parentChannel as any).createWebhook({
                     name: "EscapeHatch Bridge",
                     reason: "Automated bridge for EscapeHatch community"
                 });
                 webhook = new WebhookClient({ id: created.id, token: created.token! });
             }
-            webhookCache.set(input.discordChannelId, webhook);
+            webhookCache.set(parentChannel.id, webhook);
         }
 
         // Send message via webhook for personified appearance
@@ -291,12 +299,12 @@ export async function relayMatrixMessageToDiscord(input: {
             content: content || (files && files.length > 0 ? "" : undefined),
             avatarURL: input.avatarUrl,
             files: files,
-            threadId: input.externalThreadId
+            threadId: isThread ? textChannel.id : input.externalThreadId
         });
     } catch (error) {
         logEvent("error", "discord_outbound_relay_failed", { error: String(error) });
         // If webhook fails (e.g. deleted), clear cache for retry next time
-        webhookCache.delete(input.discordChannelId);
+        if (input.discordChannelId) webhookCache.delete(input.discordChannelId);
 
         // Fallback to bot message if webhook fails
         try {

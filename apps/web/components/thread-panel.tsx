@@ -83,14 +83,6 @@ export function ThreadPanel() {
             setReplies(prev => [...prev, sent]);
             setDraft("");
             setAttachments([]);
-            // Also update parent repliesCount in main state if possible? 
-            // Better to let realtime handle it, but for immediate feedback:
-            dispatch({
-                type: "UPDATE_MESSAGES",
-                payload: (current) => current.map(m =>
-                    m.id === threadParentId ? { ...m, repliesCount: (m.repliesCount || 0) + 1 } : m
-                )
-            });
         } catch (err) {
             showToast("Failed to send reply", "error");
         } finally {
@@ -189,9 +181,6 @@ export function ThreadPanel() {
                         }}
                     />
                     <div className="composer-actions">
-                        <button type="button" className="icon-button" onClick={() => fileInputRef.current?.click()}>
-                            📎
-                        </button>
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -199,6 +188,9 @@ export function ThreadPanel() {
                             onChange={handleFileUpload}
                             accept="image/*"
                         />
+                        <button type="button" className="icon-button" onClick={() => fileInputRef.current?.click()}>
+                            📎
+                        </button>
                         <button type="submit" className="send-button" disabled={sending || (!draft.trim() && attachments.length === 0)}>
                             {sending ? "..." : "Send"}
                         </button>
@@ -346,8 +338,9 @@ export function ThreadPanel() {
                 }
                 .composer-actions {
                     display: flex;
-                    justify-content: space-between;
+                    justify-content: flex-end;
                     align-items: center;
+                    gap: 0.5rem;
                 }
                 .icon-button {
                     background: transparent;
