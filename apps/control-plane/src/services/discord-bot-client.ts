@@ -41,11 +41,12 @@ export async function startDiscordBot() {
         client.on(Events.MessageCreate, async (message: Message) => {
             if (message.author.bot) return;
 
-            // Find all servers that have a mapping for this Discord channel
+            // Find all servers that have a mapping for this Discord channel (or its parent if it's a thread)
+            const discordChannelIdForMapping = message.channel.isThread() ? (message.channel as any).parentId : message.channelId;
             const serverIds = await withDb(async (db) => {
                 const rows = await db.query<{ server_id: string }>(
                     "select server_id from discord_bridge_channel_mappings where guild_id = $1 and discord_channel_id = $2 and enabled = true",
-                    [message.guildId, message.channelId]
+                    [message.guildId, discordChannelIdForMapping]
                 );
                 return rows.rows.map(r => r.server_id);
             });
