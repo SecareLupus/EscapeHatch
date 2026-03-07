@@ -365,7 +365,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         serverId: z.string().min(1),
         categoryId: z.string().optional(),
         name: z.string().min(2).max(80),
-        type: z.enum(["text", "voice", "announcement"])
+        type: z.enum(["text", "voice", "announcement", "forum"])
       })
       .parse(request.body);
 
@@ -756,7 +756,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       .object({
         serverId: z.string().min(1),
         name: z.string().min(2).max(80).optional(),
-        type: z.enum(["text", "voice", "announcement"]).optional(),
+        type: z.enum(["text", "voice", "announcement", "forum"]).optional(),
         categoryId: z.string().min(1).nullable().optional(),
         topic: z.string().max(255).nullable().optional(),
         position: z.number().int().min(0).optional()

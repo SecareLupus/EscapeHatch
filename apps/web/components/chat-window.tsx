@@ -148,9 +148,12 @@ export function ChatWindow({
             showDateDivider: boolean;
         }> = [];
 
-        for (let index = 0; index < messages.length; index += 1) {
-            const message = messages[index]!;
-            const previous = messages[index - 1];
+        // Only show root messages in the main window
+        const rootMessages = messages.filter(m => !m.parentId);
+
+        for (let index = 0; index < rootMessages.length; index += 1) {
+            const message = rootMessages[index]!
+            const previous = rootMessages[index - 1];
             const currentTime = new Date(message.createdAt).getTime();
             const previousTime = previous ? new Date(previous.createdAt).getTime() : null;
             const showHeader =

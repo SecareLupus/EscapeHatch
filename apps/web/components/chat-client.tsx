@@ -213,7 +213,7 @@ export function ChatClient() {
 
   const [spaceName, setSpaceName] = useState("New Space");
   const [roomName, setRoomName] = useState("new-room");
-  const [roomType, setRoomType] = useState<"text" | "announcement" | "voice">("text");
+  const [roomType, setRoomType] = useState<"text" | "announcement" | "voice" | "forum">("text");
   const [selectedHubIdForCreate, setSelectedHubIdForCreate] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("New Category");
 
@@ -753,7 +753,7 @@ export function ChatClient() {
 
   useEffect(() => {
     const selected = channels.find((channel) => channel.id === selectedChannelId);
-    dispatch({ type: "SET_RENAME_ROOM", payload: { id: selected?.id ?? "", name: selected?.name ?? "", type: selected?.type ?? "text", categoryId: selected?.categoryId ?? null } });
+    dispatch({ type: "SET_RENAME_ROOM", payload: { id: selected?.id ?? "", name: (selected?.name ?? "").replace(/^#/, ""), type: selected?.type ?? "text", categoryId: selected?.categoryId ?? null } });
     dispatch({ type: "SET_SELECTED_CATEGORY_FOR_CREATE", payload: selected?.categoryId ?? "" });
   }, [channels, selectedChannelId, dispatch]);
 
@@ -1098,7 +1098,7 @@ export function ChatClient() {
 
     dispatch({ type: "SET_ERROR", payload: null });
     try {
-      const next = await listMessages(channelId);
+      const next = await listMessages(channelId, null);
       dispatch({ type: "SET_MESSAGES", payload: next.map((message) => ({ ...message })) });
       setUrlSelection(selectedServerId, channelId);
 
