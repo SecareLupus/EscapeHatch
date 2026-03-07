@@ -19,6 +19,7 @@ interface IdentityRow {
   custom_status: string | null;
   matrix_user_id: string | null;
   product_user_id: string;
+  banner_url: string | null;
   theme: "light" | "dark" | null;
   access_token: string | null;
   refresh_token: string | null;
@@ -40,6 +41,7 @@ function mapRow(result: IdentityRow): IdentityMapping {
     customStatus: result.custom_status,
     matrixUserId: result.matrix_user_id,
     productUserId: result.product_user_id,
+    bannerUrl: result.banner_url,
     theme: result.theme as "light" | "dark" | null,
     accessToken: result.access_token,
     refreshToken: result.refresh_token,
@@ -54,16 +56,16 @@ import { config } from "../config.js";
 
 export async function syncMatrixUser(identity: IdentityMapping): Promise<void> {
   if (!identity.matrixUserId) return;
-  
+
   try {
-    await registerUser({ 
-      userId: identity.matrixUserId, 
-      displayName: identity.preferredUsername || identity.displayName || undefined 
+    await registerUser({
+      userId: identity.matrixUserId,
+      displayName: identity.preferredUsername || identity.displayName || undefined
     });
-    
+
     if (identity.preferredUsername || identity.displayName) {
       await setUserDisplayName(
-        identity.matrixUserId, 
+        identity.matrixUserId,
         identity.preferredUsername || identity.displayName || ""
       );
     }
@@ -307,6 +309,7 @@ export async function updateUserProfile(productUserId: string, input: {
   bio?: string | null;
   customStatus?: string | null;
   avatarUrl?: string | null;
+  bannerUrl?: string | null;
 }): Promise<void> {
   await withDb(async (db) => {
     await db.query(
@@ -316,6 +319,7 @@ export async function updateUserProfile(productUserId: string, input: {
          bio = case when $3::text is not null or $7::boolean then $3::text else bio end,
          custom_status = case when $4::text is not null or $8::boolean then $4::text else custom_status end,
          avatar_url = case when $5::text is not null or $9::boolean then $5::text else avatar_url end,
+         banner_url = case when $10::text is not null or $11::boolean then $10::text else banner_url end,
          updated_at = now()
        where product_user_id = $1`,
       [
@@ -327,7 +331,9 @@ export async function updateUserProfile(productUserId: string, input: {
         input.displayName === null,
         input.bio === null,
         input.customStatus === null,
-        input.avatarUrl === null
+        input.avatarUrl === null,
+        input.bannerUrl === undefined ? null : input.bannerUrl,
+        input.bannerUrl === null
       ]
     );
   });

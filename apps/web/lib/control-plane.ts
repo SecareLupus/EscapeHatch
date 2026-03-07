@@ -47,6 +47,7 @@ export interface ViewerSession {
     customStatus?: string | null;
     matrixUserId?: string | null;
     isBridged?: boolean;
+    bannerUrl?: string | null;
     theme?: "light" | "dark" | null;
   } | null;
   linkedIdentities: Array<{
@@ -248,6 +249,7 @@ export async function updateUserProfile(input: {
   bio?: string | null;
   customStatus?: string | null;
   avatarUrl?: string | null;
+  bannerUrl?: string | null;
 }): Promise<void> {
   await apiFetch("/auth/session/me/profile", {
     method: "PATCH",

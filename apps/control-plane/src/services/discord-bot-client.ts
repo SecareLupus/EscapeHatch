@@ -378,7 +378,8 @@ export async function fetchDiscordUserProfile(discordUserId: string) {
         return {
             username: user.username,
             displayName: user.globalName ?? user.username,
-            avatarUrl: user.displayAvatarURL()
+            avatarUrl: user.displayAvatarURL(),
+            bannerUrl: user.bannerURL()
         };
     } catch (error) {
         logEvent("error", "discord_user_fetch_failed", { discordUserId, error: String(error) });

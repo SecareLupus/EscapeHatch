@@ -18,6 +18,7 @@ export function ProfileModal() {
     const [bio, setBio] = useState("");
     const [customStatus, setCustomStatus] = useState("");
     const [avatarUrl, setAvatarUrl] = useState("");
+    const [bannerUrl, setBannerUrl] = useState("");
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -34,6 +35,7 @@ export function ProfileModal() {
                 setBio(viewer.identity.bio || "");
                 setCustomStatus(viewer.identity.customStatus || "");
                 setAvatarUrl(viewer.identity.avatarUrl || "");
+                setBannerUrl(viewer.identity.bannerUrl || "");
             }
         } else {
             setLoading(true);
@@ -44,6 +46,7 @@ export function ProfileModal() {
                     setBio(user.bio || "");
                     setCustomStatus(user.customStatus || "");
                     setAvatarUrl(user.avatarUrl || "");
+                    setBannerUrl(user.bannerUrl || "");
                 })
                 .catch(err => {
                     showToast("Failed to fetch user profile", "error");
@@ -63,7 +66,8 @@ export function ProfileModal() {
                 displayName: displayName || null,
                 bio: bio || null,
                 customStatus: customStatus || null,
-                avatarUrl: avatarUrl || null
+                avatarUrl: avatarUrl || null,
+                bannerUrl: bannerUrl || null
             });
             const nextViewer = await fetchViewerSession();
             dispatch({ type: "SET_VIEWER", payload: nextViewer });
@@ -81,10 +85,10 @@ export function ProfileModal() {
             <div className="modal-card" onClick={(e) => e.stopPropagation()}>
                 <div className="profile-header">
                     <div className="banner" style={{
-                        backgroundImage: avatarUrl ? `url(${avatarUrl})` : 'none',
+                        backgroundImage: bannerUrl ? `url(${bannerUrl})` : avatarUrl ? `url(${avatarUrl})` : 'none',
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
-                        filter: 'blur(10px) brightness(0.7)'
+                        filter: bannerUrl ? 'none' : 'blur(10px) brightness(0.7)'
                     }} />
                     <button className="close-button" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
                         ✕
@@ -134,6 +138,16 @@ export function ProfileModal() {
                                     value={avatarUrl}
                                     onChange={(e) => setAvatarUrl(e.target.value)}
                                     placeholder="https://..."
+                                    disabled={saving}
+                                    type="url"
+                                />
+                            </div>
+                            <div className="field">
+                                <label>Banner URL</label>
+                                <input
+                                    value={bannerUrl}
+                                    onChange={(e) => setBannerUrl(e.target.value)}
+                                    placeholder="https://... (Discord banner or custom)"
                                     disabled={saving}
                                     type="url"
                                 />

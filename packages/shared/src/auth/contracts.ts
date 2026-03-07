@@ -18,6 +18,7 @@ export interface IdentityMapping {
   refreshToken?: string | null;
   tokenExpiresAt?: string | null;
   isBridged?: boolean;
+  bannerUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,7 +34,7 @@ export interface AuthenticatedViewer {
   productUserId: string;
   identity: Pick<
     IdentityMapping,
-    "provider" | "oidcSubject" | "email" | "preferredUsername" | "avatarUrl" | "matrixUserId" | "displayName" | "bio" | "customStatus" | "isBridged"
+    "provider" | "oidcSubject" | "email" | "preferredUsername" | "avatarUrl" | "matrixUserId" | "displayName" | "bio" | "customStatus" | "isBridged" | "bannerUrl"
   >;
 }
 
