@@ -76,9 +76,9 @@ export async function startDiscordBot() {
                         authorName: message.member?.displayName ?? message.author.displayName ?? message.author.username,
                         authorAvatarUrl: message.author.displayAvatarURL() ?? undefined,
                         content: message.content,
-                        messageId: message.id, // Passing message.id here
+                        messageId: message.id,
                         media,
-                        externalThreadId: message.channel.isThread() ? message.channelId : undefined
+                        externalThreadId: message.channel.isThread() ? message.channelId : (message.reference?.messageId ?? undefined)
                     });
                 } catch (error) {
                     logEvent("error", "discord_relay_failed", { serverId, messageId: message.id, error: String(error) });
@@ -232,17 +232,28 @@ export async function relayMatrixMessageToDiscord(input: {
 
         // Resolve externalThreadId from parentId if provided but missing
         if (input.parentId && !input.externalThreadId) {
-            console.log(`[Discord Bridge] Attempting to resolve externalThreadId from parent ${input.parentId}`);
+            console.log(`[Discord Bridge] Attempting to resolve externalThreadId for parent chain of ${input.parentId}`);
             await withDb(async (db) => {
-                const parent = await db.query<{ external_thread_id: string | null }>(
-                    "select external_thread_id from chat_messages where id = $1 limit 1",
-                    [input.parentId]
-                );
-                if (parent.rows[0]?.external_thread_id) {
-                    input.externalThreadId = parent.rows[0].external_thread_id;
-                    console.log(`[Discord Bridge] Resolved thread ID ${input.externalThreadId} from parent`);
-                } else {
-                    console.warn(`[Discord Bridge] Could not find external_thread_id for parent ${input.parentId}`);
+                let currentParentId = input.parentId;
+                let depth = 0;
+                while (currentParentId && depth < 10) { // Limit depth to prevent infinite loops
+                    const parent = await db.query<{ parent_id: string | null, external_thread_id: string | null }>(
+                        "select parent_id, external_thread_id from chat_messages where id = $1 limit 1",
+                        [currentParentId]
+                    );
+                    const row = parent.rows[0];
+                    if (!row) break;
+
+                    if (row.external_thread_id) {
+                        input.externalThreadId = row.external_thread_id;
+                        console.log(`[Discord Bridge] Resolved thread ID ${input.externalThreadId} from parent ${currentParentId} (depth ${depth})`);
+                        break;
+                    }
+                    currentParentId = row.parent_id!;
+                    depth++;
+                }
+                if (!input.externalThreadId) {
+                    console.warn(`[Discord Bridge] Could not find external_thread_id in parent chain of ${input.parentId}`);
                 }
             });
         }
@@ -341,11 +352,11 @@ export async function relayMatrixMessageToDiscord(input: {
         if (input.messageId && result) {
             await withDb(async (db) => {
                 await db.query(
-                    "update chat_messages set external_message_id = $1 where id = $2",
-                    [(result as any).id, input.messageId]
+                    "update chat_messages set external_message_id = $1, external_thread_id = coalesce(external_thread_id, $2) where id = $3",
+                    [(result as any).id, finalThreadId || null, input.messageId]
                 );
             });
-            console.log(`[Discord Bridge] Persisted external_message_id ${(result as any).id} for ${input.messageId}`);
+            console.log(`[Discord Bridge] Persisted external mapping (msg: ${(result as any).id}, thread: ${finalThreadId}) for ${input.messageId}`);
         }
 
         console.log(`[Discord Bridge] Message sent successfully`);

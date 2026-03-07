@@ -340,15 +340,35 @@ export async function createMessage(input: {
 
       // Automatically resolve parentId from externalThreadId if not provided
       if (!input.parentId && input.externalThreadId) {
-        const rootMessage = await db.query<{ id: string }>(
-          `select id from chat_messages 
+        // Find a candidate parent (either the root starter or a reply in the same thread)
+        const parentCandidate = await db.query<{ id: string, parent_id: string | null }>(
+          `select id, parent_id from chat_messages 
            where channel_id = $1 
            and (external_thread_id = $2 or external_message_id = $2) 
            order by created_at asc limit 1`,
           [input.channelId, input.externalThreadId]
         );
-        if (rootMessage.rows[0]) {
-          input.parentId = rootMessage.rows[0].id;
+
+        const firstMatch = parentCandidate.rows[0];
+        if (firstMatch) {
+          let root: { id: string; parent_id: string | null } = { id: firstMatch.id, parent_id: firstMatch.parent_id };
+          // If we found a message but it has a parent, traverse up to the absolute root of this Skerry thread
+          // This ensures a flat thread structure in Skerry even for nested Discord replies.
+          let depth = 0;
+          while (root.parent_id && depth < 10) {
+            const upRow = await db.query<{ id: string, parent_id: string | null }>(
+              "select id, parent_id from chat_messages where id = $1 limit 1",
+              [root.parent_id]
+            );
+            const parent = upRow.rows[0];
+            if (parent) {
+              root = { id: parent.id, parent_id: parent.parent_id };
+              depth++;
+            } else {
+              break;
+            }
+          }
+          input.parentId = root.id;
         }
       }
 
@@ -369,15 +389,15 @@ export async function createMessage(input: {
         external_thread_id: string | null;
         created_at: string;
       }>(
-        `insert into chat_messages (
-          id, channel_id, author_user_id, author_display_name, content, attachments, is_relay,
-          external_author_id, external_provider, external_author_name, external_author_avatar_url,
-          parent_id, external_thread_id, external_message_id
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        returning *`,
+        `insert into chat_messages(
+            id, channel_id, author_user_id, author_display_name, content, attachments, is_relay,
+            external_author_id, external_provider, external_author_name, external_author_avatar_url,
+            parent_id, external_thread_id, external_message_id
+          )
+        values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        returning * `,
         [
-          `msg_${crypto.randomUUID().replaceAll("-", "")}`,
+          `msg_${crypto.randomUUID().replaceAll("-", "")} `,
           input.channelId,
           input.actorUserId,
           authorDisplayName,
@@ -421,7 +441,7 @@ export async function createMessage(input: {
         const mentionRows = await db.query<{ product_user_id: string }>(
           `select distinct product_user_id
          from identity_mappings
-         where lower(preferred_username) = any($1::text[])`,
+         where lower(preferred_username) = any($1:: text[])`,
           [mentionHandles]
         );
 
@@ -431,10 +451,10 @@ export async function createMessage(input: {
           }
 
           await db.query(
-            `insert into mention_markers (id, channel_id, message_id, mentioned_user_id)
-           values ($1, $2, $3, $4)`,
+            `insert into mention_markers(id, channel_id, message_id, mentioned_user_id)
+        values($1, $2, $3, $4)`,
             [
-              `mm_${crypto.randomUUID().replaceAll("-", "")}`,
+              `mm_${crypto.randomUUID().replaceAll("-", "")} `,
               input.channelId,
               message.id,
               mentioned.product_user_id
@@ -494,7 +514,7 @@ export async function getOrCreateDMChannel(hubId: string, productUserIds: string
     let dmServerId = dmSrvRow.rows[0]?.id;
 
     if (!dmServerId) {
-      dmServerId = `srv_${crypto.randomUUID().replaceAll("-", "")}`;
+      dmServerId = `srv_${crypto.randomUUID().replaceAll("-", "")} `;
       await db.query(
         "insert into servers (id, hub_id, name, type, created_by_user_id, owner_user_id) values ($1, $2, $3, $4, $5, $6)",
         [dmServerId, hubId, "Direct Messages", "dm", productUserIds[0], productUserIds[0]]
@@ -509,7 +529,7 @@ export async function getOrCreateDMChannel(hubId: string, productUserIds: string
        where ch.server_id = $1 and ch.type = 'dm'
        group by ch.id
        having count(cm.product_user_id) = $2
-          and array_agg(cm.product_user_id order by cm.product_user_id) = $3::text[]`,
+          and array_agg(cm.product_user_id order by cm.product_user_id) = $3:: text[]`,
       [dmServerId, sortedUserIds.length, sortedUserIds]
     );
 
@@ -523,13 +543,13 @@ export async function getOrCreateDMChannel(hubId: string, productUserIds: string
         display_name: string;
       }>(
         `select cm.product_user_id,
-           coalesce(
-             (select preferred_username 
+          coalesce(
+            (select preferred_username 
               from identity_mappings 
               where product_user_id = cm.product_user_id 
-              order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+              order by(preferred_username is not null) desc, updated_at desc, created_at asc 
               limit 1),
-             'user-' || substr(cm.product_user_id, 1, 8)
+          'user-' || substr(cm.product_user_id, 1, 8)
            ) as display_name
          from channel_members cm
          where cm.channel_id = $1`,
@@ -543,7 +563,7 @@ export async function getOrCreateDMChannel(hubId: string, productUserIds: string
       return channel;
     }
 
-    const channelId = `chn_${crypto.randomUUID().replaceAll("-", "")}`;
+    const channelId = `chn_${crypto.randomUUID().replaceAll("-", "")} `;
     const name = `DM: ${sortedUserIds.length} members`;
     await db.query(
       "insert into channels (id, server_id, name, type, topic) values ($1, $2, $3, 'dm', null)",
@@ -565,13 +585,13 @@ export async function getOrCreateDMChannel(hubId: string, productUserIds: string
       display_name: string;
     }>(
       `select cm.product_user_id,
-         coalesce(
-           (select preferred_username 
+    coalesce(
+      (select preferred_username 
             from identity_mappings 
             where product_user_id = cm.product_user_id 
-            order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+            order by(preferred_username is not null) desc, updated_at desc, created_at asc 
             limit 1),
-           'user-' || substr(cm.product_user_id, 1, 8)
+    'user-' || substr(cm.product_user_id, 1, 8)
          ) as display_name
        from channel_members cm
        where cm.channel_id = $1`,
@@ -626,10 +646,10 @@ export async function upsertChannelReadState(input: {
       last_read_at: string;
       updated_at: string;
     }>(
-      `insert into channel_read_states (product_user_id, channel_id, last_read_at)
-       values ($1, $2, coalesce($3::timestamptz, now()))
-       on conflict (product_user_id, channel_id)
-       do update set last_read_at = excluded.last_read_at, updated_at = now()
+      `insert into channel_read_states(product_user_id, channel_id, last_read_at)
+  values($1, $2, coalesce($3:: timestamptz, now()))
+       on conflict(product_user_id, channel_id)
+  do update set last_read_at = excluded.last_read_at, updated_at = now()
        returning channel_id, product_user_id, last_read_at, updated_at`,
       [input.productUserId, input.channelId, input.at ?? null]
     );
@@ -670,9 +690,9 @@ export async function listMentionMarkers(input: {
          on rs.channel_id = mm.channel_id
         and rs.product_user_id = mm.mentioned_user_id
        where mm.mentioned_user_id = $1
-         and ($2::text is null or mm.channel_id = $2)
-         and ($3::text is null or ch.server_id = $3)
-         and (rs.last_read_at is null or mm.created_at > rs.last_read_at)
+  and($2:: text is null or mm.channel_id = $2)
+  and($3:: text is null or ch.server_id = $3)
+  and(rs.last_read_at is null or mm.created_at > rs.last_read_at)
        order by mm.created_at desc
        limit $4`,
       [input.productUserId, input.channelId ?? null, input.serverId ?? null, limit]
@@ -694,10 +714,10 @@ export async function createCategory(input: {
 }): Promise<Category> {
   return withDb(async (db) => {
     const row = await db.query<CategoryRow>(
-      `insert into categories (id, server_id, name, matrix_subspace_id)
-       values ($1, $2, $3, null)
-       returning *`,
-      [`cat_${crypto.randomUUID().replaceAll("-", "")}`, input.serverId, input.name]
+      `insert into categories(id, server_id, name, matrix_subspace_id)
+  values($1, $2, $3, null)
+  returning * `,
+      [`cat_${crypto.randomUUID().replaceAll("-", "")} `, input.serverId, input.name]
     );
 
     const value = row.rows[0];
@@ -719,9 +739,9 @@ export async function updateCategory(input: {
     const row = await db.query<CategoryRow>(
       `update categories
        set name = coalesce($1, name),
-           position = coalesce($2, position)
+    position = coalesce($2, position)
        where id = $3 and server_id = $4
-       returning *`,
+  returning * `,
       [input.name ?? null, input.position ?? null, input.categoryId, input.serverId]
     );
 
@@ -792,12 +812,12 @@ export async function updateChannel(input: {
     const row = await db.query<ChannelRow>(
       `update channels
        set name = coalesce($1, name),
-           type = coalesce($2, type),
-           category_id = case when $3 = 'REMOVED_VAL' then null else coalesce($4, category_id) end,
-           position = coalesce($5, position),
-           topic = case when $8 = 'REMOVED_VAL' then null else coalesce($9, topic) end
+    type = coalesce($2, type),
+    category_id = case when $3 = 'REMOVED_VAL' then null else coalesce($4, category_id) end,
+      position = coalesce($5, position),
+      topic = case when $8 = 'REMOVED_VAL' then null else coalesce($9, topic) end
        where id = $6 and server_id = $7
-       returning *`,
+  returning * `,
       [
         input.name ?? null,
         input.type ?? null,
@@ -844,7 +864,7 @@ export async function renameServer(input: { serverId: string; name: string }): P
       `update servers
        set name = $1
        where id = $2
-       returning *`,
+  returning * `,
       [input.name, input.serverId]
     );
 
@@ -917,9 +937,9 @@ export async function updateChannelVideoControls(input: {
     const row = await db.query<ChannelRow>(
       `update channels
        set video_enabled = $3,
-           video_max_participants = $4
+    video_max_participants = $4
        where id = $1 and server_id = $2 and type = 'voice'
-       returning *`,
+  returning * `,
       [input.channelId, input.serverId, input.videoEnabled, input.maxVideoParticipants ?? null]
     );
 
@@ -972,19 +992,19 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
     } else {
       membersRow = await db.query<{ product_user_id: string }>(
         `select distinct product_user_id from role_bindings where server_id = $1 or channel_id = $2 or hub_id = $3
-         union
+  union
          select owner_user_id from servers where id = $1
-         union
+  union
          select owner_user_id from hubs where id = $3
-         union
+  union
          select product_user_id from channel_members where channel_id = $2
-         union
+  union
          select author_user_id from chat_messages
            where channel_id = $2
              and is_relay = false
-             and (external_provider is null or external_provider = '')
+  and(external_provider is null or external_provider = '')
              and author_user_id not like 'discord_%'
-         union
+  union
          select distinct product_user_id from identity_mappings where product_user_id is not null`,
         [channel.server_id, channelId, server.hub_id]
       );
@@ -1005,8 +1025,8 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
       avatar_url: string | null;
       last_seen_at: string | null;
     }>(
-      `select distinct on (im.product_user_id) 
-         im.product_user_id, im.preferred_username, im.email, im.avatar_url, up.last_seen_at
+      `select distinct on(im.product_user_id)
+  im.product_user_id, im.preferred_username, im.email, im.avatar_url, up.last_seen_at
        from identity_mappings im
        left join user_presence up on up.product_user_id = im.product_user_id
        where im.product_user_id = any($1)
@@ -1026,7 +1046,7 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
 
     const localMembers: Member[] = localUserRows.rows.map(r => ({
       productUserId: r.product_user_id,
-      displayName: r.preferred_username ?? r.email?.split('@')[0] ?? `user-${r.product_user_id.slice(0, 8)}`,
+      displayName: r.preferred_username ?? r.email?.split('@')[0] ?? `user - ${r.product_user_id.slice(0, 8)} `,
       avatarUrl: r.avatar_url ?? undefined,
       isOnline: r.last_seen_at ? (now - new Date(r.last_seen_at).getTime() < ONLINE_THRESHOLD_MS) : false,
       lastSeenAt: r.last_seen_at ?? undefined,
@@ -1088,7 +1108,7 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
           if (discordToLocal.has(discordId)) continue;
 
           bridgedMembers.push({
-            productUserId: `discord_${discordId}`,
+            productUserId: `discord_${discordId} `,
             displayName: p.displayName || p.username,
             avatarUrl: p.avatarUrl ?? undefined,
             isOnline: true,
@@ -1097,7 +1117,7 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
           });
         }
       } catch (err) {
-        console.error(`[Presence Debug] Failed to fetch Discord guild presence for ${mapping.guildId}:`, err);
+        console.error(`[Presence Debug] Failed to fetch Discord guild presence for ${mapping.guildId}: `, err);
       }
     }
 
@@ -1110,11 +1130,11 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
       external_author_name: string | null;
       external_author_avatar_url: string | null;
     }>(
-      `select distinct on (coalesce(external_author_id, author_user_id)) 
-         external_author_id, author_user_id, author_display_name, external_author_name, external_author_avatar_url
+      `select distinct on(coalesce(external_author_id, author_user_id))
+  external_author_id, author_user_id, author_display_name, external_author_name, external_author_avatar_url
        from chat_messages
-       where channel_id = $1 
-         and (external_provider = 'discord' or (author_user_id like 'discord_%' and is_relay = true))
+       where channel_id = $1
+  and(external_provider = 'discord' or(author_user_id like 'discord_%' and is_relay = true))
        order by coalesce(external_author_id, author_user_id), created_at desc`,
       [channelId]
     );
@@ -1124,10 +1144,10 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
       // Skip if this Discord user has a local product account (they're in G1/G3)
       if (discordToLocal.has(discordId)) continue;
       // Skip if already in Group 2 (online bridged)
-      if (bridgedMembers.find(m => m.productUserId === `discord_${discordId}`)) continue;
+      if (bridgedMembers.find(m => m.productUserId === `discord_${discordId} `)) continue;
 
       externalOfflineMembers.push({
-        productUserId: `discord_${discordId}`,
+        productUserId: `discord_${discordId} `,
         displayName: row.external_author_name ?? row.author_display_name,
         avatarUrl: row.external_author_avatar_url ?? undefined,
         isOnline: false,
@@ -1135,7 +1155,7 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
         bridgedUserStatus: 'offline'
       });
     }
-    console.log(`[Presence Debug] Found ${externalOfflineMembers.length} offline Discord-only participants`);
+    console.log(`[Presence Debug] Found ${externalOfflineMembers.length} offline Discord - only participants`);
 
     // Final Assembly with 4-tier Ordering
     const group1 = localMembers.filter(m => m.isOnline);
@@ -1143,7 +1163,7 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
     const group3 = localMembers.filter(m => !m.isOnline && !bridgedMembers.find(bm => bm.productUserId === m.productUserId));
     const group4 = externalOfflineMembers;
 
-    console.log(`[Presence Debug] Final counts - G1: ${group1.length}, G2: ${group2.length}, G3: ${group3.length}, G4: ${group4.length}`);
+    console.log(`[Presence Debug] Final counts - G1: ${group1.length}, G2: ${group2.length}, G3: ${group3.length}, G4: ${group4.length} `);
 
     return [...group1, ...group2, ...group3, ...group4];
   });
@@ -1210,12 +1230,12 @@ export async function getUnreadSummary(productUserId: string): Promise<Record<st
     // 1. Get unread message counts per channel
     // Joined with channel_read_states to compare message creation time with last read time.
     const messageCounts = await db.query<{ channel_id: string; unread_count: number }>(
-      `select ch.id as channel_id, 
-              (case when coalesce(rs.is_muted, false) then 0 else count(msg.id) end) as unread_count
+      `select ch.id as channel_id,
+    (case when coalesce(rs.is_muted, false) then 0 else count(msg.id) end) as unread_count
        from channels ch
        join chat_messages msg on msg.channel_id = ch.id
        left join channel_read_states rs on rs.channel_id = ch.id and rs.product_user_id = $1
-       where msg.author_user_id != $1 and (rs.last_read_at is null or msg.created_at > rs.last_read_at)
+       where msg.author_user_id != $1 and(rs.last_read_at is null or msg.created_at > rs.last_read_at)
        group by ch.id, rs.is_muted`,
       [productUserId]
     );
@@ -1227,7 +1247,7 @@ export async function getUnreadSummary(productUserId: string): Promise<Record<st
        from mention_markers mm
        left join channel_read_states rs on rs.channel_id = mm.channel_id and rs.product_user_id = $1
        where mm.mentioned_user_id = $1
-         and (rs.last_read_at is null or mm.created_at > rs.last_read_at)
+  and(rs.last_read_at is null or mm.created_at > rs.last_read_at)
        group by mm.channel_id`,
       [productUserId]
     );
@@ -1284,7 +1304,7 @@ export async function updateMessage(input: {
       `update chat_messages
        set content = $1, updated_at = now()
        where id = $2 and author_user_id = $3
-       returning *`,
+  returning * `,
       [input.content, input.messageId, input.actorUserId]
     );
 
@@ -1335,10 +1355,10 @@ export async function addReaction(input: {
 }): Promise<void> {
   return withDb(async (db) => {
     await db.query(
-      `insert into message_reactions (id, message_id, user_id, emoji)
-       values ($1, $2, $3, $4)
-       on conflict (message_id, user_id, emoji) do nothing`,
-      [`react_${crypto.randomUUID().replaceAll("-", "")}`, input.messageId, input.userId, input.emoji]
+      `insert into message_reactions(id, message_id, user_id, emoji)
+  values($1, $2, $3, $4)
+       on conflict(message_id, user_id, emoji) do nothing`,
+      [`react_${crypto.randomUUID().replaceAll("-", "")} `, input.messageId, input.userId, input.emoji]
     );
   });
 }
@@ -1378,9 +1398,9 @@ export async function listServerMembers(serverId: string): Promise<{
     // 1. Local Members
     const members = await db.query<{ product_user_id: string }>(
       `select distinct product_user_id from role_bindings where server_id = $1 or hub_id = $2
-       union
+  union
        select owner_user_id from servers where id = $1
-       union
+  union
        select distinct product_user_id from identity_mappings where product_user_id is not null`,
       [serverId, server.hub_id]
     );
@@ -1393,8 +1413,8 @@ export async function listServerMembers(serverId: string): Promise<{
       avatar_url: string | null;
       last_seen_at: string | null;
     }>(
-      `select distinct on (im.product_user_id)
-         im.product_user_id, im.preferred_username, im.email, im.avatar_url, up.last_seen_at
+      `select distinct on(im.product_user_id)
+  im.product_user_id, im.preferred_username, im.email, im.avatar_url, up.last_seen_at
        from identity_mappings im
        left join user_presence up on up.product_user_id = im.product_user_id
        where im.product_user_id = any($1)
@@ -1404,7 +1424,7 @@ export async function listServerMembers(serverId: string): Promise<{
 
     const localMembers = localUserRows.rows.map(r => ({
       productUserId: r.product_user_id,
-      displayName: r.preferred_username ?? r.email?.split('@')[0] ?? `user-${r.product_user_id.slice(0, 8)}`,
+      displayName: r.preferred_username ?? r.email?.split('@')[0] ?? `user - ${r.product_user_id.slice(0, 8)} `,
       avatarUrl: r.avatar_url ?? undefined,
       isOnline: r.last_seen_at ? (now - new Date(r.last_seen_at).getTime() < ONLINE_THRESHOLD_MS) : false,
       isBridged: false
@@ -1436,7 +1456,7 @@ export async function listServerMembers(serverId: string): Promise<{
             if (discordToLocal.has(id)) continue;
 
             bridgedMembers.push({
-              productUserId: `discord_${id}`,
+              productUserId: `discord_${id} `,
               displayName: member.displayName,
               avatarUrl: member.user.displayAvatarURL() ?? undefined,
               isOnline: member.presence?.status ? member.presence.status !== "offline" : false,
