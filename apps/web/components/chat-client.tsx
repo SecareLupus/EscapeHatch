@@ -55,7 +55,9 @@ import {
   updateChannelVideoControls,
   upsertChannelReadState,
   updateChannelControls,
+  updateServerSettings,
   updateUserTheme,
+  uploadMedia,
   updateVoicePresenceState,
   controlPlaneBaseUrl,
   createDMChannel,
@@ -124,6 +126,7 @@ export function ChatClient() {
     lastSeenMessageId,
     renameSpaceId,
     renameSpaceName,
+    renameSpaceIconUrl,
     renameCategoryId,
     renameCategoryName,
     renameRoomId,
@@ -155,6 +158,8 @@ export function ChatClient() {
     profileUserId,
     members
   } = state;
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
 
   const [mentions, setMentions] = useState<MentionMarker[]>([]);
   const { blockedUserIds } = state;
@@ -1326,11 +1331,26 @@ export function ChatClient() {
     dispatch({ type: "SET_MUTATING_STRUCTURE", payload: true });
     dispatch({ type: "SET_ERROR", payload: null });
     try {
+      let iconUrl = renameSpaceIconUrl;
+
+      if (iconFile) {
+        const upload = await uploadMedia(renameSpaceId, iconFile);
+        iconUrl = upload.url;
+      }
+
+      await updateServerSettings(renameSpaceId, {
+        name: renameSpaceName.trim(),
+        iconUrl
+      } as any);
+      // Also call renameServer if it handles something Matrix-side that updateServerSettings doesn't
+      // if renameServer is purely for the name, it's fine.
       await renameServer({
         serverId: renameSpaceId,
         name: renameSpaceName.trim()
       });
-      dispatch({ type: "SET_RENAME_SPACE", payload: { id: renameSpaceId, name: "" } });
+
+      dispatch({ type: "SET_RENAME_SPACE", payload: { id: renameSpaceId, name: "", iconUrl: null } });
+      setIconFile(null);
       await refreshChatState(renameSpaceId, selectedChannelId ?? undefined);
     } catch (cause) {
       dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to rename space." });
@@ -1877,7 +1897,7 @@ export function ChatClient() {
                   {activeModal === "create-space" && "Create New Space"}
                   {activeModal === "create-category" && "Create New Category"}
                   {activeModal === "create-room" && "Create New Room"}
-                  {activeModal === "rename-space" && "Rename Space"}
+                  {activeModal === "rename-space" && "Space Settings"}
                   {activeModal === "rename-category" && "Rename Category"}
                   {activeModal === "rename-room" && "Rename Room"}
                 </h2>
@@ -1918,6 +1938,53 @@ export function ChatClient() {
                     maxLength={80}
                     required
                   />
+
+                  <div className="form-section">
+                    <label>Space Icon</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
+                      <div className="server-icon-placeholder" style={{ width: '64px', height: '64px', fontSize: '1.5rem' }}>
+                        {iconFile ? (
+                          <img src={URL.createObjectURL(iconFile)} alt="" className="server-icon-image" />
+                        ) : renameSpaceIconUrl ? (
+                          <img src={renameSpaceIconUrl} alt="" className="server-icon-image" />
+                        ) : (
+                          renameSpaceName.charAt(0).toUpperCase() || '?'
+                        )}
+                      </div>
+                      <div className="stack" style={{ gap: '0.4rem' }}>
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() => iconInputRef.current?.click()}
+                        >
+                          {renameSpaceIconUrl || iconFile ? 'Change Icon' : 'Upload Icon'}
+                        </button>
+                        {(renameSpaceIconUrl || iconFile) && (
+                          <button
+                            type="button"
+                            className="ghost"
+                            style={{ color: 'var(--danger)' }}
+                            onClick={() => {
+                              setIconFile(null);
+                              dispatch({ type: "SET_RENAME_SPACE", payload: { id: renameSpaceId, name: renameSpaceName, iconUrl: null } });
+                            }}
+                          >
+                            Remove Icon
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        ref={iconInputRef}
+                        style={{ display: 'none' }}
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) setIconFile(file);
+                        }}
+                      />
+                    </div>
+                  </div>
                   <button type="submit" disabled={mutatingStructure}>Save Changes</button>
                 </form>
               )}

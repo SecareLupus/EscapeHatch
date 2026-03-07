@@ -66,6 +66,7 @@ export interface Server {
     createdByUserId: string;
     ownerUserId: string;
     startingChannelId?: string | null;
+    iconUrl?: string | null;
     visibility?: string;
     visitorPrivacy?: string;
     createdAt: string;

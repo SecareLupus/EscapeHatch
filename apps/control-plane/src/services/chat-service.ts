@@ -75,6 +75,7 @@ export async function listServers(): Promise<Server[]> {
       name: string;
       type: "default" | "dm";
       matrix_space_id: string | null;
+      icon_url: string | null;
       created_by_user_id: string;
       owner_user_id: string;
       created_at: string;
@@ -86,6 +87,7 @@ export async function listServers(): Promise<Server[]> {
       name: row.name,
       type: row.type || "default",
       matrixSpaceId: row.matrix_space_id,
+      iconUrl: row.icon_url,
       createdByUserId: row.created_by_user_id,
       ownerUserId: row.owner_user_id,
       createdAt: row.created_at
@@ -778,6 +780,7 @@ export async function renameServer(input: { serverId: string; name: string }): P
       hub_id: string;
       name: string;
       matrix_space_id: string | null;
+      icon_url: string | null;
       type: "default" | "dm";
       created_by_user_id: string;
       owner_user_id: string;
@@ -801,6 +804,7 @@ export async function renameServer(input: { serverId: string; name: string }): P
       name: value.name,
       type: value.type,
       matrixSpaceId: value.matrix_space_id,
+      iconUrl: value.icon_url,
       createdByUserId: value.created_by_user_id,
       ownerUserId: value.owner_user_id,
       createdAt: value.created_at

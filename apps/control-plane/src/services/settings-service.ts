@@ -46,13 +46,14 @@ export async function updateHubSettings(hubId: string, settings: {
 export async function getServerSettings(serverId: string): Promise<Partial<Server>> {
   return withDb(async (db) => {
     const res = await db.query(
-      "select starting_channel_id, visibility, visitor_privacy from servers where id = $1",
+      "select starting_channel_id, icon_url, visibility, visitor_privacy from servers where id = $1",
       [serverId]
     );
     const row = res.rows[0];
     if (!row) throw new Error("Server not found");
     return {
       startingChannelId: row.starting_channel_id,
+      iconUrl: row.icon_url,
       visibility: row.visibility,
       visitorPrivacy: row.visitor_privacy
     };
@@ -61,6 +62,7 @@ export async function getServerSettings(serverId: string): Promise<Partial<Serve
 
 export async function updateServerSettings(serverId: string, settings: {
   startingChannelId?: string | null;
+  iconUrl?: string | null;
   visibility?: string;
   visitorPrivacy?: string;
 }): Promise<void> {
@@ -68,16 +70,19 @@ export async function updateServerSettings(serverId: string, settings: {
     // Note: use undefined check for startingChannelId to allow nulling it out
     await db.query(
       `update servers set 
-        starting_channel_id = case when $2::text is not null or $5::boolean then $2::text else starting_channel_id end,
-        visibility = coalesce($3, visibility),
-        visitor_privacy = coalesce($4, visitor_privacy)
+        starting_channel_id = case when $2::text is not null or $6::boolean then $2::text else starting_channel_id end,
+        icon_url = case when $3::text is not null or $7::boolean then $3::text else icon_url end,
+        visibility = coalesce($4, visibility),
+        visitor_privacy = coalesce($5, visitor_privacy)
       where id = $1`,
       [
-        serverId, 
-        settings.startingChannelId, 
-        settings.visibility, 
+        serverId,
+        settings.startingChannelId,
+        settings.iconUrl,
+        settings.visibility,
         settings.visitorPrivacy,
-        settings.startingChannelId === null
+        settings.startingChannelId === null,
+        settings.iconUrl === null
       ]
     );
   });
@@ -109,8 +114,8 @@ export async function updateChannelSettings(channelId: string, settings: {
         allowed_role_ids = coalesce($3, allowed_role_ids)
       where id = $1`,
       [
-        channelId, 
-        settings.restrictedVisibility, 
+        channelId,
+        settings.restrictedVisibility,
         settings.allowedRoleIds
       ]
     );

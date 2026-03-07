@@ -464,6 +464,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
     const payload = z.object({
       startingChannelId: z.string().min(1).nullable().optional(),
+      iconUrl: z.string().url().nullable().optional(),
       visibility: z.string().optional(),
       visitorPrivacy: z.string().optional()
     }).parse(request.body);

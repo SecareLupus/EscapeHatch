@@ -80,6 +80,7 @@ export interface ChatState {
     // Rename/Delete states
     renameSpaceId: string;
     renameSpaceName: string;
+    renameSpaceIconUrl: string | null;
     renameCategoryId: string;
     renameCategoryName: string;
     renameRoomId: string;
@@ -149,7 +150,7 @@ type ChatAction =
     | { type: "SET_MENTION_COUNTS"; payload: Record<string, number> }
     | { type: "SET_UNREAD_COUNTS"; payload: Record<string, number> }
     | { type: "SET_CHANNEL_FILTER"; payload: string }
-    | { type: "SET_RENAME_SPACE"; payload: { id: string; name: string } }
+    | { type: "SET_RENAME_SPACE"; payload: { id: string; name: string; iconUrl?: string | null } }
     | { type: "SET_RENAME_CATEGORY"; payload: { id: string; name: string } }
     | { type: "SET_RENAME_ROOM"; payload: { id: string; name: string; type: ChannelType; categoryId: string | null } }
     | { type: "SET_SELECTED_CATEGORY_FOR_CREATE"; payload: string }
@@ -218,6 +219,7 @@ const initialState: ChatState = {
     channelFilter: "",
     renameSpaceId: "",
     renameSpaceName: "",
+    renameSpaceIconUrl: null,
     renameCategoryId: "",
     renameCategoryName: "",
     renameRoomId: "",
@@ -312,7 +314,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         case "SET_CHANNEL_FILTER":
             return { ...state, channelFilter: action.payload };
         case "SET_RENAME_SPACE":
-            return { ...state, renameSpaceId: action.payload.id, renameSpaceName: action.payload.name };
+            return {
+                ...state,
+                renameSpaceId: action.payload.id,
+                renameSpaceName: action.payload.name,
+                renameSpaceIconUrl: action.payload.iconUrl !== undefined ? action.payload.iconUrl : state.renameSpaceIconUrl
+            };
         case "SET_RENAME_CATEGORY":
             return { ...state, renameCategoryId: action.payload.id, renameCategoryName: action.payload.name };
         case "SET_RENAME_ROOM":

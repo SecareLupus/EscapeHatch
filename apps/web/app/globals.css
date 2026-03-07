@@ -580,6 +580,28 @@ textarea:focus-visible,
   transition: all 0.2s ease;
 }
 
+.server-icon-placeholder {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.server-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .list-item span {
   overflow: hidden;
   text-overflow: ellipsis;

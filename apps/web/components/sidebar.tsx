@@ -150,7 +150,11 @@ export function Sidebar({
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                                             <span className="server-icon-placeholder">
-                                                {server.type === 'dm' ? '👤' : server.name.charAt(0).toUpperCase()}
+                                                {(server as any).iconUrl ? (
+                                                    <img src={(server as any).iconUrl} alt="" className="server-icon-image" />
+                                                ) : (
+                                                    server.type === 'dm' ? '👤' : server.name.charAt(0).toUpperCase()
+                                                )}
                                             </span>
                                             {server.name}
                                         </div>
@@ -170,7 +174,7 @@ export function Sidebar({
                                                     title="Edit Server"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        dispatch({ type: "SET_RENAME_SPACE", payload: { id: server.id, name: server.name } });
+                                                        dispatch({ type: "SET_RENAME_SPACE", payload: { id: server.id, name: server.name, iconUrl: (server as any).iconUrl } });
                                                         dispatch({ type: "SET_ACTIVE_MODAL", payload: "rename-space" });
                                                     }}
                                                 >
