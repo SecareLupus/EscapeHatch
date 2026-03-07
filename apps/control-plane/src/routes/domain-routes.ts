@@ -550,7 +550,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
           url: z.string().url(),
           contentType: z.string(),
           filename: z.string()
-        })).optional()
+        })).optional(),
+        parentId: z.string().optional()
       })
       .parse(request.body);
 
@@ -558,7 +559,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       channelId: params.channelId,
       actorUserId: request.auth!.productUserId,
       content: payload.content,
-      attachments: payload.attachments
+      attachments: payload.attachments,
+      parentId: payload.parentId
     });
     publishChannelMessage(message);
 

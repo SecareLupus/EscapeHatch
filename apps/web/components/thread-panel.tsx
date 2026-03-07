@@ -120,17 +120,18 @@ export function ThreadPanel() {
     return (
         <aside className="thread-panel panel">
             <header className="panel-header">
-                <h3>Thread</h3>
+                <h2>Thread</h2>
                 <button
                     type="button"
-                    className="icon-button"
+                    className="close-button"
                     onClick={() => dispatch({ type: "SET_THREAD_PARENT_ID", payload: null })}
+                    aria-label="Close thread"
                 >
-                    ×
+                    &times;
                 </button>
             </header>
 
-            <div className="thread-content" ref={scrollRef}>
+            <div className="thread-content scrollable-pane" ref={scrollRef}>
                 {parentMessage && (
                     <div className="thread-parent">
                         <article className="message parent-message">
@@ -139,17 +140,23 @@ export function ThreadPanel() {
                                 <time>{formatMessageTime(parentMessage.createdAt)}</time>
                             </header>
                             <p>{parentMessage.content}</p>
+                            {parentMessage.attachments?.map(att => (
+                                <div key={att.id} className="attachment">
+                                    <img src={att.url} alt={att.filename} style={{ maxWidth: "100%", borderRadius: "8px", marginTop: "0.5rem" }} />
+                                </div>
+                            ))}
                         </article>
-                        <div className="thread-divider">Replies</div>
                     </div>
                 )}
 
+                <div className="thread-divider">Replies</div>
+
                 {loading ? (
-                    <div className="loading">Loading replies...</div>
+                    <div className="loading" style={{ textAlign: "center", opacity: 0.5, padding: "2rem" }}>Loading replies...</div>
                 ) : (
                     <ol className="replies-list" style={{ listStyle: "none", padding: 0, margin: 0 }}>
                         {replies.map(reply => (
-                            <li key={reply.id} style={{ marginBottom: "1rem" }}>
+                            <li key={reply.id}>
                                 <article className="message">
                                     <header>
                                         <strong>{reply.externalAuthorName || reply.authorDisplayName}</strong>
@@ -158,7 +165,7 @@ export function ThreadPanel() {
                                     <p>{reply.content}</p>
                                     {reply.attachments?.map(att => (
                                         <div key={att.id} className="attachment">
-                                            <img src={att.url} alt={att.filename} style={{ maxWidth: "100%", borderRadius: "4px" }} />
+                                            <img src={att.url} alt={att.filename} style={{ maxWidth: "100%", borderRadius: "8px", marginTop: "0.5rem" }} />
                                         </div>
                                     ))}
                                 </article>
@@ -168,7 +175,7 @@ export function ThreadPanel() {
                 )}
             </div>
 
-            <form className="thread-composer composer" onSubmit={handleSendReply}>
+            <form className="thread-composer" onSubmit={handleSendReply}>
                 <div className="input-wrapper">
                     <textarea
                         value={draft}
@@ -192,7 +199,7 @@ export function ThreadPanel() {
                             onChange={handleFileUpload}
                             accept="image/*"
                         />
-                        <button type="submit" disabled={sending || (!draft.trim() && attachments.length === 0)}>
+                        <button type="submit" className="send-button" disabled={sending || (!draft.trim() && attachments.length === 0)}>
                             {sending ? "..." : "Send"}
                         </button>
                     </div>
@@ -211,43 +218,82 @@ export function ThreadPanel() {
 
             <style jsx>{`
                 .thread-panel {
-                    flex: 0 0 350px;
-                    border-left: 1px solid var(--border-color);
                     display: flex;
                     flex-direction: column;
-                    background: var(--bg-primary);
+                    background: var(--surface);
+                    border-left: 1px solid var(--border);
+                    overflow: hidden;
+                    height: 100%;
                 }
                 .panel-header {
-                    padding: 1rem;
-                    border-bottom: 1px solid var(--border-color);
+                    padding: 0.75rem 1rem;
+                    border-bottom: 1px solid var(--border);
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                    background: var(--surface-alt);
+                }
+                .panel-header h2 {
+                    margin: 0;
+                    font-size: 1rem;
+                    font-weight: 600;
+                }
+                .close-button {
+                    background: transparent;
+                    border: none;
+                    font-size: 1.25rem;
+                    cursor: pointer;
+                    color: var(--text-muted);
+                    padding: 0.25rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 4px;
+                    transition: background 0.2s;
+                }
+                .close-button:hover {
+                    background: var(--border);
+                    color: var(--text);
                 }
                 .thread-content {
                     flex: 1;
                     overflow-y: auto;
                     padding: 1rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
                 }
                 .thread-parent {
-                    margin-bottom: 1.5rem;
                     padding-bottom: 1rem;
-                    border-bottom: 1px solid var(--border-color);
+                    border-bottom: 1px solid var(--border);
                 }
                 .thread-divider {
-                    font-size: 0.8rem;
+                    font-size: 0.7rem;
                     text-transform: uppercase;
-                    opacity: 0.6;
-                    margin: 1rem 0;
+                    letter-spacing: 0.05em;
+                    color: var(--text-muted);
+                    margin: 0.5rem 0;
                     display: flex;
                     align-items: center;
                     gap: 1rem;
+                    font-weight: 600;
                 }
                 .thread-divider::after {
                     content: "";
                     flex: 1;
                     height: 1px;
-                    background: var(--border-color);
+                    background: var(--border);
+                }
+                .replies-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                }
+                .message {
+                    background: var(--surface-alt);
+                    padding: 0.75rem;
+                    border-radius: 0.75rem;
+                    border: 1px solid var(--border);
                 }
                 .message header {
                     display: flex;
@@ -255,57 +301,118 @@ export function ThreadPanel() {
                     align-items: baseline;
                     margin-bottom: 0.25rem;
                 }
+                .message header strong {
+                    font-size: 0.9rem;
+                    color: var(--text);
+                }
                 .message time {
-                    font-size: 0.75rem;
-                    opacity: 0.6;
+                    font-size: 0.7rem;
+                    color: var(--text-muted);
+                }
+                .message p {
+                    margin: 0;
+                    font-size: 0.95rem;
+                    line-height: 1.4;
+                    color: var(--text);
+                    word-break: break-word;
                 }
                 .thread-composer {
                     padding: 1rem;
-                    border-top: 1px solid var(--border-color);
+                    border-top: 1px solid var(--border);
+                    background: var(--surface-alt);
+                }
+                .input-wrapper {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                    background: var(--surface);
+                    border: 1px solid var(--border);
+                    border-radius: 0.75rem;
+                    padding: 0.5rem;
                 }
                 .input-wrapper textarea {
                     width: 100%;
-                    background: var(--bg-secondary);
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    padding: 0.5rem;
-                    color: var(--text-primary);
+                    background: transparent;
+                    border: none;
+                    padding: 0.25rem;
+                    color: var(--text);
                     resize: none;
                     min-height: 60px;
+                    font-family: inherit;
+                    font-size: 0.9rem;
+                }
+                .input-wrapper textarea:focus {
+                    outline: none;
                 }
                 .composer-actions {
                     display: flex;
                     justify-content: space-between;
-                    margin-top: 0.5rem;
+                    align-items: center;
+                }
+                .icon-button {
+                    background: transparent;
+                    border: none;
+                    font-size: 1.1rem;
+                    cursor: pointer;
+                    padding: 0.25rem;
+                    border-radius: 4px;
+                    transition: background 0.2s;
+                }
+                .icon-button:hover {
+                    background: var(--surface-alt);
+                }
+                .send-button {
+                    background: var(--accent);
+                    color: white;
+                    border: none;
+                    padding: 0.4rem 1rem;
+                    border-radius: 0.5rem;
+                    font-weight: 600;
+                    font-size: 0.85rem;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+                .send-button:hover:not(:disabled) {
+                    background: var(--accent-strong);
+                }
+                .send-button:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
                 }
                 .attachments-preview {
                     display: flex;
                     gap: 0.5rem;
                     margin-top: 0.5rem;
+                    flex-wrap: wrap;
                 }
                 .attachment-preview {
                     position: relative;
-                    width: 50px;
-                    height: 50px;
+                    width: 60px;
+                    height: 60px;
                 }
                 .attachment-preview img {
                     width: 100%;
                     height: 100%;
                     object-fit: cover;
-                    border-radius: 4px;
+                    border-radius: 0.5rem;
+                    border: 1px solid var(--border);
                 }
                 .attachment-preview button {
                     position: absolute;
-                    top: -5px;
-                    right: -5px;
-                    background: rgba(0,0,0,0.5);
+                    top: -6px;
+                    right: -6px;
+                    background: var(--danger);
                     color: white;
                     border: none;
                     border-radius: 50%;
-                    width: 15px;
-                    height: 15px;
+                    width: 18px;
+                    height: 18px;
                     font-size: 10px;
                     cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 }
             `}</style>
         </aside>

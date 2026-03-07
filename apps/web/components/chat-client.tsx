@@ -1750,7 +1750,7 @@ export function ChatClient() {
 
       {canAccessWorkspace && (
         <section
-          className={`chat-shell ${isDetailsOpen ? "" : "details-collapsed"} ${state.isSidebarOpen ? "sidebar-open" : ""}`}
+          className={`chat-shell ${isDetailsOpen ? "" : "details-collapsed"} ${state.isSidebarOpen ? "sidebar-open" : ""} ${state.threadParentId ? "thread-open" : ""}`}
           aria-label="Chat workspace"
         >
           <div className="sidebar-drawer-container">

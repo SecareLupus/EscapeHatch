@@ -273,11 +273,25 @@ export async function relayMatrixMessageToDiscord(input: {
             name: a.filename
         }));
 
+        // Resolve externalThreadId from parentId if provided but missing
+        if (input.parentId && !input.externalThreadId) {
+            await withDb(async (db) => {
+                const parent = await db.query<{ external_thread_id: string | null }>(
+                    "select external_thread_id from chat_messages where id = $1 limit 1",
+                    [input.parentId]
+                );
+                if (parent.rows[0]?.external_thread_id) {
+                    input.externalThreadId = parent.rows[0].external_thread_id;
+                }
+            });
+        }
+
         await webhook.send({
             username: skerryEmoji ? input.authorName : `${input.authorName} ${config.discordBridge.icon}`,
             content: content || (files && files.length > 0 ? "" : undefined),
             avatarURL: input.avatarUrl,
-            files: files
+            files: files,
+            threadId: input.externalThreadId
         });
     } catch (error) {
         logEvent("error", "discord_outbound_relay_failed", { error: String(error) });
