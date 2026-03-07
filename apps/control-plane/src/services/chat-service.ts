@@ -997,21 +997,26 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
       try {
         const discordPresences = await getDiscordGuildPresence(mapping.guildId);
 
-        // Merge Discord presence into local users who are linked
+        // Merge Discord presence and nicknames into local users who are linked
         for (const member of localMembers) {
           const discordId = localToDiscord.get(member.productUserId);
           if (discordId) {
             const dp = discordPresences[discordId];
-            if (dp && dp.status !== 'offline') {
-              // If they were offline locally, they become "online" via the bridge
-              // and we show their specific Discord status and the "Bridged" badge.
-              if (!member.isOnline) {
-                member.isOnline = true;
-                member.isBridged = true;
-                member.bridgedUserStatus = dp.status;
+            if (dp) {
+              // Always respect the guild nickname if available in the bridge cache
+              if (dp.displayName) {
+                member.displayName = dp.displayName;
               }
-              // If they were ALREADY online locally, they stay "Online" (Green)
-              // and we do NOT show the badge or the Discord-specific status.
+
+              if (dp.status !== 'offline') {
+                // If they were offline locally, they become "online" via the bridge
+                // and we show their specific Discord status and the "Bridged" badge.
+                if (!member.isOnline) {
+                  member.isOnline = true;
+                  member.isBridged = true;
+                  member.bridgedUserStatus = dp.status;
+                }
+              }
             }
           }
         }
@@ -1025,7 +1030,7 @@ export async function listChannelMembers(channelId: string, viewerUserId?: strin
 
           bridgedMembers.push({
             productUserId: `discord_${discordId}`,
-            displayName: p.username,
+            displayName: p.displayName || p.username,
             avatarUrl: p.avatarUrl ?? undefined,
             isOnline: true,
             bridgedUserStatus: p.status,
@@ -1373,7 +1378,7 @@ export async function listServerMembers(serverId: string): Promise<{
 
             bridgedMembers.push({
               productUserId: `discord_${id}`,
-              displayName: member.user.username,
+              displayName: member.displayName,
               avatarUrl: member.user.displayAvatarURL() ?? undefined,
               isOnline: member.presence?.status ? member.presence.status !== "offline" : false,
               isBridged: true,

@@ -10,7 +10,7 @@ let client: Client | null = null;
 let isStarting = false;
 const webhookCache = new Map<string, WebhookClient>();
 const presenceCache = new Map<string, {
-    data: Record<string, { username: string, status: string, avatarUrl: string | null }>,
+    data: Record<string, { username: string, displayName: string, status: string, avatarUrl: string | null }>,
     isSeeded: boolean,
     lastFullSyncAt: number
 }>();
@@ -72,7 +72,7 @@ export async function startDiscordBot() {
                         serverId,
                         discordChannelId: message.channelId,
                         authorId: message.author.id,
-                        authorName: message.author.username,
+                        authorName: message.member?.displayName ?? message.author.displayName ?? message.author.username,
                         authorAvatarUrl: message.author.displayAvatarURL() ?? undefined,
                         content: message.content,
                         media
@@ -92,6 +92,7 @@ export async function startDiscordBot() {
 
             cache.data[newPresence.member.id] = {
                 username: newPresence.member.user.username,
+                displayName: newPresence.member.displayName,
                 status: newPresence.status ?? "offline",
                 avatarUrl: newPresence.member.user.displayAvatarURL()
             };
@@ -102,6 +103,7 @@ export async function startDiscordBot() {
             if (!cache) return;
             cache.data[member.id] = {
                 username: member.user.username,
+                displayName: member.displayName,
                 status: member.presence?.status ?? "offline",
                 avatarUrl: member.user.displayAvatarURL()
             };
@@ -118,6 +120,7 @@ export async function startDiscordBot() {
             if (!cache) return;
             cache.data[newMember.id] = {
                 username: newMember.user.username,
+                displayName: newMember.displayName,
                 status: newMember.presence?.status ?? "offline",
                 avatarUrl: newMember.user.displayAvatarURL()
             };
@@ -245,7 +248,7 @@ export async function relayMatrixMessageToDiscord(input: {
     }
 }
 
-export async function getDiscordGuildPresence(guildId: string): Promise<Record<string, { username: string, status: string, avatarUrl: string | null }>> {
+export async function getDiscordGuildPresence(guildId: string): Promise<Record<string, { username: string, displayName: string, status: string, avatarUrl: string | null }>> {
     if (!client || !client.isReady()) return {};
 
     const cached = presenceCache.get(guildId);
@@ -268,11 +271,12 @@ async function seedGuildPresence(guildId: string) {
 
         logEvent("info", "discord_presence_seeding_start", { guildId });
         const members = await guild.members.fetch({ withPresences: true });
-        const presenceMap: Record<string, { username: string, status: string, avatarUrl: string | null }> = {};
+        const presenceMap: Record<string, { username: string, displayName: string, status: string, avatarUrl: string | null }> = {};
 
         for (const [id, member] of members) {
             presenceMap[id] = {
                 username: member.user.username,
+                displayName: member.displayName,
                 status: member.presence?.status ?? "offline",
                 avatarUrl: member.user.displayAvatarURL()
             };
