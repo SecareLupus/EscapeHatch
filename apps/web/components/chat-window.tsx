@@ -673,10 +673,16 @@ export function ChatWindow({
                                         <button
                                             type="button"
                                             className="hover-action-item"
-                                            onClick={() => handleQuoteReply(message)}
-                                            title="Quote Reply"
+                                            onClick={() => {
+                                                if ((activeChannelData?.type as string) === "forum") {
+                                                    dispatch({ type: "SET_THREAD_PARENT_ID", payload: message.id });
+                                                } else {
+                                                    handleQuoteReply(message);
+                                                }
+                                            }}
+                                            title="Reply"
                                         >
-                                            💬
+                                            ↩️
                                         </button>
                                         {message.authorUserId === viewer?.productUserId && (
                                             <button
@@ -807,22 +813,7 @@ export function ChatWindow({
                                             <span style={{ opacity: 0.8 }}>💬</span>
                                             <span style={{ fontWeight: 600 }}>{message.repliesCount} {message.repliesCount === 1 ? 'reply' : 'replies'}</span>
                                         </button>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            className="thread-reply-btn"
-                                            onClick={() => {
-                                                if ((activeChannelData?.type as string) === "forum") {
-                                                    dispatch({ type: "SET_THREAD_PARENT_ID", payload: message.id });
-                                                } else {
-                                                    handleQuoteReply(message);
-                                                }
-                                            }}
-                                            style={{ marginTop: "0.25rem", fontSize: "0.85rem", opacity: 0, transition: "opacity 0.2s", color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                                        >
-                                            Reply
-                                        </button>
-                                    )}
+                                    ) : null}
                                 </div>
                                 {message.clientState === "sending" ? <small className="message-meta">Sending...</small> : null}
                                 {message.clientState === "failed" ? (
