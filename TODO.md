@@ -1,66 +1,144 @@
-# TODO — Creator Co-Op Hub Platform: Delegated Space Administration Roadmap
+# TODO — Skerry Platform: Post-Alpha Sprint Roadmap
 
-This roadmap starts after Phases 1-9 MVP completion and focuses on production-ready space administration delegation.
+**Created:** 2026-03-08
+**Based on:** `ReleaseReadinessReport_2026-03-08.md`
+**Previous archive:** `TODO_ARCHIVE_2026-02-13.md`, `TODO_ARCHIVE_2026-03-08.md`
 
-## Archive
-- Previous roadmap snapshot: `TODO_ARCHIVE_2026-02-13.md`
-
-## Current Focus Snapshot
-- Core auth, provisioning, moderation, voice, federation policy, Discord bridge scaffolding, and admin console exist.
-- Next objective: make space administration delegation explicit, secure, auditable, and testable for production trials.
+All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the remaining work to reach Private Alpha, then Public Beta, then production hardening.
 
 ---
 
-## Carry-Forward Hardening Items
-**Goal:** Close critical gaps discovered while completing Phases 1-9.
-**Status:** Completed
-- [x] Enforce authorization on role assignment APIs so non-admin users cannot grant roles.
-- [x] Add immutable role-assignment audit records (actor, target, scope, role, timestamp).
-- [x] Add integration tests for role-grant denial/allow paths and escalation attempts.
-- [x] Add explicit API error codes for delegation violations.
+## Phase 14 — Alpha Polish: UI Wiring (Backend-Complete Features)
 
----
-
-## Phase 10 — Delegation Domain Model + Ownership Semantics
-**Goal:** Introduce first-class delegated administration for spaces/categories/rooms.
-**Status:** Completed
-- [x] Define explicit delegation contracts in `packages/shared`.
-- [x] Add persistence model for assignments with lifecycle states (`active`, `revoked`, `expired`).
-- [x] Introduce server ownership semantics.
-- [x] Map role bindings to delegation assignments.
-- [x] Add migration/backfill strategy (system-created hubs/servers initialized with owners).
-
----
-
-## Phase 11 — Delegation Policy Engine + Secure APIs
-**Goal:** Make delegated space administration enforceable through policy gates.
-**Status:** Completed
-- [x] Build dedicated delegation service methods.
-- [x] Add policy rules for delegation operations.
-- [x] Add scope-safe user-management endpoints for delegated admins (role mapping).
-- [x] Add idempotency and conflict handling.
-- [x] Emit delegation audit events for all assignment changes.
-
----
-
-## Phase 12 — Admin UX for Delegation Workflows
-**Goal:** Deliver complete management UX for assigning and reviewing delegated space administrators.
-**Status:** Completed
-
-### Tasks
-- [x] Implement API client methods in `apps/web/lib/control-plane.ts`.
-- [x] Extend `/admin` with delegation console:
-  - assign/revoke space admins,
-  - ownership transfer flow,
-  - effective permissions preview.
-- [x] Add searchable user picker and current-assignment table per hub/space.
-- [x] Show assignment history/audit timeline in UI.
-- [x] Add UI safety affordances.
-- [x] Add E2E happy-path + abuse-path UI tests.
-
----
-
-## Phase 13 — Production Test Readiness for Delegation
-**Goal:** Validate delegated administration under realistic operational conditions.
+**Goal:** Connect fully-implemented backends to missing frontend surfaces.
 **Status:** Planned
 
+- [ ] Wire `profile-modal.tsx` to username clicks in `chat-window.tsx` (remove remaining `// TODO: Implement profile modal` at line 374)
+- [ ] Build DM frontend: sidebar inbox listing DM conversations, DM channel navigation, "New DM" user picker
+- [ ] Build emoji reaction picker UI and display reaction counts on message bubbles
+- [ ] Surface member list panel (`member-table.tsx`) as a toggleable right rail in the chat shell
+- [ ] Display online/offline presence dots using `listUserPresence` data in the member list and DM list
+
+---
+
+## Phase 15 — Alpha Polish: Missing Core UX
+
+**Goal:** Ship the small-but-expected features that make the product feel complete.
+**Status:** Planned
+
+- [ ] **Markdown rendering** — integrate `react-markdown` (or equivalent) for message content; support bold, italic, code, code blocks, and links at minimum
+- [ ] **Typing indicators** — backend: SSE event `typing.start`/`typing.stop` from composer keystrokes; frontend: "user is typing…" display below message list
+- [ ] **Browser desktop notifications** — use `Notification` API for @mentions and new DMs when tab is not focused; request permission on first login
+- [ ] **Pin messages** — backend endpoint + DB column; UI pin action in message context menu and pinned-messages header button
+- [ ] **Invite / join links** — generate shareable hub/space join URLs; backend redemption endpoint; invite landing page
+
+---
+
+## Phase 16 — Alpha Polish: Housekeeping
+
+**Goal:** Remove dead code and reduce technical debt before publishing.
+**Status:** Planned
+
+- [ ] Delete empty `apps/web/app/admin/` directory
+- [ ] Decompose `chat-client.tsx` (2,216 lines) — extract: voice panel state, notification state, DM state, and moderation panel into dedicated components or hooks
+- [ ] Add React error boundaries to the web app root and per major panel to prevent full-page crashes
+- [ ] Fix timeout moderation — implement true timed restriction (Synapse power-level schedule or scheduled job) instead of the current kick-as-timeout workaround
+- [ ] Lint/audit all remaining `any` type casts in `chat-service.ts` (bridgedMembers, etc.)
+
+---
+
+## Phase 17 — Public Beta: Message Discovery
+
+**Goal:** Let users find content they're looking for.
+**Status:** Planned
+
+- [ ] **Full-text message search** — `pg_trgm` or `tsvector` on message content; API endpoint `GET /v1/channels/:channelId/messages/search?q=`; search modal in UI with scoped results
+- [ ] **Message jump / deep link** — link directly to a specific message by ID and scroll to it on load
+- [ ] **Jump to unread** — "jump to first unread" button when entering a channel with unread messages
+
+---
+
+## Phase 18 — Public Beta: Notification System
+
+**Goal:** Keep users informed across sessions and devices.
+**Status:** Planned
+
+- [ ] Upgrade SSE transport from channel-scoped to hub-scoped global event bus — enables cross-channel presence, typing, and DM notifications without re-subscribing
+- [ ] Notification preferences per channel (all messages / mentions only / muted)
+- [ ] Notification badge in browser tab title update on new mentions
+- [ ] Email notifications for @mentions when user is offline (requires email service integration — see Phase 21)
+
+---
+
+## Phase 19 — Public Beta: Rich Media & Embeds
+
+**Goal:** Make shared content interactive and visually rich.
+**Status:** Planned
+
+- [ ] **URL preview / link embeds** — backend scraper (title, description, thumbnail via Open Graph); display card below message containing links
+- [ ] **Image lightbox** — click to expand inline images full-screen
+- [ ] **Video previews** — inline playback for video attachments
+- [ ] **GIF support** — animated GIF rendering (already stored, just needs `<img>` pointer vs `<video>`)
+
+---
+
+## Phase 20 — Moderation Hardening
+
+**Goal:** Make moderation actions safe, reversible, and complete.
+**Status:** Planned
+
+- [ ] Implement timed timeout via Synapse power-level scheduling or a `moderation_time_restrictions` DB table + scheduled runner
+- [ ] Warn action (DM warning message to user before punitive action)
+- [ ] Strike system — configurable warn → mute → kick → ban escalation
+- [ ] Moderation action UI improvements — confirmation dialogs, undo window for redact
+- [ ] Rate-limit reporting endpoint to prevent report spam
+
+---
+
+## Phase 21 — Infrastructure & Operations
+
+**Goal:** Harden the platform for production traffic and operations.
+**Status:** Planned
+
+- [ ] **Email service** — integrate SMTP (e.g., Resend, Postmark, or SES) for: account recovery, invite emails, offline mention notifications
+- [ ] **Observability** — expand `observability-service.ts`; add structured request logging (JSON), Prometheus metrics endpoint, Sentry (or equivalent) error tracking
+- [ ] **Rate limit audit** — verify `rateLimitPerMinute: 240` is enforced on all routes; add per-user rate limits on message send
+- [ ] **PostgreSQL backups** — automate point-in-time recovery (daily pg_dump to S3 or equivalent)
+- [ ] **Health checks** — deepen `/health` to include DB ping, Synapse reachability, and Redis/SSE broker alive
+- [ ] **Reverse proxy config** — finalize Nginx/Caddy production config with SSL, HSTS, WebSocket upgrade
+- [ ] **CI/CD pipeline** — verify `.github/workflows/ci.yml` runs: lint, typecheck, build, and all tests on every PR; add deployment step
+
+---
+
+## Phase 22 — Test Coverage Expansion
+
+**Goal:** Raise confidence before production traffic hits the system.
+**Status:** Planned
+
+- [ ] Integration tests for authenticated message send, edit, delete, and reaction flows
+- [ ] Integration tests for DM creation and messaging
+- [ ] Integration tests for voice token issuance
+- [ ] Moderation action tests (kick, ban, timeout — with Discord bridge mocked)
+- [ ] E2E tests: message send → receive via SSE, file upload, profile modal open
+- [ ] Presence service tests: online threshold logic, stale user handling
+- [ ] Load test: SSE connection scalability under concurrent channel subscribers
+
+---
+
+## Phase 23 — Extensions & Ecosystem (Post-Launch)
+
+**Goal:** Grow the platform beyond core chat.
+**Status:** Backlog
+
+- [ ] **Custom emoji / stickers** — per-server emoji upload and picker
+- [ ] **Webhooks** — inbound webhooks to post to channels (for CI/CD alerts, etc.)
+- [ ] **Bot framework** — first-party bot scaffolding using the existing chat API
+- [ ] **Federation enhancements** — cross-hub channel bridging, shared member identity
+- [ ] **Mobile app** — PWA or native shell wrapping the web client
+- [ ] **Multi-hub orchestration** — K8s manifests, helm chart, per-hub resource isolation
+
+---
+
+## Current Sprint Focus
+
+Start with **Phase 14** (backend-wiring, highest user impact, no new backend work needed) and **Phase 16** (housekeeping, reduces debt before adding more features), running in parallel.
