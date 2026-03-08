@@ -42,11 +42,8 @@ export function Sidebar({
         viewer
     } = state;
 
-    const sortedServers = useMemo(() => {
-        const dmServers = servers.filter(s => s.type === 'dm');
-        const defaultServers = servers.filter(s => s.type !== 'dm');
-        return [...defaultServers, ...dmServers];
-    }, [servers]);
+    const defaultServers = useMemo(() => servers.filter(s => s.type !== 'dm'), [servers]);
+    const dmServer = useMemo(() => servers.find(s => s.type === 'dm'), [servers]);
 
     const canManageHub = useMemo(
         () => viewerRoles.some((binding) => binding.role === "hub_admin" && (binding.serverId === null || binding.serverId === "" || !binding.serverId)),
@@ -129,7 +126,7 @@ export function Sidebar({
                     </div>
 
                     <ul>
-                        {sortedServers.map((server) => (
+                        {defaultServers.map((server) => (
                             <li key={server.id}>
                                 <div className="list-item-container">
                                     <button
@@ -153,7 +150,7 @@ export function Sidebar({
                                                 {(server as any).iconUrl ? (
                                                     <img src={(server as any).iconUrl} alt="" className="server-icon-image" />
                                                 ) : (
-                                                    server.type === 'dm' ? '👤' : server.name.charAt(0).toUpperCase()
+                                                    server.name.charAt(0).toUpperCase()
                                                 )}
                                             </span>
                                             {server.name}
@@ -198,41 +195,63 @@ export function Sidebar({
                                         )}
                                     </button>
                                 </div>
-                                {server.type === 'dm' && state.allDmChannels
-                                    ?.filter(c => c.serverId === server.id && (unreadCountByChannel[c.id] ?? 0) > 0)
-                                    .map(dm => (
-                                        <div key={dm.id} className="list-item-container" style={{ paddingLeft: '1rem', marginTop: '4px' }}>
-                                            <button
-                                                type="button"
-                                                className={cn(
-                                                    "list-item server-entry",
-                                                    selectedChannelId === dm.id && selectedServerId === server.id && "active",
-                                                    "unread"
-                                                )}
-                                                onClick={() => {
-                                                    void handleServerChange(server.id, dm.id);
-                                                    setView("channels");
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, fontSize: '0.9em', overflow: 'hidden' }}>
-                                                    <span className="server-icon-placeholder" style={{ width: '24px', height: '24px', fontSize: '12px', minWidth: '24px' }}>
-                                                        💬
-                                                    </span>
-                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        {getChannelName(dm, viewer?.productUserId)}
-                                                    </span>
-                                                </div>
-                                                {(() => {
-                                                    const dmntionCount = mentionCountByChannel[dm.id] ?? 0;
-                                                    return dmntionCount > 0 && !state.muteStatusByChannel[dm.id] ? (
-                                                        <span className="mention-pill">@{dmntionCount}</span>
-                                                    ) : <span className="unread-pill"></span>;
-                                                })()}
-                                            </button>
-                                        </div>
-                                    ))}
                             </li>
                         ))}
+                    </ul>
+
+                    <div className="category-header" style={{ marginTop: '1.5rem' }}>
+                        <h2>Direct Messages</h2>
+                        <button
+                            type="button"
+                            className="icon-button"
+                            aria-label="New Message"
+                            onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: "dm-picker" })}
+                        >
+                            +
+                        </button>
+                    </div>
+
+                    <ul>
+                        {state.allDmChannels?.map((dm) => (
+                            <li key={dm.id}>
+                                <div className="list-item-container">
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            "list-item server-entry",
+                                            selectedChannelId === dm.id && "active",
+                                            (unreadCountByChannel[dm.id] ?? 0) > 0 && "unread"
+                                        )}
+                                        onClick={() => {
+                                            if (dmServer) {
+                                                void handleServerChange(dmServer.id, dm.id);
+                                                setView("channels");
+                                            }
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, fontSize: '0.9em', overflow: 'hidden' }}>
+                                            <span className="server-icon-placeholder" style={{ width: '24px', height: '24px', fontSize: '12px', minWidth: '24px' }}>
+                                                {(dm.participants?.[0] as any)?.avatarUrl ? (
+                                                    <img src={(dm.participants![0] as any).avatarUrl} alt="" className="server-icon-image" />
+                                                ) : "💬"}
+                                            </span>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {getChannelName(dm, viewer?.productUserId)}
+                                            </span>
+                                        </div>
+                                        {(() => {
+                                            const dmntionCount = mentionCountByChannel[dm.id] ?? 0;
+                                            return dmntionCount > 0 && !state.muteStatusByChannel[dm.id] ? (
+                                                <span className="mention-pill">@{dmntionCount}</span>
+                                            ) : (unreadCountByChannel[dm.id] ?? 0) > 0 ? <span className="unread-pill"></span> : null;
+                                        })()}
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                        {(!state.allDmChannels || state.allDmChannels.length === 0) && (
+                            <p className="no-items-placeholder">No direct messages yet.</p>
+                        )}
                     </ul>
 
 

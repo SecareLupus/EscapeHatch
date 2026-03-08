@@ -21,6 +21,7 @@ import type {
   VoicePresenceMember,
   VoiceTokenGrant
 } from "@skerry/shared";
+export type { IdentityMapping, VoicePresenceMember };
 
 
 const publicBaseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "localhost";
@@ -287,6 +288,13 @@ export async function searchUsers(query: string): Promise<IdentityMapping[]> {
   const q = new URLSearchParams({ q: query });
   const json = await apiFetch<{ items: IdentityMapping[] }>(`/v1/users/search?${q.toString()}`);
   return json.items;
+}
+
+export async function createDirectMessage(hubId: string, userIds: string[]): Promise<Channel> {
+  return apiFetch<Channel>(`/v1/hubs/${encodeURIComponent(hubId)}/dms`, {
+    method: "POST",
+    body: JSON.stringify({ userIds })
+  });
 }
 
 export async function fetchUser(userId: string): Promise<IdentityMapping> {

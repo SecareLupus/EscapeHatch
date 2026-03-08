@@ -39,7 +39,7 @@ export function ThreadPanel() {
                 showToast("Failed to load replies", "error");
             })
             .finally(() => setLoading(false));
-    }, [threadParentId, selectedChannelId, state.messages]);
+    }, [threadParentId, selectedChannelId, state.messages, showToast]);
 
     useEffect(() => {
         if (!threadParentId || !selectedChannelId) return;

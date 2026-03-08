@@ -1,0 +1,196 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useChat } from "../context/chat-context";
+import { searchUsers, createDirectMessage } from "../lib/control-plane";
+import { IdentityMapping } from "../lib/control-plane";
+
+export function DMPickerModal() {
+    const { state, dispatch } = useChat();
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<IdentityMapping[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!query.trim()) {
+            setResults([]);
+            return;
+        }
+
+        const timeout = setTimeout(async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const users = await searchUsers(query);
+                setResults(users);
+            } catch (err) {
+                console.error("Search failed:", err);
+                setError("Failed to search users.");
+            } finally {
+                setLoading(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(timeout);
+    }, [query]);
+
+    const handleSelectUser = async (user: IdentityMapping) => {
+        if (!state.bootstrapStatus?.bootstrapHubId) return;
+
+        setLoading(true);
+        try {
+            const channel = await createDirectMessage(state.bootstrapStatus.bootstrapHubId, [user.productUserId]);
+
+            // Refresh DM list and switch to the new channel
+            dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
+
+            // Note: ChatClient has an effect that polls for DM channels, 
+            // but we might want to trigger a refresh or just navigate if we have the ID.
+            // For now, we'll let the next sync handle the list, and try to switch immediately.
+
+            const dmServer = state.servers.find(s => s.type === 'dm');
+            if (dmServer) {
+                // We don't have a direct 'handleServerChange' here, but we can set IDs
+                dispatch({ type: "SET_SELECTED_SERVER_ID", payload: dmServer.id });
+                dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: channel.id });
+            }
+        } catch (err) {
+            console.error("Failed to create DM:", err);
+            setError("Failed to start conversation.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (state.activeModal !== "dm-picker") return null;
+
+    return (
+        <div className="modal-overlay" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
+            <div className="modal-content dm-picker-modal" onClick={(e) => e.stopPropagation()}>
+                <header className="modal-header">
+                    <h2>New Direct Message</h2>
+                    <button className="close-button" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>×</button>
+                </header>
+
+                <div className="modal-body">
+                    <div className="search-input-wrapper">
+                        <input
+                            type="text"
+                            placeholder="Type a username..."
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            autoFocus
+                            className="search-input"
+                        />
+                    </div>
+
+                    {loading && <div className="loading-state">Searching...</div>}
+                    {error && <div className="error-message">{error}</div>}
+
+                    <ul className="user-results-list">
+                        {results.map((user) => (
+                            <li key={user.productUserId} className="user-result-item" onClick={() => handleSelectUser(user)}>
+                                <div className="user-avatar-placeholder">
+                                    {user.avatarUrl ? (
+                                        <img src={user.avatarUrl} alt="" />
+                                    ) : (
+                                        (user.displayName ?? "U").charAt(0).toUpperCase()
+                                    )}
+                                </div>
+                                <div className="user-info">
+                                    <span className="display-name">{user.displayName ?? "Unknown User"}</span>
+                                    {user.matrixUserId && <span className="matrix-id">{user.matrixUserId}</span>}
+                                </div>
+                            </li>
+                        ))}
+                        {!loading && query && results.length === 0 && (
+                            <li className="no-results">No users found for &quot;{query}&quot;</li>
+                        )}
+                    </ul>
+                </div>
+            </div>
+
+            <style jsx>{`
+                .dm-picker-modal {
+                    width: 100%;
+                    max-width: 440px;
+                    background: var(--panel-bg, #ffffff);
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                .search-input-wrapper {
+                    padding: 1rem;
+                    border-bottom: 1px solid var(--border-color, #eee);
+                }
+                .search-input {
+                    width: 100%;
+                    padding: 0.75rem;
+                    border: 1px solid var(--border-color, #ccc);
+                    border-radius: 4px;
+                    font-size: 1rem;
+                    background: var(--input-bg, #fff);
+                    color: var(--text-color, #333);
+                }
+                .user-results-list {
+                    list-style: none;
+                    padding: 0;
+                    margin: 0;
+                    max-height: 300px;
+                    overflow-y: auto;
+                }
+                .user-result-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 0.75rem 1rem;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+                .user-result-item:hover {
+                    background: var(--hover-bg, #f5f5f5);
+                }
+                .user-avatar-placeholder {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    background: #5865f2;
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    overflow: hidden;
+                    font-size: 14px;
+                }
+                .user-avatar-placeholder img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+                .user-info {
+                    display: flex;
+                    flex-direction: column;
+                }
+                .display-name {
+                    font-weight: 500;
+                    color: var(--text-color, #333);
+                }
+                .matrix-id {
+                    font-size: 0.75rem;
+                    color: var(--text-muted, #666);
+                }
+                .no-results, .loading-state {
+                    padding: 2rem;
+                    text-align: center;
+                    color: var(--text-muted, #666);
+                }
+                .error-message {
+                    padding: 0.5rem 1rem;
+                    color: #d32f2f;
+                    font-size: 0.875rem;
+                }
+            `}</style>
+        </div>
+    );
+}

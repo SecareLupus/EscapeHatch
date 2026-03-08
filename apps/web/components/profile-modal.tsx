@@ -54,7 +54,7 @@ export function ProfileModal() {
                 })
                 .finally(() => setLoading(false));
         }
-    }, [profileUserId, isOwnProfile, viewer]);
+    }, [profileUserId, isOwnProfile, viewer, showToast]);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();

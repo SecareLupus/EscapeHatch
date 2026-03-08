@@ -359,7 +359,7 @@ export function ChatWindow({
         }
 
         return items;
-    }, [contextMenu, viewer, allowedActions, selectedServerId, selectedChannelId]);
+    }, [contextMenu, viewer, allowedActions, selectedServerId]);
 
     const userContextMenuItems: ContextMenuItem[] = useMemo(() => {
         if (!userContextMenu) return [];
@@ -371,8 +371,8 @@ export function ChatWindow({
                 label: "View Profile",
                 icon: "👤",
                 onClick: () => {
-                    // TODO: Implement profile modal
-                    console.log("View profile", userContextMenu.userId);
+                    dispatch({ type: "SET_PROFILE_USER_ID", payload: userContextMenu.userId });
+                    dispatch({ type: "SET_ACTIVE_MODAL", payload: "profile" });
                 }
             },
             {
@@ -425,7 +425,8 @@ export function ChatWindow({
         }
 
         return items;
-    }, [userContextMenu, viewer, allowedActions, selectedServerId]);
+        return items;
+    }, [userContextMenu, viewer, allowedActions, selectedServerId, dispatch]);
 
     const handleUserContextMenu = (event: React.MouseEvent, userId: string, displayName: string) => {
         event.preventDefault();
@@ -597,11 +598,11 @@ export function ChatWindow({
 
                     <button
                         type="button"
-                        className="ghost"
-                        title={isDetailsOpen ? "Hide Details" : "Show Details"}
+                        className={`icon-button ${isDetailsOpen ? "active-toggle" : ""}`}
+                        title={isDetailsOpen ? "Hide Member List" : "Show Member List"}
                         onClick={() => dispatch({ type: "SET_DETAILS_OPEN", payload: !isDetailsOpen })}
                     >
-                        {isDetailsOpen ? "→" : "←"}
+                        👥
                     </button>
                 </div>
             </header>
@@ -638,7 +639,12 @@ export function ChatWindow({
                                         <strong
                                             className="author-name"
                                             style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "0.4rem" }}
-                                            onClick={(e) => handleUserContextMenu(e, message.authorUserId, message.externalAuthorName || message.authorDisplayName)}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                dispatch({ type: "SET_PROFILE_USER_ID", payload: message.authorUserId });
+                                                dispatch({ type: "SET_ACTIVE_MODAL", payload: "profile" });
+                                            }}
                                             onContextMenu={(e) => handleUserContextMenu(e, message.authorUserId, message.externalAuthorName || message.authorDisplayName)}
                                         >
                                             {message.isRelay && (
@@ -654,6 +660,39 @@ export function ChatWindow({
                                     </header>
                                 ) : null}
                                 <div className="message-content-wrapper" style={{ position: "relative" }}>
+                                    {/* Hover action bar */}
+                                    <div className="message-hover-actions">
+                                        <button
+                                            type="button"
+                                            className="hover-action-item"
+                                            onClick={() => setReactionTargetMessageId(message.id)}
+                                            title="Add Reaction"
+                                        >
+                                            😀
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="hover-action-item"
+                                            onClick={() => handleQuoteReply(message)}
+                                            title="Quote Reply"
+                                        >
+                                            💬
+                                        </button>
+                                        {message.authorUserId === viewer?.productUserId && (
+                                            <button
+                                                type="button"
+                                                className="hover-action-item"
+                                                onClick={() => {
+                                                    setEditingMessageId(message.id);
+                                                    setEditContent(message.content);
+                                                }}
+                                                title="Edit"
+                                            >
+                                                ✏️
+                                            </button>
+                                        )}
+                                    </div>
+
                                     {editingMessageId === message.id ? (
                                         <div className="message-edit-inline" style={{ marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                                             <textarea

@@ -13,6 +13,7 @@ import { ProfileModal } from "./profile-modal";
 import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
 import { getChannelName } from "../lib/channel-utils";
 import { ThreadPanel } from "./thread-panel";
+import { DMPickerModal } from "./dm-picker-modal";
 import {
   bootstrapAdmin,
   createReport,
@@ -243,6 +244,17 @@ export function ChatClient() {
     dispatch({ type: "SET_THEME", payload: next });
     void updateUserTheme(next);
   }, [theme, dispatch]);
+
+  const markChannelAsRead = useCallback(async (channelId: string) => {
+    if (!channelId) return;
+    // Immediate UI update
+    dispatch({ type: "CLEAR_NOTIFICATIONS", payload: { channelId } });
+    try {
+      await upsertChannelReadState(channelId);
+    } catch (e) {
+      // Ignore transient errors
+    }
+  }, [dispatch]);
 
   const canAccessWorkspace = Boolean(viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized);
   const activeChannel = channels.find((channel) => channel.id === selectedChannelId) ?? null;
@@ -659,7 +671,7 @@ export function ChatClient() {
         showToast(msg, "error");
       }
     );
-  }, [viewer, bootstrapStatus?.initialized, bootstrapStatus?.defaultServerId, bootstrapStatus?.defaultChannelId, refreshChatState]);
+  }, [viewer, bootstrapStatus?.initialized, bootstrapStatus?.defaultServerId, bootstrapStatus?.defaultChannelId, refreshChatState, dispatch, showToast]);
 
   useEffect(() => {
     if (!canAccessWorkspace || !selectedServerId) {
@@ -734,7 +746,7 @@ export function ChatClient() {
     const selectedServer = servers.find((server) => server.id === selectedServerId);
     dispatch({ type: "SET_RENAME_SPACE", payload: { id: selectedServer?.id ?? "", name: selectedServer?.name ?? "" } });
     dispatch({ type: "SET_DELETE_TARGET_SPACE_ID", payload: state.deleteTargetSpaceId || selectedServer?.id || servers[0]?.id || "" });
-  }, [selectedServerId, servers, dispatch]);
+  }, [selectedServerId, servers, dispatch, state.deleteTargetSpaceId]);
 
   useEffect(() => {
     // Reset voice state ONLY if the server actually changed
@@ -800,7 +812,7 @@ export function ChatClient() {
       stopped = true;
       clearInterval(timer);
     };
-  }, [voiceConnected, selectedServerId, selectedChannelId, activeChannel?.type]);
+  }, [voiceConnected, selectedServerId, selectedChannelId, activeChannel?.type, dispatch]);
 
   useEffect(() => {
     const newest = messages[messages.length - 1];
@@ -822,7 +834,7 @@ export function ChatClient() {
 
     dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: pendingNewMessageCount + 1 });
     dispatch({ type: "SET_LAST_SEEN_MESSAGE_ID", payload: newest.id });
-  }, [isNearBottom, lastSeenMessageId, messages]);
+  }, [isNearBottom, lastSeenMessageId, messages, dispatch, pendingNewMessageCount]);
 
   useEffect(() => {
     if (!canAccessWorkspace || !selectedChannelId) {
@@ -941,7 +953,7 @@ export function ChatClient() {
       disconnectStream();
       stopPolling();
     };
-  }, [canAccessWorkspace, selectedChannelId]);
+  }, [canAccessWorkspace, selectedChannelId, dispatch, markChannelAsRead, state.isNearBottom, state.selectedChannelId]);
 
 
   function getAdjacentId(currentId: string, ids: string[], direction: "next" | "previous"): string | null {
@@ -1128,16 +1140,7 @@ export function ChatClient() {
     }
   }
 
-  const markChannelAsRead = useCallback(async (channelId: string) => {
-    if (!channelId) return;
-    // Immediate UI update
-    dispatch({ type: "CLEAR_NOTIFICATIONS", payload: { channelId } });
-    try {
-      await upsertChannelReadState(channelId);
-    } catch (e) {
-      // Ignore transient errors
-    }
-  }, [dispatch]);
+
 
   function handleMessageListScroll(event?: React.UIEvent<HTMLOListElement>): void {
     const list = messagesRef.current;
@@ -1832,7 +1835,7 @@ export function ChatClient() {
                         >
                           <span
                             className="member-dot"
-                            data-online={member.isOnline}
+                            data-online={member.isOnline.toString()}
                             data-status={member.bridgedUserStatus}
                           />
                           <span className="member-name">{member.displayName}</span>
@@ -2211,6 +2214,7 @@ export function ChatClient() {
       }
 
       {activeModal === "profile" && <ProfileModal />}
+      {activeModal === "dm-picker" && <DMPickerModal />}
     </main >
   );
 }

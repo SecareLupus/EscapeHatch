@@ -45,6 +45,7 @@ export type ModalType =
     | "rename-category"
     | "rename-room"
     | "profile"
+    | "dm-picker"
     | null;
 
 export interface ChatState {

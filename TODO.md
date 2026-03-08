@@ -11,13 +11,13 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 ## Phase 14 — Alpha Polish: UI Wiring (Backend-Complete Features)
 
 **Goal:** Connect fully-implemented backends to missing frontend surfaces.
-**Status:** Planned
+**Status:** Complete
 
-- [ ] Wire `profile-modal.tsx` to username clicks in `chat-window.tsx` (remove remaining `// TODO: Implement profile modal` at line 374)
-- [ ] Build DM frontend: sidebar inbox listing DM conversations, DM channel navigation, "New DM" user picker
-- [ ] Build emoji reaction picker UI and display reaction counts on message bubbles
-- [ ] Surface member list panel (`member-table.tsx`) as a toggleable right rail in the chat shell
-- [ ] Display online/offline presence dots using `listUserPresence` data in the member list and DM list
+- [x] Wire `profile-modal.tsx` to username clicks in `chat-window.tsx` (remove remaining `// TODO: Implement profile modal` at line 374)
+- [x] Build DM frontend: sidebar inbox listing DM conversations, DM channel navigation, "New DM" user picker
+- [x] Build emoji reaction picker UI and display reaction counts on message bubbles
+- [x] Surface member list panel (`member-table.tsx`) as a toggleable right rail in the chat shell
+- [x] Display online/offline presence dots using `listUserPresence` data in the member list and DM list
 
 ---
 
