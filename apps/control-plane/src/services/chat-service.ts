@@ -340,12 +340,12 @@ export async function createMessage(input: {
 
       // Automatically resolve parentId from externalThreadId if not provided
       if (!input.parentId && input.externalThreadId) {
-        console.log(`[Bridge] Attempting to resolve parent for external ID ${input.externalThreadId} in channel ${input.channelId}`);
+        console.log(`[Bridge] Parent Linkage Diagnostic - Start`);
+        console.log(`[Bridge] Input: externalThreadId=${input.externalThreadId}, channelId=${input.channelId}, provider=${input.externalProvider || 'discord'}`);
+
         // Find a candidate parent (either the root starter or a reply in the same thread)
-        // We lift the channel_id constraint because external IDs are unique per provider, 
-        // and sometimes the internal channel mapping might be slightly off for threads.
-        const parentCandidate = await db.query<{ id: string, parent_id: string | null }>(
-          `select id, parent_id from chat_messages 
+        const parentCandidate = await db.query<{ id: string, parent_id: string | null, external_thread_id: string | null, external_message_id: string | null, external_provider: string | null }>(
+          `select id, parent_id, external_thread_id, external_message_id, external_provider from chat_messages 
            where (external_thread_id = $1 or external_message_id = $1) 
            and (external_provider = $2 or external_provider is null)
            order by created_at asc limit 1`,
@@ -354,10 +354,10 @@ export async function createMessage(input: {
 
         const firstMatch = parentCandidate.rows[0];
         if (firstMatch) {
-          console.log(`[Bridge] Found candidate match ${firstMatch.id} for external ID ${input.externalThreadId}`);
+          console.log(`[Bridge] Linkage SUCCESS: Found candidate match ${firstMatch.id}`);
+          console.log(`[Bridge] Match Details: msg_id=${firstMatch.external_message_id}, thread_id=${firstMatch.external_thread_id}, provider=${firstMatch.external_provider}`);
+
           let root: { id: string; parent_id: string | null } = { id: firstMatch.id, parent_id: firstMatch.parent_id };
-          // If we found a message but it has a parent, traverse up to the absolute root of this Skerry thread
-          // This ensures a flat thread structure in Skerry even for nested Discord replies.
           let depth = 0;
           while (root.parent_id && depth < 10) {
             const upRow = await db.query<{ id: string, parent_id: string | null }>(
@@ -373,10 +373,18 @@ export async function createMessage(input: {
             }
           }
           input.parentId = root.id;
-          console.log(`[Bridge] Resolved root parent ${input.parentId} (depth ${depth})`);
+          console.log(`[Bridge] Final Parent ID: ${input.parentId} (traversal depth: ${depth})`);
         } else {
-          console.warn(`[Bridge] Failed to find parent matching external ID ${input.externalThreadId}`);
+          console.warn(`[Bridge] Linkage FAILURE: Failed to find parent for external ID ${input.externalThreadId}`);
+
+          // Debug: Dump recent messages in this channel to see what we DO have
+          const recent = await db.query<{ id: string, external_message_id: string | null, external_thread_id: string | null, external_provider: string | null }>(
+            "select id, external_message_id, external_thread_id, external_provider from chat_messages where channel_id = $1 order by created_at desc limit 5",
+            [input.channelId]
+          );
+          console.log(`[Bridge] Diagnostic - Recent messages in ${input.channelId}:`, JSON.stringify(recent.rows, null, 2));
         }
+        console.log(`[Bridge] Parent Linkage Diagnostic - End`);
       }
 
 

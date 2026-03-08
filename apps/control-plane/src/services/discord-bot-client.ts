@@ -306,8 +306,9 @@ export async function relayMatrixMessageToDiscord(input: {
                 wait: true
             } as any);
 
+            console.log(`[Discord Bridge] Webhook Result (Forum) FULL:`, JSON.stringify(result, null, 2));
             const newThreadId = (result as any).thread?.id || (result as any).channelId;
-            console.log(`[Discord Bridge] Webhook Result (Forum):`, JSON.stringify({
+            console.log(`[Discord Bridge] Webhook Result (Forum) Summary:`, JSON.stringify({
                 id: (result as any).id,
                 channelId: (result as any).channelId,
                 threadId: (result as any).thread?.id,
@@ -316,6 +317,7 @@ export async function relayMatrixMessageToDiscord(input: {
 
             if (input.messageId && newThreadId) {
                 await withDb(async (db) => {
+                    console.log(`[Discord Bridge] Persisting Forum IDs to Skerry: messageId=${input.messageId}, external_thread_id=${newThreadId}, external_message_id=${(result as any).id}`);
                     await db.query(
                         "update chat_messages set external_thread_id = $1, external_message_id = $2, external_provider = 'discord' where id = $3",
                         [newThreadId, (result as any).id, input.messageId]
@@ -356,7 +358,8 @@ export async function relayMatrixMessageToDiscord(input: {
             wait: true
         } as any);
 
-        console.log(`[Discord Bridge] Webhook Result (Regular/Reply):`, JSON.stringify({
+        console.log(`[Discord Bridge] Webhook Result (Regular/Reply) FULL:`, JSON.stringify(result, null, 2));
+        console.log(`[Discord Bridge] Webhook Result (Regular/Reply) Summary:`, JSON.stringify({
             id: (result as any).id,
             channelId: (result as any).channelId,
             finalThreadId
@@ -364,6 +367,7 @@ export async function relayMatrixMessageToDiscord(input: {
 
         if (input.messageId && result) {
             await withDb(async (db) => {
+                console.log(`[Discord Bridge] Persisting Regular IDs to Skerry: messageId=${input.messageId}, external_thread_id=${finalThreadId}, external_message_id=${(result as any).id}`);
                 await db.query(
                     "update chat_messages set external_message_id = $1, external_thread_id = coalesce(external_thread_id, $2), external_provider = 'discord' where id = $3",
                     [(result as any).id, finalThreadId || null, input.messageId]
