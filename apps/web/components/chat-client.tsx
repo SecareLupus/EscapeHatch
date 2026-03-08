@@ -1667,9 +1667,16 @@ export function ChatClient() {
     }
 
     const content = draftMessage.trim();
+    let finalContent = content;
+    if (state.quotingMessage) {
+      const author = state.quotingMessage.externalAuthorName || state.quotingMessage.authorDisplayName;
+      finalContent = `> @${author}: ${state.quotingMessage.content}\n\n${content}`;
+      dispatch({ type: "SET_QUOTING_MESSAGE", payload: null });
+    }
+
     setDraftMessage("");
     messageInputRef.current?.focus();
-    await sendContentWithOptimistic(content, attachments);
+    await sendContentWithOptimistic(finalContent, attachments);
   }
 
   async function handleSendMessage(event: React.FormEvent): Promise<void> {

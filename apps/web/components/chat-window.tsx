@@ -39,6 +39,33 @@ interface ChatWindowProps {
     refreshChatState: (serverId?: string, channelId?: string) => Promise<void>;
 }
 
+function MessageContent({ content }: { content: string }) {
+    // Regex to match: > @Author: Content
+    // It captures Author in $1 and Content in $2
+    // We use [\s\S]*? to match across multiple lines until the end of the block (or end of string)
+    const quoteRegex = /^> @([^:]+):\s*([\s\S]*?)(?:\n\n|\n?$)/m;
+    const match = content.match(quoteRegex);
+
+    if (match) {
+        const author = match[1];
+        const quotedText = match[2];
+        const remainingText = content.replace(quoteRegex, "").trim();
+
+        return (
+            <div className="message-text">
+                <blockquote className="message-quote">
+                    <strong className="quote-author">@{author}</strong>
+                    <p>{quotedText}</p>
+                </blockquote>
+                {remainingText && <p>{remainingText.replace(/!\[image\]\(https?:\/\/[^\s)]+\)/g, "").trim()}</p>}
+            </div>
+        );
+    }
+
+    // Fallback to regular rendering (minus image markers if any)
+    return <p>{content.replace(/!\[image\]\(https?:\/\/[^\s)]+\)/g, "").trim()}</p>;
+}
+
 
 export function ChatWindow({
     handleSendMessage,
@@ -79,7 +106,8 @@ export function ChatWindow({
         theme,
         allowedActions,
         discordMappings,
-        discordConnection
+        discordConnection,
+        quotingMessage
     } = state;
 
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: MessageItem | null } | null>(null);
@@ -96,11 +124,9 @@ export function ChatWindow({
     const [isInviting, setIsInviting] = useState(false);
 
     const handleQuoteReply = useCallback((message: MessageItem) => {
-        const author = message.externalAuthorName || message.authorDisplayName;
-        const quote = `> @${author}: ${message.content}\n`;
-        setDraftMessage(prev => quote + prev);
+        dispatch({ type: "SET_QUOTING_MESSAGE", payload: message });
         messageInputRef.current?.focus();
-    }, [setDraftMessage, messageInputRef]);
+    }, [dispatch, messageInputRef]);
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -658,7 +684,7 @@ export function ChatWindow({
                                         </div>
                                     ) : (
                                         <>
-                                            <p>{message.content.replace(/!\[image\]\(https?:\/\/[^\s)]+\)/g, "").trim()}</p>
+                                            <MessageContent content={message.content} />
                                             {message.updatedAt && <small className="message-meta-edited" style={{ fontSize: "0.75rem", opacity: 0.6 }}>(edited)</small>}
                                         </>
                                     )}
@@ -817,6 +843,21 @@ export function ChatWindow({
                     Message
                 </label>
                 <div className="input-wrapper">
+                    {quotingMessage && (
+                        <div className="composer-quote-preview">
+                            <div className="quote-info">
+                                <strong>Replying to @{quotingMessage.externalAuthorName || quotingMessage.authorDisplayName}</strong>
+                                <p>{quotingMessage.content.slice(0, 100)}{quotingMessage.content.length > 100 ? "..." : ""}</p>
+                            </div>
+                            <button
+                                type="button"
+                                className="close-button"
+                                onClick={() => dispatch({ type: "SET_QUOTING_MESSAGE", payload: null })}
+                            >
+                                ×
+                            </button>
+                        </div>
+                    )}
                     {attachments.length > 0 && (
                         <div className="composer-attachments-preview" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", padding: "0.5rem", borderBottom: "1px solid var(--border-color)" }}>
                             {attachments.map((att) => (

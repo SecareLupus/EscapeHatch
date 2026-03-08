@@ -120,6 +120,7 @@ export interface ChatState {
     allDmChannels: Channel[];
     lastChannelByServer: Record<string, string>;
     threadParentId: string | null;
+    quotingMessage: MessageItem | null;
 }
 
 type ChatAction =
@@ -188,7 +189,8 @@ type ChatAction =
     | { type: "SET_MEMBERS"; payload: ChatMember[] }
     | { type: "SET_ALL_DM_CHANNELS", payload: Channel[] }
     | { type: "SET_LAST_CHANNEL_BY_SERVER", payload: { serverId: string; channelId: string } }
-    | { type: "SET_THREAD_PARENT_ID", payload: string | null };
+    | { type: "SET_THREAD_PARENT_ID", payload: string | null }
+    | { type: "SET_QUOTING_MESSAGE", payload: MessageItem | null };
 
 const initialState: ChatState = {
     viewer: null,
@@ -257,7 +259,8 @@ const initialState: ChatState = {
     members: [],
     allDmChannels: [],
     lastChannelByServer: {},
-    threadParentId: null
+    threadParentId: null,
+    quotingMessage: null
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -458,6 +461,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             };
         case "SET_THREAD_PARENT_ID":
             return { ...state, threadParentId: action.payload };
+        case "SET_QUOTING_MESSAGE":
+            return { ...state, quotingMessage: action.payload };
         default:
             return state;
     }

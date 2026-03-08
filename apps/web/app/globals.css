@@ -951,6 +951,73 @@ textarea:focus-visible,
   background: var(--surface);
 }
 
+.composer-quote-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  border-top-left-radius: 0.6rem;
+  border-top-right-radius: 0.6rem;
+  gap: 0.75rem;
+}
+
+.composer-quote-preview .quote-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.composer-quote-preview .quote-info strong {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--accent);
+  margin-bottom: 0.15rem;
+}
+
+.composer-quote-preview .quote-info p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-quote-preview .close-button {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.message-quote {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.85rem;
+  border-left: 4px solid var(--accent);
+  background: var(--surface-alt);
+  border-radius: 0 0.5rem 0.5rem 0;
+  position: relative;
+}
+
+.message-quote .quote-author {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+  font-weight: 700;
+}
+
+.message-quote p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .composer-actions {
   display: flex;
   flex-direction: column;
