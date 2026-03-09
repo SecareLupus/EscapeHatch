@@ -7,7 +7,7 @@ import type { ChatMessage, ModerationActionType } from "@skerry/shared";
 import { getChannelName } from "../lib/channel-utils";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { useToast } from "./toast-provider";
-import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage, listChannelMembers, inviteToChannel, updateChannel, searchUsers, formatMessageTime, pinMessage, unpinMessage, sendTypingStatus, createHubInvite } from "../lib/control-plane";
+import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage, listChannelMembers, inviteToChannel, updateChannel, searchUsers, formatMessageTime, pinMessage, unpinMessage, sendTypingStatus, createHubInvite, getFirstUnreadMessageId } from "../lib/control-plane";
 import dynamic from "next/dynamic";
 
 // @ts-ignore - emoji-picker-react types mismatch with Next.js dynamic
@@ -38,7 +38,7 @@ interface ChatWindowProps {
     handleToggleMuteDeafen: (muted: boolean, deafened: boolean) => Promise<void>;
     handleToggleVideo: (enabled: boolean) => Promise<void>;
     handlePerformModerationAction?: (action: ModerationActionType, targetUserId?: string, targetMessageId?: string) => Promise<void>;
-    refreshChatState: (serverId?: string, channelId?: string) => Promise<void>;
+    refreshChatState: (serverId?: string, channelId?: string, messageId?: string) => Promise<void>;
 }
 
 function MessageContent({ message }: { message: MessageItem }) {
@@ -234,6 +234,22 @@ export function ChatWindow({
             }
         };
     }, [reactionTargetMessageId]);
+    useEffect(() => {
+        if (state.highlightedMessageId && messagesRef.current) {
+            const el = document.getElementById(`message-${state.highlightedMessageId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+        }
+    }, [state.highlightedMessageId, messages, messagesRef]);
+
+    const handleJumpToUnread = useCallback(async () => {
+        if (!selectedChannelId) return;
+        const messageId = await getFirstUnreadMessageId(selectedChannelId);
+        if (messageId) {
+            void refreshChatState(selectedServerId ?? undefined, selectedChannelId, messageId);
+        }
+    }, [selectedChannelId, selectedServerId, refreshChatState]);
 
     const canManageChannel = useMemo(
         () =>
@@ -706,6 +722,14 @@ export function ChatWindow({
 
                     <button
                         type="button"
+                        className="icon-button"
+                        onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: "search" })}
+                        title="Search Messages"
+                    >
+                        🔍
+                    </button>
+                    <button
+                        type="button"
                         className={`icon-button ${isDetailsOpen ? "active-toggle" : ""}`}
                         title={isDetailsOpen ? "Hide Member List" : "Show Member List"}
                         onClick={() => dispatch({ type: "SET_DETAILS_OPEN", payload: !isDetailsOpen })}
@@ -714,6 +738,12 @@ export function ChatWindow({
                     </button>
                 </div>
             </header>
+
+            {selectedChannelId && (state.unreadCountByChannel[selectedChannelId] || 0) > 0 && !isNearBottom && (
+                <div className="unread-banner" onClick={handleJumpToUnread}>
+                    You have unread messages. Click to jump to the first unread.
+                </div>
+            )}
 
             {activeChannel?.type === "voice" && voiceConnected && voiceGrant && (
                 <VoiceRoom
@@ -732,7 +762,7 @@ export function ChatWindow({
                     const isNearBottomIndex = index >= renderedMessages.length - 2;
 
                     return (
-                        <li key={message.id}>
+                        <li key={message.id} id={`message-${message.id}`} className={state.highlightedMessageId === message.id ? "highlighted-message" : ""}>
                             {showDateDivider ? (
                                 <div className="date-divider">
                                     <span>{new Date(message.createdAt).toLocaleDateString()}</span>
@@ -937,78 +967,86 @@ export function ChatWindow({
             <TypingIndicator channelId={selectedChannelId!} />
 
             {/* Single fixed-position reaction picker — decoupled from message DOM */}
-            {reactionTargetMessageId && reactionPickerPos && (() => {
-                const pickerH = 345;
-                const pickerW = 300;
-                const vw = window.innerWidth;
-                const vh = window.innerHeight;
-                // Prefer opening below the button; flip up if not enough room
-                const spaceBelow = vh - reactionPickerPos.y;
-                const top = spaceBelow >= pickerH + 8
-                    ? reactionPickerPos.y + 4
-                    : Math.max(8, reactionPickerPos.y - pickerH - 4);
-                // Snap left so picker doesn't overflow right edge
-                const left = Math.min(reactionPickerPos.x, vw - pickerW - 8);
-                return (
-                    <div
-                        className="reaction-picker-overlay"
-                        style={{ position: "fixed", top, left, zIndex: 3000 }}
-                    >
-                        <div className="picker-backdrop" style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setReactionTargetMessageId(null)} />
-                        <div className="emoji-picker-container reaction-picker-compact" style={{ position: "relative", zIndex: 100 }}>
-                            <EmojiPicker
-                                onEmojiClick={async (emojiData: EmojiClickData) => {
-                                    const targetMsg = messages.find(m => m.id === reactionTargetMessageId);
-                                    if (targetMsg) {
-                                        await addReaction(targetMsg.channelId, targetMsg.id, emojiData.emoji);
-                                    }
-                                    setReactionTargetMessageId(null);
-                                }}
-                                theme={theme as any}
-                                width={pickerW}
-                                height={340}
-                                emojiSize={22}
-                                previewConfig={{ showPreview: false }}
-                                skinTonesDisabled={true}
-                                style={{
-                                    "--epr-emoji-padding": "2px",
-                                    "--epr-emoji-size": "22px",
-                                    "--epr-horizontal-padding": "6px",
-                                    "--epr-search-input-height": "32px"
-                                } as any}
-                            />
+            {
+                reactionTargetMessageId && reactionPickerPos && (() => {
+                    const pickerH = 345;
+                    const pickerW = 300;
+                    const vw = window.innerWidth;
+                    const vh = window.innerHeight;
+                    // Prefer opening below the button; flip up if not enough room
+                    const spaceBelow = vh - reactionPickerPos.y;
+                    const top = spaceBelow >= pickerH + 8
+                        ? reactionPickerPos.y + 4
+                        : Math.max(8, reactionPickerPos.y - pickerH - 4);
+                    // Snap left so picker doesn't overflow right edge
+                    const left = Math.min(reactionPickerPos.x, vw - pickerW - 8);
+                    return (
+                        <div
+                            className="reaction-picker-overlay"
+                            style={{ position: "fixed", top, left, zIndex: 3000 }}
+                        >
+                            <div className="picker-backdrop" style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setReactionTargetMessageId(null)} />
+                            <div className="emoji-picker-container reaction-picker-compact" style={{ position: "relative", zIndex: 100 }}>
+                                <EmojiPicker
+                                    onEmojiClick={async (emojiData: EmojiClickData) => {
+                                        const targetMsg = messages.find(m => m.id === reactionTargetMessageId);
+                                        if (targetMsg) {
+                                            await addReaction(targetMsg.channelId, targetMsg.id, emojiData.emoji);
+                                        }
+                                        setReactionTargetMessageId(null);
+                                    }}
+                                    theme={theme as any}
+                                    width={pickerW}
+                                    height={340}
+                                    emojiSize={22}
+                                    previewConfig={{ showPreview: false }}
+                                    skinTonesDisabled={true}
+                                    style={{
+                                        "--epr-emoji-padding": "2px",
+                                        "--epr-emoji-size": "22px",
+                                        "--epr-horizontal-padding": "6px",
+                                        "--epr-search-input-height": "32px"
+                                    } as any}
+                                />
+                            </div>
                         </div>
+                    );
+                })()
+            }
+
+
+
+            {
+                contextMenu && (
+                    <ContextMenu
+                        x={contextMenu.x}
+                        y={contextMenu.y}
+                        items={messageContextMenuItems}
+                        onClose={() => setContextMenu(null)}
+                    />
+                )
+            }
+
+            {
+                userContextMenu && (
+                    <ContextMenu
+                        x={userContextMenu.x}
+                        y={userContextMenu.y}
+                        items={userContextMenuItems}
+                        onClose={() => setUserContextMenu(null)}
+                    />
+                )
+            }
+
+            {
+                !isNearBottom && pendingNewMessageCount > 0 ? (
+                    <div className="jump-latest">
+                        <button type="button" onClick={jumpToLatest}>
+                            Jump to latest ({pendingNewMessageCount})
+                        </button>
                     </div>
-                );
-            })()}
-
-
-
-            {contextMenu && (
-                <ContextMenu
-                    x={contextMenu.x}
-                    y={contextMenu.y}
-                    items={messageContextMenuItems}
-                    onClose={() => setContextMenu(null)}
-                />
-            )}
-
-            {userContextMenu && (
-                <ContextMenu
-                    x={userContextMenu.x}
-                    y={userContextMenu.y}
-                    items={userContextMenuItems}
-                    onClose={() => setUserContextMenu(null)}
-                />
-            )}
-
-            {!isNearBottom && pendingNewMessageCount > 0 ? (
-                <div className="jump-latest">
-                    <button type="button" onClick={jumpToLatest}>
-                        Jump to latest ({pendingNewMessageCount})
-                    </button>
-                </div>
-            ) : null}
+                ) : null
+            }
 
             <form onSubmit={(e) => {
                 e.preventDefault();
@@ -1144,124 +1182,149 @@ export function ChatWindow({
                 </div>
             </form>
             {/* Topic Edit Modal */}
-            {isEditingTopic && (
-                <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-                    <div className="modal-content panel" style={{ width: "400px", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
-                        <h3>Edit DM Topic</h3>
-                        <p style={{ fontSize: "0.9rem", opacity: 0.8, marginBottom: "1rem" }}>Set a topic for this conversation. It will be shown as the title.</p>
-                        <input
-                            type="text"
-                            className="input"
-                            value={newTopic}
-                            onChange={(e) => setNewTopic(e.target.value)}
-                            placeholder="e.g. Project Planning"
-                            autoFocus
-                            onKeyDown={(e) => e.key === "Enter" && handleSaveTopic()}
-                            style={{ width: "100%", marginBottom: "1rem" }}
-                        />
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                            <button className="ghost" onClick={() => setIsEditingTopic(false)}>Cancel</button>
-                            <button className="primary" onClick={handleSaveTopic}>Save Topic</button>
+            {
+                isEditingTopic && (
+                    <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+                        <div className="modal-content panel" style={{ width: "400px", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
+                            <h3>Edit DM Topic</h3>
+                            <p style={{ fontSize: "0.9rem", opacity: 0.8, marginBottom: "1rem" }}>Set a topic for this conversation. It will be shown as the title.</p>
+                            <input
+                                type="text"
+                                className="input"
+                                value={newTopic}
+                                onChange={(e) => setNewTopic(e.target.value)}
+                                placeholder="e.g. Project Planning"
+                                autoFocus
+                                onKeyDown={(e) => e.key === "Enter" && handleSaveTopic()}
+                                style={{ width: "100%", marginBottom: "1rem" }}
+                            />
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                                <button className="ghost" onClick={() => setIsEditingTopic(false)}>Cancel</button>
+                                <button className="primary" onClick={handleSaveTopic}>Save Topic</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Invite Modal */}
-            {isInviting && (
-                <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-                    <div className="modal-content panel" style={{ width: "400px", minHeight: "300px", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column" }}>
-                        <h3>Invite to DM</h3>
-                        <input
-                            type="text"
-                            className="input"
-                            value={userSearchQuery}
-                            onChange={(e) => setUserSearchQuery(e.target.value)}
-                            placeholder="Search by username..."
-                            autoFocus
-                            style={{ width: "100%", marginBottom: "1rem" }}
-                        />
-                        <div className="search-results" style={{ flex: 1, overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "4px" }}>
-                            {userSearchResults.length > 0 ? (
-                                userSearchResults.map((user) => (
-                                    <div key={user.productUserId} style={{ padding: "0.5rem", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                        <span>{user.preferredUsername}</span>
-                                        <button className="inline-action" onClick={() => handleInviteUser(user.productUserId)}>Invite</button>
-                                    </div>
-                                ))
-                            ) : (
-                                <p style={{ padding: "1rem", textAlign: "center", opacity: 0.6 }}>No users found</p>
-                            )}
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
-                            <button className="ghost" onClick={() => setIsInviting(false)}>Close</button>
+            {
+                isInviting && (
+                    <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+                        <div className="modal-content panel" style={{ width: "400px", minHeight: "300px", padding: "1.5rem", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column" }}>
+                            <h3>Invite to DM</h3>
+                            <input
+                                type="text"
+                                className="input"
+                                value={userSearchQuery}
+                                onChange={(e) => setUserSearchQuery(e.target.value)}
+                                placeholder="Search by username..."
+                                autoFocus
+                                style={{ width: "100%", marginBottom: "1rem" }}
+                            />
+                            <div className="search-results" style={{ flex: 1, overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "4px" }}>
+                                {userSearchResults.length > 0 ? (
+                                    userSearchResults.map((user) => (
+                                        <div key={user.productUserId} style={{ padding: "0.5rem", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                            <span>{user.preferredUsername}</span>
+                                            <button className="inline-action" onClick={() => handleInviteUser(user.productUserId)}>Invite</button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p style={{ padding: "1rem", textAlign: "center", opacity: 0.6 }}>No users found</p>
+                                )}
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
+                                <button className="ghost" onClick={() => setIsInviting(false)}>Close</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
             {/* Hub Invite Modal */}
-            {isCreatingHubInvite && (
-                <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setIsCreatingHubInvite(false)}>
-                    <div className="modal-content panel" style={{ width: "400px", padding: "1.5rem", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }} onClick={(e) => e.stopPropagation()}>
-                        <header style={{ marginBottom: "1.5rem", textAlign: "center" }}>
-                            <h3 style={{ margin: 0 }}>Invite to {activeServer?.name}</h3>
-                        </header>
+            {
+                isCreatingHubInvite && (
+                    <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setIsCreatingHubInvite(false)}>
+                        <div className="modal-content panel" style={{ width: "400px", padding: "1.5rem", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }} onClick={(e) => e.stopPropagation()}>
+                            <header style={{ marginBottom: "1.5rem", textAlign: "center" }}>
+                                <h3 style={{ margin: 0 }}>Invite to {activeServer?.name}</h3>
+                            </header>
 
-                        {!lastInviteUrl ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                                <p style={{ fontSize: "0.9rem", opacity: 0.8, textAlign: "center" }}>
-                                    This will create a link that anyone can use to join this hub.
-                                </p>
-                                <button
-                                    className="primary"
-                                    onClick={async () => {
-                                        try {
-                                            const hubId = activeServer?.id;
-                                            if (!hubId) return;
-                                            const invite = await createHubInvite(hubId);
-                                            const url = `${window.location.origin}/invite/${invite.id}`;
-                                            setLastInviteUrl(url);
-                                        } catch (e) {
-                                            showToast("Failed to create invite", "error");
-                                        }
-                                    }}
-                                    style={{ width: "100%", padding: "0.8rem", borderRadius: "8px", background: "var(--accent)", color: "white", border: "none", fontWeight: 600, cursor: "pointer" }}
-                                >
-                                    Generate Invite Link
-                                </button>
-                            </div>
-                        ) : (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                                <div style={{ background: "var(--surface-alt)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                    <input
-                                        type="text"
-                                        readOnly
-                                        value={lastInviteUrl}
-                                        style={{ flex: 1, background: "transparent", border: "none", color: "var(--text)", fontSize: "0.9rem" }}
-                                    />
+                            {!lastInviteUrl ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                                    <p style={{ fontSize: "0.9rem", opacity: 0.8, textAlign: "center" }}>
+                                        This will create a link that anyone can use to join this hub.
+                                    </p>
                                     <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(lastInviteUrl);
-                                            showToast("Copied to clipboard", "success");
+                                        className="primary"
+                                        onClick={async () => {
+                                            try {
+                                                const hubId = activeServer?.id;
+                                                if (!hubId) return;
+                                                const invite = await createHubInvite(hubId);
+                                                const url = `${window.location.origin}/invite/${invite.id}`;
+                                                setLastInviteUrl(url);
+                                            } catch (e) {
+                                                showToast("Failed to create invite", "error");
+                                            }
                                         }}
-                                        style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "4px", padding: "0.25rem 0.5rem", fontSize: "0.8rem", cursor: "pointer" }}
+                                        style={{ width: "100%", padding: "0.8rem", borderRadius: "8px", background: "var(--accent)", color: "white", border: "none", fontWeight: 600, cursor: "pointer" }}
                                     >
-                                        Copy
+                                        Generate Invite Link
                                     </button>
                                 </div>
-                                <p style={{ fontSize: "0.8rem", opacity: 0.6, textAlign: "center" }}>
-                                    Share this link with your friends!
-                                </p>
-                                <button className="ghost" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }} style={{ padding: "0.5rem", color: "var(--accent)", border: "none", background: "none", cursor: "pointer" }}>Done</button>
-                            </div>
-                        )}
+                            ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                                    <div style={{ background: "var(--surface-alt)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={lastInviteUrl}
+                                            style={{ flex: 1, background: "transparent", border: "none", color: "var(--text)", fontSize: "0.9rem" }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(lastInviteUrl);
+                                                showToast("Copied to clipboard", "success");
+                                            }}
+                                            style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "4px", padding: "0.25rem 0.5rem", fontSize: "0.8rem", cursor: "pointer" }}
+                                        >
+                                            Copy
+                                        </button>
+                                    </div>
+                                    <p style={{ fontSize: "0.8rem", opacity: 0.6, textAlign: "center" }}>
+                                        Share this link with your friends!
+                                    </p>
+                                    <button className="ghost" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }} style={{ padding: "0.5rem", color: "var(--accent)", border: "none", background: "none", cursor: "pointer" }}>Done</button>
+                                </div>
+                            )}
 
-                        <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center" }}>
-                            <button className="ghost" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }} style={{ opacity: 0.6, fontSize: "0.9rem", background: "none", border: "none", cursor: "pointer" }}>Close</button>
+                            <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center" }}>
+                                <button className="ghost" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }} style={{ opacity: 0.6, fontSize: "0.9rem", background: "none", border: "none", cursor: "pointer" }}>Close</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </section>
+                )
+            }
+            <style jsx>{`
+            .highlighted-message {
+                background: rgba(255, 255, 0, 0.15);
+                transition: background 1.5s ease-out;
+            }
+            .unread-banner {
+                background: #5865f2;
+                color: white;
+                padding: 0.5rem;
+                text-align: center;
+                cursor: pointer;
+                font-size: 0.85rem;
+                font-weight: 500;
+                z-index: 10;
+            }
+            .unread-banner:hover {
+                background: #4752c4;
+            }
+            `}</style>
+        </section >
     );
 }

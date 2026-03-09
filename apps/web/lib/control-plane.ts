@@ -324,6 +324,43 @@ export async function listMessages(channelId: string, parentId?: string | null):
   return json.items;
 }
 
+export async function searchMessages(input: {
+  channelId?: string;
+  serverId?: string;
+  query: string;
+  limit?: number;
+  before?: string;
+}): Promise<ChatMessage[]> {
+  const q = new URLSearchParams({ q: input.query });
+  if (input.limit) q.set("limit", String(input.limit));
+  if (input.before) q.set("before", input.before);
+
+  let path = "";
+  if (input.channelId) {
+    path = `/v1/channels/${encodeURIComponent(input.channelId)}/messages/search?${q.toString()}`;
+  } else if (input.serverId) {
+    path = `/v1/servers/${encodeURIComponent(input.serverId)}/messages/search?${q.toString()}`;
+  } else {
+    throw new Error("Either channelId or serverId must be provided for search");
+  }
+
+  const json = await apiFetch<{ items: ChatMessage[] }>(path);
+  return json.items;
+}
+
+export async function listMessagesAround(channelId: string, messageId: string, limit = 50): Promise<ChatMessage[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  const json = await apiFetch<{ items: ChatMessage[] }>(
+    `/v1/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/around?${query.toString()}`
+  );
+  return json.items;
+}
+
+export async function getFirstUnreadMessageId(channelId: string): Promise<string | null> {
+  const json = await apiFetch<{ messageId: string | null }>(`/v1/channels/${encodeURIComponent(channelId)}/unread-message`);
+  return json.messageId;
+}
+
 export async function sendMessage(channelId: string, content: string, attachments?: ChatMessage["attachments"], parentId?: string): Promise<ChatMessage> {
   return apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/messages`, {
     method: "POST",

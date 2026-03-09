@@ -46,6 +46,7 @@ export type ModalType =
     | "rename-room"
     | "profile"
     | "dm-picker"
+    | "search"
     | null;
 
 export interface ChatState {
@@ -123,6 +124,10 @@ export interface ChatState {
     threadParentId: string | null;
     quotingMessage: MessageItem | null;
     typingUsersByChannel: Record<string, Record<string, string>>;
+    searchQuery: string;
+    searchResults: ChatMessage[];
+    isSearching: boolean;
+    highlightedMessageId: string | null;
 }
 
 type ChatAction =
@@ -193,7 +198,11 @@ type ChatAction =
     | { type: "SET_LAST_CHANNEL_BY_SERVER", payload: { serverId: string; channelId: string } }
     | { type: "SET_THREAD_PARENT_ID", payload: string | null }
     | { type: "SET_QUOTING_MESSAGE", payload: MessageItem | null }
-    | { type: "SET_TYPING_USER", payload: { channelId: string; userId: string; displayName: string; isTyping: boolean } };
+    | { type: "SET_TYPING_USER", payload: { channelId: string; userId: string; displayName: string; isTyping: boolean } }
+    | { type: "SET_SEARCH_QUERY", payload: string }
+    | { type: "SET_SEARCH_RESULTS", payload: ChatMessage[] }
+    | { type: "SET_IS_SEARCHING", payload: boolean }
+    | { type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: string | null };
 
 const initialState: ChatState = {
     viewer: null,
@@ -264,7 +273,11 @@ const initialState: ChatState = {
     lastChannelByServer: {},
     threadParentId: null,
     quotingMessage: null,
-    typingUsersByChannel: {}
+    typingUsersByChannel: {},
+    searchQuery: "",
+    searchResults: [],
+    isSearching: false,
+    highlightedMessageId: null
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -483,6 +496,14 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 }
             };
         }
+        case "SET_SEARCH_QUERY":
+            return { ...state, searchQuery: action.payload };
+        case "SET_SEARCH_RESULTS":
+            return { ...state, searchResults: action.payload };
+        case "SET_IS_SEARCHING":
+            return { ...state, isSearching: action.payload };
+        case "SET_HIGHLIGHTED_MESSAGE_ID":
+            return { ...state, highlightedMessageId: action.payload };
         default:
             return state;
     }

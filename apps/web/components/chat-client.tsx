@@ -6,6 +6,7 @@ import { useChat, MessageItem, ModalType } from "../context/chat-context";
 import { AuthOverlay } from "./auth-overlay";
 import { Sidebar } from "./sidebar";
 import { ChatWindow } from "./chat-window";
+import { SearchModal } from "./search-modal";
 import { ErrorBoundary } from "./error-boundary";
 import Link from "next/link";
 import { useToast } from "./toast-provider";
@@ -40,6 +41,9 @@ import {
   listCategories,
   listChannels,
   listMessages,
+  listMessagesAround,
+  searchMessages,
+  getFirstUnreadMessageId,
   listServers,
   listViewerRoleBindings,
   joinVoicePresence,
@@ -99,6 +103,7 @@ export function ChatClient() {
   const searchParams = useSearchParams();
   const urlServerId = searchParams.get("server");
   const urlChannelId = searchParams.get("channel");
+  const urlMessageId = searchParams.get("message");
   const suggestedUsername = searchParams.get("suggestedUsername");
 
   const { state, dispatch: originalDispatch } = useChat();
@@ -311,7 +316,7 @@ export function ChatClient() {
   }, [messages]);
 
   const setUrlSelection = useCallback(
-    (serverId: string | null, channelId: string | null) => {
+    (serverId: string | null, channelId: string | null, messageId: string | null = null) => {
       const currentQuery = searchParams.toString();
       const next = new URLSearchParams(searchParams.toString());
       if (serverId) {
@@ -324,6 +329,12 @@ export function ChatClient() {
         next.set("channel", channelId);
       } else {
         next.delete("channel");
+      }
+
+      if (messageId) {
+        next.set("message", messageId);
+      } else {
+        next.delete("message");
       }
 
       const query = next.toString();
@@ -463,7 +474,7 @@ export function ChatClient() {
       }
     }
 
-    setUrlSelection(nextServerId, nextChannelId);
+    setUrlSelection(nextServerId, nextChannelId, urlMessageId);
 
     if (!nextChannelId) {
       dispatch({ type: "SET_MESSAGES", payload: [] });
@@ -471,7 +482,15 @@ export function ChatClient() {
     }
 
     if (shouldFetchMessages) {
-      const messageItems = await listMessages(nextChannelId, null); // Fetch root messages only
+      let messageItems: ChatMessage[];
+      if (urlMessageId) {
+        messageItems = await listMessagesAround(nextChannelId, urlMessageId);
+        dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: urlMessageId });
+      } else {
+        messageItems = await listMessages(nextChannelId, null); // Fetch root messages only
+        dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: null });
+      }
+
       if (requestId !== chatStateRequestIdRef.current) {
         return;
       }
@@ -501,7 +520,7 @@ export function ChatClient() {
     } else {
       dispatch({ type: "SET_MEMBERS", payload: [] });
     }
-  }, [selectedServerId, selectedChannelId, setUrlSelection, urlChannelId, urlServerId, dispatch, draftMessagesByChannel, channelScrollPositions]);
+  }, [selectedServerId, selectedChannelId, setUrlSelection, urlChannelId, urlServerId, urlMessageId, dispatch, draftMessagesByChannel, channelScrollPositions]);
 
   const {
     voiceConnected,
@@ -1575,31 +1594,31 @@ export function ChatClient() {
           </div>
           <ErrorBoundary>
             <ChatWindow
-            handleSendMessage={handleSendMessage}
-            handleMessageListScroll={handleMessageListScroll}
-            jumpToLatest={jumpToLatest}
-            submitDraftMessage={submitDraftMessage}
-            sendContentWithOptimistic={sendContentWithOptimistic}
-            handleJoinVoice={handleJoinVoice}
-            handleLeaveVoice={handleLeaveVoice}
-            handleToggleMuteDeafen={handleToggleMuteDeafen}
-            handleToggleVideo={handleToggleVideo}
-            draftMessage={draftMessage}
-            setDraftMessage={setDraftMessage}
+              handleSendMessage={handleSendMessage}
+              handleMessageListScroll={handleMessageListScroll}
+              jumpToLatest={jumpToLatest}
+              submitDraftMessage={submitDraftMessage}
+              sendContentWithOptimistic={sendContentWithOptimistic}
+              handleJoinVoice={handleJoinVoice}
+              handleLeaveVoice={handleLeaveVoice}
+              handleToggleMuteDeafen={handleToggleMuteDeafen}
+              handleToggleVideo={handleToggleVideo}
+              draftMessage={draftMessage}
+              setDraftMessage={setDraftMessage}
 
-            sending={sending}
-            voiceConnected={voiceConnected}
-            voiceMuted={voiceMuted}
-            voiceDeafened={voiceDeafened}
-            voiceVideoEnabled={voiceVideoEnabled}
-            voiceGrant={voiceGrant}
-            mentions={mentions}
-            messagesRef={messagesRef}
-            messageInputRef={messageInputRef}
-            refreshChatState={refreshChatState}
-          />
-        </ErrorBoundary>
-          
+              sending={sending}
+              voiceConnected={voiceConnected}
+              voiceMuted={voiceMuted}
+              voiceDeafened={voiceDeafened}
+              voiceVideoEnabled={voiceVideoEnabled}
+              voiceGrant={voiceGrant}
+              mentions={mentions}
+              messagesRef={messagesRef}
+              messageInputRef={messageInputRef}
+              refreshChatState={refreshChatState}
+            />
+          </ErrorBoundary>
+
           <ErrorBoundary>
             {state.threadParentId && <ThreadPanel />}
           </ErrorBoundary>
@@ -1609,106 +1628,106 @@ export function ChatClient() {
               <ErrorBoundary>
                 <aside className="context panel scrollable-pane" aria-label="Channel context">
                   <h2>Channel Details</h2>
-                {activeChannel ? (
-                  <>
-                    <p className="context-line">
-                      <strong>Name:</strong> #{getChannelName(activeChannel, viewer?.productUserId, members)}
-                    </p>
-                    <p className="context-line">
-                      <strong>Type:</strong> {activeChannel.type}
-                    </p>
-                    <p className="context-line">
-                      <strong>Locked:</strong> {activeChannel.isLocked ? "Yes" : "No"}
-                    </p>
-                    <p className="context-line">
-                      <strong>Slow mode:</strong> {activeChannel.slowModeSeconds}s
-                    </p>
-                    {(mentions.length ?? 0) > 0 ? (
+                  {activeChannel ? (
+                    <>
                       <p className="context-line">
-                        <strong>Mentions in channel:</strong> {mentions.length}
+                        <strong>Name:</strong> #{getChannelName(activeChannel, viewer?.productUserId, members)}
                       </p>
-                    ) : null}
-
-                    <hr />
-                    <h3>Channel Members</h3>
-                    <ul className="member-list">
-                      {members.map((member) => (
-                        <li
-                          key={member.productUserId}
-                          className="member-item"
-                          onContextMenu={(e) => handleUserContextMenu(e, { id: member.productUserId, displayName: member.displayName })}
-                          title={member.isOnline ? "Online" : "Offline"}
-                        >
-                          <span
-                            className="member-dot"
-                            data-online={member.isOnline.toString()}
-                            data-status={member.bridgedUserStatus}
-                          />
-                          <span className="member-name">{member.displayName}</span>
-                          {member.isBridged && (
-                            <span className="bridged-badge" title={member.bridgedUserStatus || 'Bridged from Discord'}>
-                              Bridged
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                      {members.length === 0 && <p className="muted">No members found</p>}
-                    </ul >
-
-                    {canManageChannel && (
-                      <div style={{ marginTop: "1.5rem" }}>
-                        <Link
-                          href={`/settings/rooms/${activeChannel.id}`}
-                          className="button-link ghost"
-                          style={{ width: "100%" }}
-                        >
-                          Manage Channel Settings
-                        </Link>
-                      </div>
-                    )}
-
-                    {activeChannel.type === "voice" ? (
-                      <>
-                        <hr />
-                        <h3>Voice Controls</h3>
+                      <p className="context-line">
+                        <strong>Type:</strong> {activeChannel.type}
+                      </p>
+                      <p className="context-line">
+                        <strong>Locked:</strong> {activeChannel.isLocked ? "Yes" : "No"}
+                      </p>
+                      <p className="context-line">
+                        <strong>Slow mode:</strong> {activeChannel.slowModeSeconds}s
+                      </p>
+                      {(mentions.length ?? 0) > 0 ? (
                         <p className="context-line">
-                          <strong>Status:</strong> {voiceConnected ? "Connected" : "Disconnected"}
+                          <strong>Mentions in channel:</strong> {mentions.length}
                         </p>
-                        {voiceGrant ? (
-                          <p className="context-line">
-                            <strong>Voice Room:</strong> {voiceGrant.sfuRoomId}
-                          </p>
-                        ) : null}
-                        <div className="voice-actions">
-                          {!voiceConnected ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void handleJoinVoice();
-                              }}
-                            >
-                              Join Voice
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={() => {
-                                void handleLeaveVoice();
-                              }}
-                            >
-                              Leave Voice
-                            </button>
-                          )}
+                      ) : null}
+
+                      <hr />
+                      <h3>Channel Members</h3>
+                      <ul className="member-list">
+                        {members.map((member) => (
+                          <li
+                            key={member.productUserId}
+                            className="member-item"
+                            onContextMenu={(e) => handleUserContextMenu(e, { id: member.productUserId, displayName: member.displayName })}
+                            title={member.isOnline ? "Online" : "Offline"}
+                          >
+                            <span
+                              className="member-dot"
+                              data-online={member.isOnline.toString()}
+                              data-status={member.bridgedUserStatus}
+                            />
+                            <span className="member-name">{member.displayName}</span>
+                            {member.isBridged && (
+                              <span className="bridged-badge" title={member.bridgedUserStatus || 'Bridged from Discord'}>
+                                Bridged
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                        {members.length === 0 && <p className="muted">No members found</p>}
+                      </ul >
+
+                      {canManageChannel && (
+                        <div style={{ marginTop: "1.5rem" }}>
+                          <Link
+                            href={`/settings/rooms/${activeChannel.id}`}
+                            className="button-link ghost"
+                            style={{ width: "100%" }}
+                          >
+                            Manage Channel Settings
+                          </Link>
                         </div>
-                      </>
-                    ) : null
-                    }
-                  </>
-                ) : (
-                  <p>Select a channel to see details</p>
-                )}
-              </aside >
+                      )}
+
+                      {activeChannel.type === "voice" ? (
+                        <>
+                          <hr />
+                          <h3>Voice Controls</h3>
+                          <p className="context-line">
+                            <strong>Status:</strong> {voiceConnected ? "Connected" : "Disconnected"}
+                          </p>
+                          {voiceGrant ? (
+                            <p className="context-line">
+                              <strong>Voice Room:</strong> {voiceGrant.sfuRoomId}
+                            </p>
+                          ) : null}
+                          <div className="voice-actions">
+                            {!voiceConnected ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleJoinVoice();
+                                }}
+                              >
+                                Join Voice
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="ghost"
+                                onClick={() => {
+                                  void handleLeaveVoice();
+                                }}
+                              >
+                                Leave Voice
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      ) : null
+                      }
+                    </>
+                  ) : (
+                    <p>Select a channel to see details</p>
+                  )}
+                </aside >
               </ErrorBoundary>
             )}
           </div >

@@ -292,6 +292,118 @@ export async function listMessages(input: {
   });
 }
 
+export async function searchMessages(input: {
+  channelId?: string;
+  serverId?: string;
+  query: string;
+  limit: number;
+  before?: string;
+  viewerUserId: string;
+}): Promise<ChatMessage[]> {
+  return withDb(async (db) => {
+    let query = `
+      select m.* from chat_messages m
+    `;
+    const params: any[] = [];
+
+    if (input.serverId) {
+      query += ` join channels c on c.id = m.channel_id`;
+    }
+
+    query += ` where m.deleted_at is null`;
+
+    if (input.channelId) {
+      params.push(input.channelId);
+      query += ` and m.channel_id = $${params.length}`;
+    } else if (input.serverId) {
+      params.push(input.serverId);
+      query += ` and c.server_id = $${params.length}`;
+    }
+
+    params.push(input.query);
+    query += ` and m.content % $${params.length}`; // trigram similarity
+
+    if (input.before) {
+      params.push(input.before);
+      query += ` and m.created_at < $${params.length}::timestamptz`;
+    }
+
+    if (input.viewerUserId) {
+      params.push(input.viewerUserId);
+      query += ` and m.author_user_id not in (select blocked_user_id from user_blocks where blocker_user_id = $${params.length})`;
+    }
+
+    query += ` order by m.content <-> $${params.indexOf(input.query) + 1} asc, m.created_at desc limit $${params.length + 1}`;
+    params.push(input.limit);
+
+    const rows = await db.query<ChatMessageRow>(query, params);
+    return rows.rows.map(row => mapChatMessage(row, {}, {}, input.viewerUserId));
+  });
+}
+
+export async function listMessagesAround(messageId: string, channelId: string, limit: number, viewerUserId: string): Promise<ChatMessage[]> {
+  return withDb(async (db) => {
+    const targetRow = await db.query<{ created_at: string }>(
+      "select created_at from chat_messages where id = $1 and channel_id = $2 and deleted_at is null",
+      [messageId, channelId]
+    );
+
+    if (targetRow.rows.length === 0) {
+      return [];
+    }
+
+    const targetCreatedAt = targetRow.rows[0]!.created_at;
+    const halfLimit = Math.floor(limit / 2);
+
+    const beforeRows = await db.query<ChatMessageRow>(
+      `select * from chat_messages 
+       where channel_id = $1 and deleted_at is null and created_at <= $2
+       and author_user_id not in (select blocked_user_id from user_blocks where blocker_user_id = $3)
+       order by created_at desc limit $4`,
+      [channelId, targetCreatedAt, viewerUserId, halfLimit + 1]
+    );
+
+    const afterRows = await db.query<ChatMessageRow>(
+      `select * from chat_messages 
+       where channel_id = $1 and deleted_at is null and created_at > $2
+       and author_user_id not in (select blocked_user_id from user_blocks where blocker_user_id = $3)
+       order by created_at asc limit $4`,
+      [channelId, targetCreatedAt, viewerUserId, halfLimit]
+    );
+
+    const allRows = [...afterRows.rows.reverse(), ...beforeRows.rows].sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    return allRows.map(row => mapChatMessage(row, {}, {}, viewerUserId));
+  });
+}
+
+export async function getFirstUnreadMessageId(channelId: string, userId: string): Promise<string | null> {
+  return withDb(async (db) => {
+    const readState = await db.query<{ last_read_at: string }>(
+      "select last_read_at from channel_read_states where channel_id = $1 and product_user_id = $2",
+      [channelId, userId]
+    );
+
+    if (readState.rows.length === 0) {
+      return null;
+    }
+
+    const lastReadAt = readState.rows[0]?.last_read_at;
+
+    const msg = await db.query<{ id: string }>(
+      `select id from chat_messages 
+       where channel_id = $1 and deleted_at is null and created_at > $2
+       order by created_at asc limit 1`,
+      [channelId, lastReadAt]
+    );
+
+    return msg.rows[0]?.id ?? null;
+  });
+}
+
+
 function mapChatMessage(row: ChatMessageRow, repliesCountMap: Record<string, number>, reactionsMap: Record<string, ReactionRow[]>, viewerUserId?: string): ChatMessage {
   const rawReactions = reactionsMap[row.id] ?? [];
   const reactionsByEmoji: Record<string, NonNullable<ChatMessage["reactions"]>[number]> = {};

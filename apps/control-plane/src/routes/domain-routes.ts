@@ -56,7 +56,10 @@ import {
   unpinMessage,
   createHubInvite,
   getHubInvite,
-  useHubInvite
+  useHubInvite,
+  searchMessages,
+  listMessagesAround,
+  getFirstUnreadMessageId
 } from "../services/chat-service.js";
 import { getBootstrapStatus } from "../services/bootstrap-service.js";
 import { publishChannelMessage, subscribeToChannelMessages } from "../services/chat-realtime.js";
@@ -507,6 +510,69 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         viewerUserId: request.auth!.productUserId
       })
     };
+  });
+
+  app.get("/v1/channels/:channelId/messages/search", initializedAuthHandlers, async (request) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const query = z.object({
+      q: z.string().min(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+      before: z.string().datetime().optional()
+    }).parse(request.query);
+
+    return {
+      items: await searchMessages({
+        channelId: params.channelId,
+        query: query.q,
+        limit: query.limit,
+        before: query.before,
+        viewerUserId: request.auth!.productUserId
+      })
+    };
+  });
+
+  app.get("/v1/servers/:serverId/messages/search", initializedAuthHandlers, async (request) => {
+    const params = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    const query = z.object({
+      q: z.string().min(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+      before: z.string().datetime().optional()
+    }).parse(request.query);
+
+    return {
+      items: await searchMessages({
+        serverId: params.serverId,
+        query: query.q,
+        limit: query.limit,
+        before: query.before,
+        viewerUserId: request.auth!.productUserId
+      })
+    };
+  });
+
+  app.get("/v1/channels/:channelId/messages/:messageId/around", initializedAuthHandlers, async (request) => {
+    const params = z.object({
+      channelId: z.string().min(1),
+      messageId: z.string().min(1)
+    }).parse(request.params);
+    const query = z.object({
+      limit: z.coerce.number().int().min(1).max(100).default(50)
+    }).parse(request.query);
+
+    return {
+      items: await listMessagesAround(
+        params.messageId,
+        params.channelId,
+        query.limit,
+        request.auth!.productUserId
+      )
+    };
+  });
+
+  app.get("/v1/channels/:channelId/unread-message", initializedAuthHandlers, async (request) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const messageId = await getFirstUnreadMessageId(params.channelId, request.auth!.productUserId);
+    return { messageId };
   });
 
   app.get("/v1/servers/:serverId/read-states", initializedAuthHandlers, async (request) => {

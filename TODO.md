@@ -50,11 +50,11 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 ## Phase 17 — Public Beta: Message Discovery
 
 **Goal:** Let users find content they're looking for.
-**Status:** Planned
+**Status:** Complete
 
-- [ ] **Full-text message search** — `pg_trgm` or `tsvector` on message content; API endpoint `GET /v1/channels/:channelId/messages/search?q=`; search modal in UI with scoped results
-- [ ] **Message jump / deep link** — link directly to a specific message by ID and scroll to it on load
-- [ ] **Jump to unread** — "jump to first unread" button when entering a channel with unread messages
+- [x] **Full-text message search** — `pg_trgm` or `tsvector` on message content; API endpoint `GET /v1/channels/:channelId/messages/search?q=`; search modal in UI with scoped results
+- [x] **Message jump / deep link** — link directly to a specific message by ID and scroll to it on load
+- [x] **Jump to unread** — "jump to first unread" button when entering a channel with unread messages
 
 ---
 
