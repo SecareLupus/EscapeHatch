@@ -263,48 +263,114 @@ export async function listMessages(input: {
       }
     }
 
-    return rows.rows.reverse().map((row) => {
-      const rawReactions = reactionsMap[row.id] ?? [];
-      const reactionsByEmoji: Record<string, any> = {};
+    return rows.rows.reverse().map((row) => mapChatMessage(row, repliesCountMap, reactionsMap, input.viewerUserId));
+  });
+}
 
-      for (const r of rawReactions) {
-        if (!reactionsByEmoji[r.emoji]) {
-          reactionsByEmoji[r.emoji] = {
-            emoji: r.emoji,
-            count: 0,
-            me: false,
-            userIds: [],
-            displayNames: []
-          };
-        }
-        reactionsByEmoji[r.emoji].count++;
-        reactionsByEmoji[r.emoji].userIds.push(r.user_id);
-        reactionsByEmoji[r.emoji].displayNames.push(r.display_name);
-        if (input.viewerUserId && r.user_id === input.viewerUserId) {
-          reactionsByEmoji[r.emoji].me = true;
-        }
-      }
+function mapChatMessage(row: any, repliesCountMap: Record<string, number>, reactionsMap: Record<string, any[]>, viewerUserId?: string): ChatMessage {
+  const rawReactions = reactionsMap[row.id] ?? [];
+  const reactionsByEmoji: Record<string, any> = {};
 
-      return {
-        id: row.id,
-        channelId: row.channel_id,
-        authorUserId: row.author_user_id,
-        authorDisplayName: row.author_display_name,
-        content: row.content,
-        attachments: row.attachments,
-        reactions: Object.values(reactionsByEmoji),
-        isRelay: row.is_relay,
-        externalProvider: row.external_provider ?? undefined,
-        externalAuthorName: row.external_author_name ?? undefined,
-        externalAuthorAvatarUrl: row.external_author_avatar_url ?? undefined,
-        parentId: row.parent_id ?? undefined,
-        externalThreadId: row.external_thread_id ?? undefined,
-        repliesCount: repliesCountMap[row.id] || 0,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        deletedAt: row.deleted_at
+  for (const r of rawReactions) {
+    if (!reactionsByEmoji[r.emoji]) {
+      reactionsByEmoji[r.emoji] = {
+        emoji: r.emoji,
+        count: 0,
+        me: false,
+        userIds: [],
+        displayNames: []
       };
-    });
+    }
+    reactionsByEmoji[r.emoji].count++;
+    reactionsByEmoji[r.emoji].userIds.push(r.user_id);
+    reactionsByEmoji[r.emoji].displayNames.push(r.display_name);
+    if (viewerUserId && r.user_id === viewerUserId) {
+      reactionsByEmoji[r.emoji].me = true;
+    }
+  }
+
+  return {
+    id: row.id,
+    channelId: row.channel_id,
+    authorUserId: row.author_user_id,
+    authorDisplayName: row.author_display_name,
+    content: row.content,
+    attachments: row.attachments,
+    reactions: Object.values(reactionsByEmoji),
+    isRelay: row.is_relay,
+    externalProvider: row.external_provider ?? undefined,
+    externalAuthorName: row.external_author_name ?? undefined,
+    externalAuthorAvatarUrl: row.external_author_avatar_url ?? undefined,
+    parentId: row.parent_id ?? undefined,
+    externalThreadId: row.external_thread_id ?? undefined,
+    repliesCount: repliesCountMap[row.id] || 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at
+  };
+}
+
+export async function fetchMessage(channelId: string, messageId: string, viewerUserId?: string): Promise<ChatMessage | null> {
+  return withDb(async (db) => {
+    const rows = await db.query<{
+      id: string;
+      channel_id: string;
+      author_user_id: string;
+      author_display_name: string;
+      content: string;
+      attachments: any;
+      is_relay: boolean;
+      external_provider: string | null;
+      external_author_name: string | null;
+      external_author_avatar_url: string | null;
+      parent_id: string | null;
+      external_thread_id: string | null;
+      created_at: string;
+      updated_at?: string;
+      deleted_at?: string;
+    }>(
+      "select * from chat_messages where id = $1 and channel_id = $2 and deleted_at is null",
+      [messageId, channelId]
+    );
+
+    if (rows.rows.length === 0) {
+      return null;
+    }
+
+    const row = rows.rows[0];
+
+    // Get replies count
+    const counts = await db.query<{ count: string }>(
+      "select count(*) from chat_messages where parent_id = $1",
+      [messageId]
+    );
+    const repliesCount = parseInt(counts.rows[0].count, 10);
+
+    // Get reactions
+    const reactionsResult = await db.query<{
+      message_id: string;
+      emoji: string;
+      user_id: string;
+      display_name: string;
+    }>(
+      `select mr.message_id, mr.emoji, mr.user_id, 
+         coalesce(
+           (select preferred_username 
+            from identity_mappings 
+            where product_user_id = mr.user_id 
+            order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+            limit 1),
+           'user-' || substr(mr.user_id, 1, 8)
+         ) as display_name
+       from message_reactions mr 
+       where mr.message_id = $1`,
+      [messageId]
+    );
+
+    const reactionsMap = { [messageId]: reactionsResult.rows };
+    const repliesCountMap = { [messageId]: repliesCount };
+
+    return mapChatMessage(row, repliesCountMap, reactionsMap, viewerUserId);
   });
 }
 

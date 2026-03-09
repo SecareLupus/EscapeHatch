@@ -33,6 +33,7 @@ import {
   listCategories,
   listChannels,
   listMessages,
+  fetchMessage,
   listMentionMarkers,
   listChannelReadStates,
   listServers,
@@ -632,8 +633,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
     // For reactions, we could publish a message update to refresh counts
     // In a more optimized version, we'd have a specific reaction event
-    const messages = await listMessages({ channelId: params.channelId, limit: 1, before: undefined, viewerUserId: undefined });
-    const message = messages.find(m => m.id === params.messageId);
+    const message = await fetchMessage(params.channelId, params.messageId, request.auth!.productUserId);
     if (message) {
       publishChannelMessage(message, "message.updated");
     }
@@ -654,8 +654,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       emoji: params.emoji
     });
 
-    const messages = await listMessages({ channelId: params.channelId, limit: 1, before: undefined, viewerUserId: undefined });
-    const message = messages.find(m => m.id === params.messageId);
+    const message = await fetchMessage(params.channelId, params.messageId, request.auth!.productUserId);
     if (message) {
       publishChannelMessage(message, "message.updated");
     }
