@@ -19,7 +19,8 @@ import type {
   DelegationAuditEvent,
   IdentityMapping,
   VoicePresenceMember,
-  VoiceTokenGrant
+  VoiceTokenGrant,
+  HubInvite
 } from "@skerry/shared";
 export type { IdentityMapping, VoicePresenceMember };
 
@@ -359,6 +360,26 @@ export async function removeReaction(channelId: string, messageId: string, emoji
   });
 }
 
+export async function pinMessage(channelId: string, messageId: string): Promise<ChatMessage> {
+  return apiFetch<ChatMessage>(`/v1/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/pin`, {
+    method: "POST"
+  });
+}
+
+export async function unpinMessage(channelId: string, messageId: string): Promise<ChatMessage> {
+  return apiFetch<ChatMessage>(`/v1/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/pin`, {
+    method: "DELETE"
+  });
+}
+
+export async function sendTypingStatus(channelId: string, isTyping: boolean): Promise<void> {
+  await apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/typing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isTyping })
+  });
+}
+
 export async function createServer(input: { hubId: string; name: string }): Promise<Server> {
   return apiFetch<Server>("/v1/servers", {
     method: "POST",
@@ -543,6 +564,24 @@ export async function deleteChannel(input: { channelId: string; serverId: string
   const query = new URLSearchParams({ serverId: input.serverId });
   await apiFetch(`/v1/channels/${encodeURIComponent(input.channelId)}?${query.toString()}`, {
     method: "DELETE"
+  });
+}
+
+export async function createHubInvite(hubId: string, options: { expiresAt?: string; maxUses?: number } = {}): Promise<HubInvite> {
+  return apiFetch<HubInvite>(`/v1/hubs/${encodeURIComponent(hubId)}/invites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options)
+  });
+}
+
+export async function fetchHubInvite(inviteId: string): Promise<HubInvite> {
+  return apiFetch<HubInvite>(`/v1/invites/${encodeURIComponent(inviteId)}`);
+}
+
+export async function joinHubByInvite(inviteId: string): Promise<{ hubId: string }> {
+  return apiFetch<{ hubId: string }>(`/v1/invites/${encodeURIComponent(inviteId)}/join`, {
+    method: "POST"
   });
 }
 
@@ -787,6 +826,17 @@ export function connectMessageStream(
   source.addEventListener("message.deleted", (event) => {
     const payload = JSON.parse((event as MessageEvent<string>).data) as { id: string };
     handlers.onMessageDeleted?.(payload.id);
+  });
+
+  source.addEventListener("typing.start", (event) => {
+    const payload = JSON.parse((event as MessageEvent<string>).data) as ChatMessage;
+    // We repurpose the listener for typing events
+    (handlers as any).onTypingStart?.(payload);
+  });
+
+  source.addEventListener("typing.stop", (event) => {
+    const payload = JSON.parse((event as MessageEvent<string>).data) as ChatMessage;
+    (handlers as any).onTypingStop?.(payload);
   });
 
   return () => {

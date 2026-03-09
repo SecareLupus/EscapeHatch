@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Category, Channel, ChannelReadState, ChatMessage, MentionMarker, Server } from "@skerry/shared";
+import type { Category, Channel, ChannelReadState, ChatMessage, HubInvite, MentionMarker, Server } from "@skerry/shared";
 import { withDb } from "../db/client.js";
 
 interface ChannelRow {
@@ -35,6 +35,7 @@ export interface ChatMessageRow {
   parent_id: string | null;
   external_thread_id: string | null;
   external_message_id?: string | null;
+  is_pinned: boolean;
   created_at: string;
   updated_at?: string;
   deleted_at?: string;
@@ -240,6 +241,7 @@ export async function listMessages(input: {
       external_author_avatar_url: string | null;
       parent_id: string | null;
       external_thread_id: string | null;
+      is_pinned: boolean;
       created_at: string;
       updated_at?: string;
       deleted_at?: string;
@@ -327,6 +329,7 @@ function mapChatMessage(row: ChatMessageRow, repliesCountMap: Record<string, num
     parentId: row.parent_id ?? undefined,
     externalThreadId: row.external_thread_id ?? undefined,
     repliesCount: repliesCountMap[row.id] || 0,
+    isPinned: row.is_pinned,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at
@@ -1566,5 +1569,97 @@ export async function listServerMembers(serverId: string): Promise<{
     }
 
     return [...localMembers, ...bridgedMembers];
+  });
+}
+
+export async function pinMessage(input: { messageId: string; actorUserId: string }): Promise<ChatMessage> {
+  return withDb(async (db) => {
+    const res = await db.query(
+      "update chat_messages set is_pinned = true, updated_at = now() where id = $1 returning *",
+      [input.messageId]
+    );
+    const row = res.rows[0];
+    if (!row) throw new Error("Message not found");
+
+    const msg = await fetchMessage(row.channel_id, row.id, input.actorUserId);
+    if (!msg) throw new Error("Failed to fetch updated message");
+    return msg;
+  });
+}
+
+export async function unpinMessage(input: { messageId: string; actorUserId: string }): Promise<ChatMessage> {
+  return withDb(async (db) => {
+    const res = await db.query(
+      "update chat_messages set is_pinned = false, updated_at = now() where id = $1 returning *",
+      [input.messageId]
+    );
+    const row = res.rows[0];
+    if (!row) throw new Error("Message not found");
+
+    const msg = await fetchMessage(row.channel_id, row.id, input.actorUserId);
+    if (!msg) throw new Error("Failed to fetch updated message");
+    return msg;
+  });
+}
+
+
+
+export async function createHubInvite(input: {
+  hubId: string;
+  createdByUserId: string;
+  expiresAt?: string | null;
+  maxUses?: number | null;
+}): Promise<HubInvite> {
+  return withDb(async (db) => {
+    const id = `inv_${crypto.randomUUID().replaceAll("-", "")}`;
+    const res = await db.query<HubInvite>(
+      `insert into hub_invites (id, hub_id, created_by_user_id, expires_at, max_uses)
+       values ($1, $2, $3, $4, $5)
+       returning id, hub_id as "hubId", created_by_user_id as "createdByUserId", 
+                 expires_at as "expiresAt", max_uses as "maxUses", 
+                 uses_count as "usesCount", created_at as "createdAt"`,
+      [id, input.hubId, input.createdByUserId, input.expiresAt ?? null, input.maxUses ?? null]
+    );
+    return res.rows[0]!;
+  });
+}
+
+export async function getHubInvite(inviteId: string): Promise<HubInvite | null> {
+  return withDb(async (db) => {
+    const res = await db.query(
+      `select id, hub_id as "hubId", created_by_user_id as "createdByUserId", 
+              expires_at as "expiresAt", max_uses as "maxUses", 
+              uses_count as "usesCount", created_at as "createdAt"
+       from hub_invites where id = $1`,
+      [inviteId]
+    );
+    return res.rows[0] ?? null;
+  });
+}
+
+export async function useHubInvite(input: { inviteId: string; productUserId: string }): Promise<{ hubId: string }> {
+  return withDb(async (db) => {
+    const invite = await getHubInvite(input.inviteId);
+    if (!invite) throw new Error("Invite not found");
+
+    if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
+      throw new Error("Invite expired");
+    }
+    if (invite.maxUses !== null && invite.usesCount >= invite.maxUses) {
+      throw new Error("Invite reached max uses");
+    }
+
+    // Grant role in the hub
+    await db.query(
+      `insert into role_bindings (id, product_user_id, role, hub_id)
+       values ($1, $2, $3, $4)
+       on conflict do nothing`,
+      [`rb_${crypto.randomUUID().replaceAll("-", "")}`, input.productUserId, "user", invite.hubId]
+    );
+
+    // Update uses count
+    await db.query("update hub_invites set uses_count = uses_count + 1 where id = $1", [input.inviteId]);
+
+    return { hubId: invite.hubId };
   });
 }

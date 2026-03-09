@@ -51,7 +51,12 @@ import {
   addReaction,
   removeReaction,
   listChannelMembers,
-  inviteToChannel
+  inviteToChannel,
+  pinMessage,
+  unpinMessage,
+  createHubInvite,
+  getHubInvite,
+  useHubInvite
 } from "../services/chat-service.js";
 import { getBootstrapStatus } from "../services/bootstrap-service.js";
 import { publishChannelMessage, subscribeToChannelMessages } from "../services/chat-realtime.js";
@@ -586,6 +591,102 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
 
     publishChannelMessage(message, "message.updated");
     return message;
+  });
+
+  app.post("/v1/channels/:channelId/messages/:messageId/pin", initializedAuthHandlers, async (request) => {
+    const params = z.object({
+      channelId: z.string().min(1),
+      messageId: z.string().min(1)
+    }).parse(request.params);
+
+    const message = await pinMessage({
+      messageId: params.messageId,
+      actorUserId: request.auth!.productUserId
+    });
+
+    publishChannelMessage(message, "message.updated");
+    return message;
+  });
+
+  app.delete("/v1/channels/:channelId/messages/:messageId/pin", initializedAuthHandlers, async (request) => {
+    const params = z.object({
+      channelId: z.string().min(1),
+      messageId: z.string().min(1)
+    }).parse(request.params);
+
+    const message = await unpinMessage({
+      messageId: params.messageId,
+      actorUserId: request.auth!.productUserId
+    });
+
+    publishChannelMessage(message, "message.updated");
+    return message;
+  });
+
+  app.post("/v1/channels/:channelId/typing", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({
+      isTyping: z.boolean()
+    }).parse(request.body);
+
+    const identity = await getIdentityByProductUserId(request.auth!.productUserId);
+    if (!identity) return;
+
+    publishChannelMessage({
+      id: "typing-" + request.auth!.productUserId,
+      channelId: params.channelId,
+      authorUserId: request.auth!.productUserId,
+      authorDisplayName: identity.displayName,
+      content: "",
+      createdAt: new Date().toISOString()
+    } as any, payload.isTyping ? "typing.start" : "typing.stop");
+
+    reply.code(204).send();
+  });
+
+  app.post("/v1/hubs/:hubId/invites", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({
+      expiresAt: z.string().datetime().optional(),
+      maxUses: z.number().int().min(1).optional()
+    }).parse(request.body ?? {});
+
+    const allowed = await canManageHub({
+      productUserId: request.auth!.productUserId,
+      hubId: params.hubId
+    });
+    if (!allowed) {
+      reply.code(403).send({ message: "Forbidden: insufficient hub management scope." });
+      return;
+    }
+
+    const invite = await createHubInvite({
+      hubId: params.hubId,
+      createdByUserId: request.auth!.productUserId,
+      expiresAt: payload.expiresAt,
+      maxUses: payload.maxUses
+    });
+
+    reply.code(201);
+    return invite;
+  });
+
+  app.get("/v1/invites/:inviteId", async (request, reply) => {
+    const params = z.object({ inviteId: z.string().min(1) }).parse(request.params);
+    const invite = await getHubInvite(params.inviteId);
+    if (!invite) {
+      reply.code(404).send({ message: "Invite not found." });
+      return;
+    }
+    return invite;
+  });
+
+  app.post("/v1/invites/:inviteId/join", initializedAuthHandlers, async (request) => {
+    const params = z.object({ inviteId: z.string().min(1) }).parse(request.params);
+    return useHubInvite({
+      inviteId: params.inviteId,
+      productUserId: request.auth!.productUserId
+    });
   });
 
   app.delete("/v1/channels/:channelId/messages/:messageId", initializedAuthHandlers, async (request, reply) => {

@@ -537,6 +537,10 @@ export function ChatClient() {
     dispatch({ type: "SET_ERROR", payload: null });
     try {
       await refreshAuthState();
+      // Request notification permission
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+        void Notification.requestPermission();
+      }
     } catch (cause) {
       const msg = cause instanceof Error ? cause.message : "Failed to load auth state.";
       dispatch({ type: "SET_ERROR", payload: msg });
@@ -544,7 +548,7 @@ export function ChatClient() {
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
     }
-  }, [refreshAuthState, dispatch]);
+  }, [refreshAuthState, dispatch, showToast]);
 
   useEffect(() => {
     void initialize();
@@ -786,7 +790,7 @@ export function ChatClient() {
         }
         startPolling();
       },
-      onMessageCreated: (message) => {
+      onMessageCreated: (message: ChatMessage) => {
         dispatch({
           type: "UPDATE_MESSAGES",
           payload: (current: MessageItem[]) => {
@@ -810,8 +814,17 @@ export function ChatClient() {
         if (state.selectedChannelId === message.channelId && state.isNearBottom && !message.parentId) {
           void markChannelAsRead(message.channelId);
         }
+
+        // Browser Notifications
+        if (typeof window !== "undefined" && document.hidden && Notification.permission === "granted" && message.authorUserId !== viewer?.productUserId) {
+          const channel = channels.find(c => c.id === message.channelId);
+          new Notification(`${message.authorDisplayName} in ${channel ? getChannelName(channel) : 'Channel'}`, {
+            body: message.content,
+            icon: "/favicon.ico" // Fallback icon
+          });
+        }
       },
-      onMessageUpdated: (updatedMessage) => {
+      onMessageUpdated: (updatedMessage: ChatMessage) => {
         dispatch({
           type: "UPDATE_MESSAGES",
           payload: (current: MessageItem[]) => {
@@ -819,15 +832,39 @@ export function ChatClient() {
           }
         });
       },
-      onMessageDeleted: (deletedMessageId) => {
+      onMessageDeleted: (deletedMessageId: string) => {
         dispatch({
           type: "UPDATE_MESSAGES",
           payload: (current: MessageItem[]) => {
             return current.filter((item: MessageItem) => item.id !== deletedMessageId);
           }
         });
+      },
+      onTypingStart: (typingInfo: any) => {
+        if (typingInfo.authorUserId === viewer?.productUserId) return;
+        dispatch({
+          type: "SET_TYPING_USER",
+          payload: {
+            channelId: typingInfo.channelId,
+            userId: typingInfo.authorUserId,
+            displayName: typingInfo.authorDisplayName,
+            isTyping: true
+          }
+        });
+      },
+      onTypingStop: (typingInfo: any) => {
+        if (typingInfo.authorUserId === viewer?.productUserId) return;
+        dispatch({
+          type: "SET_TYPING_USER",
+          payload: {
+            channelId: typingInfo.channelId,
+            userId: typingInfo.authorUserId,
+            displayName: typingInfo.authorDisplayName,
+            isTyping: false
+          }
+        });
       }
-    });
+    } as any);
 
     return () => {
       closed = true;

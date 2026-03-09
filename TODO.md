@@ -24,26 +24,26 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 ## Phase 15 — Alpha Polish: Missing Core UX
 
 **Goal:** Ship the small-but-expected features that make the product feel complete.
-**Status:** Planned
+**Status:** Complete
 
-- [ ] **Markdown rendering** — integrate `react-markdown` (or equivalent) for message content; support bold, italic, code, code blocks, and links at minimum
-- [ ] **Typing indicators** — backend: SSE event `typing.start`/`typing.stop` from composer keystrokes; frontend: "user is typing…" display below message list
-- [ ] **Browser desktop notifications** — use `Notification` API for @mentions and new DMs when tab is not focused; request permission on first login
-- [ ] **Pin messages** — backend endpoint + DB column; UI pin action in message context menu and pinned-messages header button
-- [ ] **Invite / join links** — generate shareable hub/space join URLs; backend redemption endpoint; invite landing page
+- [x] **Markdown rendering** — integrate `react-markdown` (or equivalent) for message content; support bold, italic, code, code blocks, and links at minimum
+- [x] **Typing indicators** — backend: SSE event `typing.start`/`typing.stop` from composer keystrokes; frontend: "user is typing…" display below message list
+- [x] **Browser desktop notifications** — use `Notification` API for @mentions and new DMs when tab is not focused; request permission on first login
+- [x] **Pin messages** — backend endpoint + DB column; UI pin action in message context menu and pinned-messages header button
+- [x] **Invite / join links** — generate shareable hub/space join URLs; backend redemption endpoint; invite landing page
 
 ---
 
 ## Phase 16 — Alpha Polish: Housekeeping
 
 **Goal:** Remove dead code and reduce technical debt before publishing.
-**Status:** Planned
+**Status:** Complete
 
-- [ ] Delete empty `apps/web/app/admin/` directory
-- [ ] Decompose `chat-client.tsx` (2,216 lines) — extract: voice panel state, notification state, DM state, and moderation panel into dedicated components or hooks
-- [ ] Add React error boundaries to the web app root and per major panel to prevent full-page crashes
-- [ ] Fix timeout moderation — implement true timed restriction (Synapse power-level schedule or scheduled job) instead of the current kick-as-timeout workaround
-- [ ] Lint/audit all remaining `any` type casts in `chat-service.ts` (bridgedMembers, etc.)
+- [x] Delete empty `apps/web/app/admin/` directory
+- [x] Decompose `chat-client.tsx` (2,216 lines) — extract: voice panel state, notification state, DM state, and moderation panel into dedicated components or hooks
+- [x] Add React error boundaries to the web app root and per major panel to prevent full-page crashes
+- [x] Fix timeout moderation — implement true timed restriction (Synapse power-level schedule or scheduled job) instead of the current kick-as-timeout workaround
+- [x] Lint/audit all remaining `any` type casts in `chat-service.ts` (bridgedMembers, etc.)
 
 ---
 
@@ -141,4 +141,4 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 
 ## Current Sprint Focus
 
-Start with **Phase 14** (backend-wiring, highest user impact, no new backend work needed) and **Phase 16** (housekeeping, reduces debt before adding more features), running in parallel.
+Start with **Phase 15** (missing core UX features) as the primary focus for this sprint.

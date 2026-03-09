@@ -1,6 +1,6 @@
 import type { ChatMessage } from "@skerry/shared";
 
-type ChatMessageEvent = "message.created" | "message.updated" | "message.deleted";
+type ChatMessageEvent = "message.created" | "message.updated" | "message.deleted" | "typing.start" | "typing.stop";
 type ChatMessageListener = (event: ChatMessageEvent, message: ChatMessage) => void;
 
 const channelListeners = new Map<string, Set<ChatMessageListener>>();

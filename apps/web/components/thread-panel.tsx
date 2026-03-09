@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
 import { useChat, MessageItem } from "../context/chat-context";
 import { listMessages, sendMessage, uploadMedia, formatMessageTime, connectMessageStream } from "../lib/control-plane";
 import { useToast } from "./toast-provider";
@@ -131,7 +132,9 @@ export function ThreadPanel() {
                                 <strong>{parentMessage.externalAuthorName || parentMessage.authorDisplayName}</strong>
                                 <time>{formatMessageTime(parentMessage.createdAt)}</time>
                             </header>
-                            <p>{parentMessage.content}</p>
+                            <p className="message-content">
+                                <ReactMarkdown>{parentMessage.content}</ReactMarkdown>
+                            </p>
                             {parentMessage.attachments?.map(att => (
                                 <div key={att.id} className="attachment">
                                     <img src={att.url} alt={att.filename} style={{ maxWidth: "100%", borderRadius: "8px", marginTop: "0.5rem" }} />
@@ -154,7 +157,9 @@ export function ThreadPanel() {
                                         <strong>{reply.externalAuthorName || reply.authorDisplayName}</strong>
                                         <time>{formatMessageTime(reply.createdAt)}</time>
                                     </header>
-                                    <p>{reply.content}</p>
+                                    <p className="message-content">
+                                        <ReactMarkdown>{reply.content}</ReactMarkdown>
+                                    </p>
                                     {reply.attachments?.map(att => (
                                         <div key={att.id} className="attachment">
                                             <img src={att.url} alt={att.filename} style={{ maxWidth: "100%", borderRadius: "8px", marginTop: "0.5rem" }} />

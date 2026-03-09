@@ -122,6 +122,7 @@ export interface ChatState {
     lastChannelByServer: Record<string, string>;
     threadParentId: string | null;
     quotingMessage: MessageItem | null;
+    typingUsersByChannel: Record<string, Record<string, string>>;
 }
 
 type ChatAction =
@@ -191,7 +192,8 @@ type ChatAction =
     | { type: "SET_ALL_DM_CHANNELS", payload: Channel[] }
     | { type: "SET_LAST_CHANNEL_BY_SERVER", payload: { serverId: string; channelId: string } }
     | { type: "SET_THREAD_PARENT_ID", payload: string | null }
-    | { type: "SET_QUOTING_MESSAGE", payload: MessageItem | null };
+    | { type: "SET_QUOTING_MESSAGE", payload: MessageItem | null }
+    | { type: "SET_TYPING_USER", payload: { channelId: string; userId: string; displayName: string; isTyping: boolean } };
 
 const initialState: ChatState = {
     viewer: null,
@@ -261,7 +263,8 @@ const initialState: ChatState = {
     allDmChannels: [],
     lastChannelByServer: {},
     threadParentId: null,
-    quotingMessage: null
+    quotingMessage: null,
+    typingUsersByChannel: {}
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -464,6 +467,22 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return { ...state, threadParentId: action.payload };
         case "SET_QUOTING_MESSAGE":
             return { ...state, quotingMessage: action.payload };
+        case "SET_TYPING_USER": {
+            const { channelId, userId, displayName, isTyping } = action.payload;
+            const channelTyping = { ...(state.typingUsersByChannel[channelId] || {}) };
+            if (isTyping) {
+                channelTyping[userId] = displayName;
+            } else {
+                delete channelTyping[userId];
+            }
+            return {
+                ...state,
+                typingUsersByChannel: {
+                    ...state.typingUsersByChannel,
+                    [channelId]: channelTyping
+                }
+            };
+        }
         default:
             return state;
     }

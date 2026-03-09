@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { useChat, MessageItem } from "../context/chat-context";
 import type { ChatMessage, ModerationActionType } from "@skerry/shared";
 import { getChannelName } from "../lib/channel-utils";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
-import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage, listChannelMembers, inviteToChannel, updateChannel, searchUsers, formatMessageTime } from "../lib/control-plane";
+import { useToast } from "./toast-provider";
+import { performModerationAction, createReport, uploadMedia, updateMessage, addReaction, removeReaction, deleteMessage, listChannelMembers, inviteToChannel, updateChannel, searchUsers, formatMessageTime, pinMessage, unpinMessage, sendTypingStatus, createHubInvite } from "../lib/control-plane";
 import dynamic from "next/dynamic";
 
 // @ts-ignore - emoji-picker-react types mismatch with Next.js dynamic
@@ -39,31 +41,81 @@ interface ChatWindowProps {
     refreshChatState: (serverId?: string, channelId?: string) => Promise<void>;
 }
 
-function MessageContent({ content }: { content: string }) {
-    // Regex to match: > @Author: Content
-    // It captures Author in $1 and Content in $2
-    // We use [\s\S]*? to match across multiple lines until the end of the block (or end of string)
+function MessageContent({ message }: { message: MessageItem }) {
+    const content = message.content;
     const quoteRegex = /^> @([^:]+):\s*([\s\S]*?)(?:\n\n|\n?$)/m;
     const match = content.match(quoteRegex);
 
-    if (match) {
-        const author = match[1];
-        const quotedText = match[2];
-        const remainingText = content.replace(quoteRegex, "").trim();
+    return (
+        <div className="message-text">
+            {match ? (
+                <>
+                    <blockquote className="message-quote">
+                        <strong className="quote-author">@{match[1]}</strong>
+                        <p>{match[2]}</p>
+                    </blockquote>
+                    <div className="markdown-content">
+                        <ReactMarkdown>{content.replace(quoteRegex, "").trim()}</ReactMarkdown>
+                    </div>
+                </>
+            ) : (
+                <div className="markdown-content">
+                    <ReactMarkdown>{content}</ReactMarkdown>
+                </div>
+            )}
+        </div>
+    );
+}
 
-        return (
-            <div className="message-text">
-                <blockquote className="message-quote">
-                    <strong className="quote-author">@{author}</strong>
-                    <p>{quotedText}</p>
-                </blockquote>
-                {remainingText && <p>{remainingText.replace(/!\[image\]\(https?:\/\/[^\s)]+\)/g, "").trim()}</p>}
-            </div>
-        );
+function TypingIndicator({ channelId }: { channelId: string }) {
+    const { state } = useChat();
+    const typingUsers = state.typingUsersByChannel[channelId] || {};
+    const userNames = Object.values(typingUsers);
+
+    if (userNames.length === 0) return null;
+
+    let text = "";
+    if (userNames.length === 1) {
+        text = `${userNames[0]} is typing...`;
+    } else if (userNames.length === 2) {
+        text = `${userNames[0]} and ${userNames[1]} are typing...`;
+    } else {
+        text = "Several people are typing...";
     }
 
-    // Fallback to regular rendering (minus image markers if any)
-    return <p>{content.replace(/!\[image\]\(https?:\/\/[^\s)]+\)/g, "").trim()}</p>;
+    return (
+        <div className="typing-indicator">
+            <span className="typing-dots">
+                <span>.</span><span>.</span><span>.</span>
+            </span>
+            {text}
+            <style jsx>{`
+                .typing-indicator {
+                    padding: 0.5rem 1rem;
+                    font-size: 0.8rem;
+                    color: var(--text-muted);
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    animation: fadeIn 0.2s ease-out;
+                }
+                .typing-dots span {
+                    animation: blink 1.4s infinite both;
+                }
+                .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+                .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+                @keyframes blink {
+                    0% { opacity: 0.2; }
+                    20% { opacity: 1; }
+                    100% { opacity: 0.2; }
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(5px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
+        </div>
+    );
 }
 
 
@@ -121,8 +173,13 @@ export function ChatWindow({
     const [channelMembers, setChannelMembers] = useState<{ productUserId: string; displayName: string }[]>([]);
     const [isEditingTopic, setIsEditingTopic] = useState(false);
     const [attachments, setAttachments] = useState<any[]>([]);
+    const [lastTypingSentAt, setLastTypingSentAt] = useState<number>(0);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [newTopic, setNewTopic] = useState("");
     const [isInviting, setIsInviting] = useState(false);
+    const [isCreatingHubInvite, setIsCreatingHubInvite] = useState(false);
+    const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
+    const { showToast } = useToast();
 
     const handleQuoteReply = useCallback((message: MessageItem) => {
         dispatch({ type: "SET_QUOTING_MESSAGE", payload: message });
@@ -161,23 +218,22 @@ export function ChatWindow({
     }, [showEmojiPicker]);
 
     useEffect(() => {
+        const messagesList = messagesRef.current;
         if (reactionTargetMessageId) {
-            const messagesList = messagesRef.current;
             if (messagesList) {
                 messagesList.style.overflow = "hidden";
             }
         } else {
-            const messagesList = messagesRef.current;
             if (messagesList) {
                 messagesList.style.overflow = "auto";
             }
         }
         return () => {
-            if (messagesRef.current) {
-                messagesRef.current.style.overflow = "auto";
+            if (messagesList) {
+                messagesList.style.overflow = "auto";
             }
         };
-    }, [reactionTargetMessageId, messagesRef]);
+    }, [reactionTargetMessageId]);
 
     const canManageChannel = useMemo(
         () =>
@@ -378,8 +434,29 @@ export function ChatWindow({
             });
         }
 
+        if (contextMenu.message) {
+            const isPinned = contextMenu.message.isPinned;
+            items.push({
+                label: isPinned ? "Unpin Message" : "Pin Message",
+                icon: "📌",
+                onClick: async () => {
+                    try {
+                        if (isPinned) {
+                            await unpinMessage(contextMenu.message!.channelId, contextMenu.message!.id);
+                            showToast("Message unpinned", "success");
+                        } else {
+                            await pinMessage(contextMenu.message!.channelId, contextMenu.message!.id);
+                            showToast("Message pinned", "success");
+                        }
+                    } catch (e) {
+                        showToast("Failed to update pin status", "error");
+                    }
+                }
+            });
+        }
+
         return items;
-    }, [contextMenu, viewer, allowedActions, selectedServerId]);
+    }, [contextMenu, viewer, allowedActions, selectedServerId, showToast]);
 
     const userContextMenuItems: ContextMenuItem[] = useMemo(() => {
         if (!userContextMenu) return [];
@@ -541,7 +618,18 @@ export function ChatWindow({
                         </p>
                     </div>
                 </div>
-                <div className="channel-actions">
+                <div className="channel-actions" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    {activeServer && activeServer.type !== "dm" && (
+                        <button
+                            type="button"
+                            className="icon-button"
+                            onClick={() => setIsCreatingHubInvite(true)}
+                            title="Create Hub Invite"
+                            style={{ background: "var(--accent-color-transparent)", padding: "0.4rem 0.8rem", borderRadius: "6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--accent-color)", border: "1px solid var(--accent-color-transparent)" }}
+                        >
+                            ➕ Invite
+                        </button>
+                    )}
                     {activeDiscordMapping && (
                         <div
                             className="discord-badge-container"
@@ -674,6 +762,11 @@ export function ChatWindow({
                                             {message.externalAuthorName || message.authorDisplayName}
                                         </strong>
                                         <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+                                        {message.isPinned && (
+                                            <span className="pinned-indicator" title="Pinned Message" style={{ marginLeft: "0.5rem", fontSize: "0.8rem", opacity: 0.6 }}>
+                                                📌
+                                            </span>
+                                        )}
                                     </header>
                                 ) : null}
                                 <div className="message-content-wrapper" style={{ position: "relative" }}>
@@ -750,7 +843,7 @@ export function ChatWindow({
                                         </div>
                                     ) : (
                                         <>
-                                            <MessageContent content={message.content} />
+                                            <MessageContent message={message} />
                                             {message.updatedAt && <small className="message-meta-edited" style={{ fontSize: "0.75rem", opacity: 0.6 }}>(edited)</small>}
                                         </>
                                     )}
@@ -841,6 +934,7 @@ export function ChatWindow({
                     );
                 })}
             </ol>
+            <TypingIndicator channelId={selectedChannelId!} />
 
             {/* Single fixed-position reaction picker — decoupled from message DOM */}
             {reactionTargetMessageId && reactionPickerPos && (() => {
@@ -970,7 +1064,23 @@ export function ChatWindow({
                                 if (draftMessage.trim() || attachments.length > 0) {
                                     void submitDraftMessage(attachments);
                                     setAttachments([]);
+                                    // Clear typing immediately
+                                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                                    void sendTypingStatus(selectedChannelId!, false);
+                                    setLastTypingSentAt(0);
                                 }
+                            } else {
+                                // Typing logic
+                                const now = Date.now();
+                                if (now - lastTypingSentAt > 3000) {
+                                    void sendTypingStatus(selectedChannelId!, true);
+                                    setLastTypingSentAt(now);
+                                }
+                                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                                typingTimeoutRef.current = setTimeout(() => {
+                                    void sendTypingStatus(selectedChannelId!, false);
+                                    setLastTypingSentAt(0);
+                                }, 5000);
                             }
                         }}
                         maxLength={2000}
@@ -1085,6 +1195,69 @@ export function ChatWindow({
                         </div>
                         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
                             <button className="ghost" onClick={() => setIsInviting(false)}>Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Hub Invite Modal */}
+            {isCreatingHubInvite && (
+                <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setIsCreatingHubInvite(false)}>
+                    <div className="modal-content panel" style={{ width: "400px", padding: "1.5rem", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }} onClick={(e) => e.stopPropagation()}>
+                        <header style={{ marginBottom: "1.5rem", textAlign: "center" }}>
+                            <h3 style={{ margin: 0 }}>Invite to {activeServer?.name}</h3>
+                        </header>
+
+                        {!lastInviteUrl ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                                <p style={{ fontSize: "0.9rem", opacity: 0.8, textAlign: "center" }}>
+                                    This will create a link that anyone can use to join this hub.
+                                </p>
+                                <button
+                                    className="primary"
+                                    onClick={async () => {
+                                        try {
+                                            const hubId = activeServer?.id;
+                                            if (!hubId) return;
+                                            const invite = await createHubInvite(hubId);
+                                            const url = `${window.location.origin}/invite/${invite.id}`;
+                                            setLastInviteUrl(url);
+                                        } catch (e) {
+                                            showToast("Failed to create invite", "error");
+                                        }
+                                    }}
+                                    style={{ width: "100%", padding: "0.8rem", borderRadius: "8px", background: "var(--accent)", color: "white", border: "none", fontWeight: 600, cursor: "pointer" }}
+                                >
+                                    Generate Invite Link
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                                <div style={{ background: "var(--surface-alt)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={lastInviteUrl}
+                                        style={{ flex: 1, background: "transparent", border: "none", color: "var(--text)", fontSize: "0.9rem" }}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(lastInviteUrl);
+                                            showToast("Copied to clipboard", "success");
+                                        }}
+                                        style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "4px", padding: "0.25rem 0.5rem", fontSize: "0.8rem", cursor: "pointer" }}
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                                <p style={{ fontSize: "0.8rem", opacity: 0.6, textAlign: "center" }}>
+                                    Share this link with your friends!
+                                </p>
+                                <button className="ghost" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }} style={{ padding: "0.5rem", color: "var(--accent)", border: "none", background: "none", cursor: "pointer" }}>Done</button>
+                            </div>
+                        )}
+
+                        <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center" }}>
+                            <button className="ghost" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }} style={{ opacity: 0.6, fontSize: "0.9rem", background: "none", border: "none", cursor: "pointer" }}>Close</button>
                         </div>
                     </div>
                 </div>

@@ -208,6 +208,16 @@ export interface FederationPolicyStatus {
     updatedAt: string;
 }
 
+export interface HubInvite {
+    id: string;
+    hubId: string;
+    createdByUserId: string;
+    expiresAt: string | null;
+    maxUses: number | null;
+    usesCount: number;
+    createdAt: string;
+}
+
 export interface DiscordBridgeConnection {
     id: string;
     serverId: string;
@@ -308,6 +318,7 @@ export interface ChatMessage {
     parentId?: string;
     externalThreadId?: string;
     repliesCount?: number;
+    isPinned?: boolean;
     createdAt: string;
     updatedAt?: string;
     deletedAt?: string;
