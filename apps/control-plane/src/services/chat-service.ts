@@ -344,7 +344,7 @@ export async function fetchMessage(channelId: string, messageId: string, viewerU
       "select count(*) from chat_messages where parent_id = $1",
       [messageId]
     );
-    const repliesCount = parseInt(counts.rows[0].count, 10);
+    const repliesCount = parseInt(counts.rows[0]?.count || "0", 10);
 
     // Get reactions
     const reactionsResult = await db.query<{
