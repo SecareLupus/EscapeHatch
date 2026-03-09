@@ -797,8 +797,10 @@ export function ChatWindow({
                                                         setReactionTargetMessageId(null);
                                                     }}
                                                     theme={theme as any}
-                                                    width={350}
-                                                    height={400}
+                                                    width={280}
+                                                    height={320}
+                                                    previewConfig={{ showPreview: false }}
+                                                    skinTonesDisabled={true}
                                                 />
                                             </div>
                                         </div>
