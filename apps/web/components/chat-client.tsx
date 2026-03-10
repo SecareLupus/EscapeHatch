@@ -23,6 +23,7 @@ import {
   completeUsernameOnboarding,
   createCategory,
   createChannel,
+  createHubInvite,
   createServer,
   deleteChannel,
   deleteCategory, // Added deleteCategory
@@ -40,9 +41,11 @@ import {
   listChannelReadStates,
   listCategories,
   listChannels,
+  inviteToChannel,
   listMessages,
   listMessagesAround,
   searchMessages,
+  searchUsers,
   getFirstUnreadMessageId,
   listServers,
   listViewerRoleBindings,
@@ -114,7 +117,6 @@ export function ChatClient() {
     originalDispatch(action);
   }, [originalDispatch]);
 
-  const { showToast } = useToast();
   const {
     viewer,
     providers,
@@ -165,13 +167,46 @@ export function ChatClient() {
     channelScrollPositions,
     draftMessagesByChannel,
     profileUserId,
-    members
+    members,
+    blockedUserIds
   } = state;
+
+  const { showToast } = useToast();
+  const [isInviting, setIsInviting] = useState(false);
+  const [isCreatingHubInvite, setIsCreatingHubInvite] = useState(false);
+  const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
+
+  const activeChannelData = state.activeChannelData;
+  const activeServer = useMemo(
+    () => servers.find((s) => s.id === (activeChannelData?.serverId ?? selectedServerId)),
+    [servers, selectedServerId, activeChannelData?.serverId]
+  );
+
+  useEffect(() => {
+    if (userSearchQuery.length > 1) {
+      const timer = setTimeout(() => {
+        void searchUsers(userSearchQuery).then(setUserSearchResults);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setUserSearchResults([]);
+    }
+  }, [userSearchQuery]);
+
+  const canManageChannel = useMemo(
+    () =>
+      allowedActions.includes("channel.lock") ||
+      allowedActions.includes("channel.unlock") ||
+      allowedActions.includes("channel.slowmode"),
+    [allowedActions]
+  );
+
   const [iconFile, setIconFile] = useState<File | null>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
 
   const [mentions, setMentions] = useState<MentionMarker[]>([]);
-  const { blockedUserIds } = state;
 
   const filteredChannels = useMemo(() => {
     const term = channelFilter.trim().toLowerCase();
@@ -262,13 +297,6 @@ export function ChatClient() {
 
   const canAccessWorkspace = Boolean(viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized);
   const activeChannel = channels.find((channel) => channel.id === selectedChannelId) ?? null;
-  const canManageChannel = useMemo(
-    () =>
-      allowedActions.includes("channel.lock") ||
-      allowedActions.includes("channel.unlock") ||
-      allowedActions.includes("channel.slowmode"),
-    [allowedActions]
-  );
   const canManageHub = useMemo(
     () => viewerRoles.some((binding) => binding.role === "hub_admin" && !binding.serverId),
     [viewerRoles]
@@ -1544,6 +1572,14 @@ export function ChatClient() {
             {theme === "light" ? "🌙" : "☀️"}
           </button>
 
+          <button
+            type="button"
+            className="icon-button"
+            title="Search Messages"
+            onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: "search" })}
+          >
+            🔍
+          </button>
           <Link href="/settings" className="icon-button" title="User Settings" aria-label="User Settings">
             ⚙️
           </Link>
@@ -1627,7 +1663,31 @@ export function ChatClient() {
             {isDetailsOpen && (
               <ErrorBoundary>
                 <aside className="context panel scrollable-pane" aria-label="Channel context">
-                  <h2>Channel Details</h2>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                    <h2 style={{ margin: 0 }}>Channel Details</h2>
+                    {selectedServerId && activeServer?.type !== "dm" && (
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={() => setIsCreatingHubInvite(true)}
+                        title="Create Hub Invite"
+                        style={{ background: "var(--accent-color-transparent, rgba(88, 101, 242, 0.1))", padding: "0.4rem 0.8rem", borderRadius: "6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--accent-color, #5865f2)", border: "1px solid var(--accent-color-transparent, rgba(88, 101, 242, 0.2))" }}
+                      >
+                        ➕ Invite
+                      </button>
+                    )}
+                    {activeChannel?.type === "dm" && (
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={() => setIsInviting(true)}
+                        title="Invite Participants"
+                        style={{ background: "var(--accent-color-transparent, rgba(88, 101, 242, 0.1))", padding: "0.4rem 0.8rem", borderRadius: "6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--accent-color, #5865f2)", border: "1px solid var(--accent-color-transparent, rgba(88, 101, 242, 0.2))" }}
+                      >
+                        👤+ Invite
+                      </button>
+                    )}
+                  </div>
                   {activeChannel ? (
                     <>
                       <p className="context-line">
@@ -2041,6 +2101,120 @@ export function ChatClient() {
 
       {activeModal === "profile" && <ProfileModal />}
       {activeModal === "dm-picker" && <DMPickerModal />}
+      {activeModal === "search" && <SearchModal />}
+
+      {/* Invite Modal */}
+      {isInviting && (
+        <div className="modal-backdrop" onClick={() => setIsInviting(false)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()} style={{ width: "400px" }}>
+            <header className="modal-header">
+              <h2>Invite to DM</h2>
+              <button type="button" className="ghost" onClick={() => setIsInviting(false)}>×</button>
+            </header>
+            <div className="stack" style={{ padding: "1rem" }}>
+              <input
+                type="text"
+                placeholder="Search by username..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                autoFocus
+                style={{ width: "100%" }}
+              />
+              <div className="search-results scroller" style={{ maxHeight: "300px", marginTop: "1rem", border: "1px solid var(--border)", borderRadius: "4px" }}>
+                {userSearchResults.length > 0 ? (
+                  userSearchResults.map((user) => (
+                    <div key={user.productUserId} style={{ padding: "0.75rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span>{user.preferredUsername}</span>
+                      <button
+                        className="ghost"
+                        onClick={async () => {
+                          try {
+                            if (!selectedChannelId) return;
+                            await inviteToChannel(selectedChannelId, user.productUserId);
+                            showToast(`Invited ${user.preferredUsername}`, "success");
+                            setIsInviting(false);
+                            // The member list should update via the real-time stream or next poll.
+                          } catch (err) {
+                            showToast("Invite failed", "error");
+                          }
+                        }}
+                      >
+                        Invite
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p style={{ padding: "1rem", textAlign: "center", opacity: 0.6 }}>No users found</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hub Invite Modal */}
+      {isCreatingHubInvite && (
+        <div className="modal-backdrop" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()} style={{ width: "400px" }}>
+            <header className="modal-header">
+              <h2>Invite to {activeServer?.name}</h2>
+              <button type="button" className="ghost" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }}>×</button>
+            </header>
+            <div className="stack" style={{ padding: "1.5rem", textAlign: "center" }}>
+              {!lastInviteUrl ? (
+                <>
+                  <p style={{ fontSize: "0.9rem", opacity: 0.8, marginBottom: "1.5rem" }}>
+                    This will create a link that anyone can use to join this hub.
+                  </p>
+                  <button
+                    className="primary"
+                    onClick={async () => {
+                      try {
+                        const hubId = activeServer?.id;
+                        if (!hubId) return;
+                        const invite = await createHubInvite(hubId);
+                        const url = `${window.location.origin}/invite/${invite.id}`;
+                        setLastInviteUrl(url);
+                      } catch (e) {
+                        showToast("Failed to create invite", "error");
+                      }
+                    }}
+                    style={{ width: "100%" }}
+                  >
+                    Generate Invite Link
+                  </button>
+                </>
+              ) : (
+                <div className="stack" style={{ gap: "1rem" }}>
+                  <div style={{ background: "var(--surface-alt)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <input
+                      type="text"
+                      readOnly
+                      value={lastInviteUrl}
+                      style={{ flex: 1, background: "transparent", border: "none", color: "var(--text)", fontSize: "0.9rem" }}
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(lastInviteUrl);
+                        showToast("Copied to clipboard", "success");
+                      }}
+                      className="primary"
+                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p style={{ fontSize: "0.8rem", opacity: 0.6 }}>
+                    Share this link with your friends!
+                  </p>
+                  <button className="ghost" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }}>Done</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </main >
   );
 }

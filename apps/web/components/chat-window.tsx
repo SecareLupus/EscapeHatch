@@ -635,17 +635,6 @@ export function ChatWindow({
                     </div>
                 </div>
                 <div className="channel-actions" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    {activeServer && activeServer.type !== "dm" && (
-                        <button
-                            type="button"
-                            className="icon-button"
-                            onClick={() => setIsCreatingHubInvite(true)}
-                            title="Create Hub Invite"
-                            style={{ background: "var(--accent-color-transparent)", padding: "0.4rem 0.8rem", borderRadius: "6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--accent-color)", border: "1px solid var(--accent-color-transparent)" }}
-                        >
-                            ➕ Invite
-                        </button>
-                    )}
                     {activeDiscordMapping && (
                         <div
                             className="discord-badge-container"
@@ -670,14 +659,6 @@ export function ChatWindow({
                                 title="Set DM Topic"
                             >
                                 📝
-                            </button>
-                            <button
-                                type="button"
-                                className="icon-button"
-                                onClick={() => setIsInviting(true)}
-                                title="Invite Participants"
-                            >
-                                👤+
                             </button>
                         </div>
                     )}
@@ -720,14 +701,6 @@ export function ChatWindow({
                         </div>
                     )}
 
-                    <button
-                        type="button"
-                        className="icon-button"
-                        onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: "search" })}
-                        title="Search Messages"
-                    >
-                        🔍
-                    </button>
                     <button
                         type="button"
                         className={`icon-button ${isDetailsOpen ? "active-toggle" : ""}`}
