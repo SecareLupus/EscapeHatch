@@ -1161,7 +1161,7 @@ export function ChatClient() {
       return;
     }
 
-    list.scrollTop = list.scrollHeight;
+    list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
     dispatch({ type: "SET_NEAR_BOTTOM", payload: true });
     dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: 0 });
   }
@@ -1697,7 +1697,7 @@ export function ChatClient() {
                         className="icon-button"
                         onClick={() => setIsCreatingHubInvite(true)}
                         title="Create Hub Invite"
-                        style={{ background: "var(--accent-color-transparent, rgba(88, 101, 242, 0.1))", padding: "0.4rem 0.8rem", borderRadius: "6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--accent-color, #5865f2)", border: "1px solid var(--accent-color-transparent, rgba(88, 101, 242, 0.2))" }}
+                        style={{ background: "var(--accent-color, #5865f2)", padding: "0.5rem 1.2rem", borderRadius: "8px", fontSize: "0.9rem", fontWeight: 700, color: "white", border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.2)", transition: "all 0.2s ease" }}
                       >
                         ➕ Invite
                       </button>
@@ -1708,7 +1708,7 @@ export function ChatClient() {
                         className="icon-button"
                         onClick={() => setIsInviting(true)}
                         title="Invite Participants"
-                        style={{ background: "var(--accent-color-transparent, rgba(88, 101, 242, 0.1))", padding: "0.4rem 0.8rem", borderRadius: "6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--accent-color, #5865f2)", border: "1px solid var(--accent-color-transparent, rgba(88, 101, 242, 0.2))" }}
+                        style={{ background: "var(--accent-color, #5865f2)", padding: "0.5rem 1.2rem", borderRadius: "8px", fontSize: "0.9rem", fontWeight: 700, color: "white", border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.2)", transition: "all 0.2s ease" }}
                       >
                         👤+ Invite
                       </button>
