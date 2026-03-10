@@ -302,13 +302,10 @@ export async function searchMessages(input: {
 }): Promise<ChatMessage[]> {
   return withDb(async (db) => {
     let query = `
-      select m.* from chat_messages m
+      select m.*, c.server_id from chat_messages m
+      join channels c on c.id = m.channel_id
     `;
     const params: any[] = [];
-
-    if (input.serverId) {
-      query += ` join channels c on c.id = m.channel_id`;
-    }
 
     query += ` where m.deleted_at is null`;
 
@@ -320,8 +317,10 @@ export async function searchMessages(input: {
       query += ` and c.server_id = $${params.length}`;
     }
 
-    params.push(input.query);
-    query += ` and m.content % $${params.length}`; // trigram similarity
+    // Wrap query in percentage for ILIKE
+    const searchPattern = `%${input.query}%`;
+    params.push(searchPattern);
+    query += ` and m.content ilike $${params.length}`;
 
     if (input.before) {
       params.push(input.before);
@@ -333,11 +332,14 @@ export async function searchMessages(input: {
       query += ` and m.author_user_id not in (select blocked_user_id from user_blocks where blocker_user_id = $${params.length})`;
     }
 
-    query += ` order by m.content <-> $${params.indexOf(input.query) + 1} asc, m.created_at desc limit $${params.length + 1}`;
+    query += ` order by m.created_at desc limit $${params.length + 1}`;
     params.push(input.limit);
 
-    const rows = await db.query<ChatMessageRow>(query, params);
-    return rows.rows.map(row => mapChatMessage(row, {}, {}, input.viewerUserId));
+    const rows = await db.query<ChatMessageRow & { server_id: string }>(query, params);
+    return rows.rows.map(row => ({
+      ...mapChatMessage(row, {}, {}, input.viewerUserId),
+      serverId: row.server_id
+    }));
   });
 }
 

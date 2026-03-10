@@ -513,9 +513,17 @@ export function ChatClient() {
       let messageItems: ChatMessage[];
       if (urlMessageId) {
         messageItems = await listMessagesAround(nextChannelId, urlMessageId);
-        dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: urlMessageId });
+        if (messageItems.length === 0) {
+          // Fallback if message not found (e.g. invalid deep link or deleted)
+          messageItems = await listMessages(nextChannelId, null);
+          dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: null });
+          // Clear the invalid message param from URL
+          setUrlSelection(nextServerId, nextChannelId, null);
+        } else {
+          dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: urlMessageId });
+        }
       } else {
-        messageItems = await listMessages(nextChannelId, null); // Fetch root messages only
+        messageItems = await listMessages(nextChannelId, null);
         dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: null });
       }
 
@@ -634,6 +642,20 @@ export function ChatClient() {
       }
     );
   }, [viewer, bootstrapStatus?.initialized, bootstrapStatus?.defaultServerId, bootstrapStatus?.defaultChannelId, refreshChatState, dispatch, showToast]);
+
+  // Synchronize state with URL parameters when they change (e.g. from search or deep links)
+  useEffect(() => {
+    if (!bootstrapStatus?.initialized) return;
+
+    // If URL params don't match current selection, or there's a message ID to jump to, sync them
+    const needsSync = (urlServerId && urlServerId !== selectedServerId) ||
+      (urlChannelId && urlChannelId !== selectedChannelId) ||
+      (urlMessageId && messages.every(m => m.id !== urlMessageId));
+
+    if (needsSync) {
+      void refreshChatState(urlServerId ?? undefined, urlChannelId ?? undefined);
+    }
+  }, [urlServerId, urlChannelId, urlMessageId, bootstrapStatus?.initialized, refreshChatState, selectedServerId, selectedChannelId, messages]);
 
   useEffect(() => {
     if (!canAccessWorkspace || !selectedServerId) {

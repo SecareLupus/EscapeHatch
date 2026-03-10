@@ -4,9 +4,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useChat } from "../context/chat-context";
 import { searchMessages } from "../lib/control-plane";
 import type { ChatMessage } from "@skerry/shared";
+import { useRouter } from "next/navigation";
 
 export function SearchModal() {
     const { state, dispatch } = useChat();
+    const router = useRouter();
     const { searchQuery, searchResults, isSearching, selectedChannelId, selectedServerId } = state;
     const [scope, setScope] = useState<"channel" | "server">("channel");
 
@@ -41,22 +43,20 @@ export function SearchModal() {
         return () => clearTimeout(timeout);
     }, [searchQuery, scope, handleSearch, state.activeModal]);
 
-    const handleJump = (msg: ChatMessage) => {
+    const handleJump = (msg: any) => {
         // Close search
         dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
 
         // Trigger navigation/highlighting
-        // This will be handled by ChatClient watching the URL or a separate effect
         const next = new URLSearchParams(window.location.search);
+        if (msg.serverId) {
+            next.set("server", msg.serverId);
+        }
         next.set("channel", msg.channelId);
         next.set("message", msg.id);
 
-        // We might need to find the server ID for the channel if it's different from current
-        // For now assume same server if it was channel search, or we might need a lookup.
-        window.history.pushState({}, "", `${window.location.pathname}?${next.toString()}`);
-
-        // Trigger a custom event or just let ChatClient's searchParams effect handle it
-        window.dispatchEvent(new Event("popstate"));
+        // Use router for reactive update in Next.js
+        router.push(`${window.location.pathname}?${next.toString()}`);
     };
 
     if (state.activeModal !== "search") return null;
