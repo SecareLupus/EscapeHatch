@@ -126,6 +126,13 @@ export function Sidebar({
         e.preventDefault();
         const items: ContextMenuItem[] = [
             {
+                label: "Notification Settings",
+                type: "header"
+            },
+            {
+                type: "separator"
+            },
+            {
                 label: "All Messages",
                 onClick: () => updateChannelPreference(channel.id, 'all', false),
                 icon: state.muteStatusByChannel[channel.id] === false ? "✓" : ""

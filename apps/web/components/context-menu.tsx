@@ -3,10 +3,11 @@
 import React, { useEffect, useRef } from "react";
 
 export interface ContextMenuItem {
-  label: string;
+  label?: string;
   icon?: string;
-  onClick: () => void;
+  onClick?: () => void;
   danger?: boolean;
+  type?: "item" | "header" | "separator";
 }
 
 interface ContextMenuProps {
@@ -56,20 +57,31 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
 
   return (
     <div className="context-menu" ref={menuRef} style={style}>
-      {items.map((item, index) => (
-        <React.Fragment key={index}>
+      {items.map((item, index) => {
+        if (item.type === "header") {
+          return (
+            <div key={index} className="context-menu-header">
+              {item.label}
+            </div>
+          );
+        }
+        if (item.type === "separator") {
+          return <div key={index} className="context-menu-separator" />;
+        }
+        return (
           <button
+            key={index}
             className={`context-menu-item ${item.danger ? "danger" : ""}`}
             onClick={() => {
-              item.onClick();
+              item.onClick?.();
               onClose();
             }}
           >
             {item.icon && <span>{item.icon}</span>}
             {item.label}
           </button>
-        </React.Fragment>
-      ))}
+        );
+      })}
     </div>
   );
 }
