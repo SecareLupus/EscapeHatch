@@ -86,12 +86,26 @@ export function useModeration(setUrlSelection: (serverId: string | null, channel
 
     if (isModerator && !isSelf) {
       items.push({
+        label: "Moderate User...",
+        icon: "🛡️",
+        danger: true,
+        onClick: () => {
+          dispatch({ 
+            type: "SET_MODERATION_TARGET", 
+            payload: { userId: userContextMenu.userId, displayName: userContextMenu.displayName } 
+          });
+          dispatch({ type: "SET_ACTIVE_MODAL", payload: "moderation" });
+        }
+      });
+
+      items.push({
         label: "Timeout (Shadow Mute)",
         icon: "⏳",
         danger: true,
         onClick: () => {
           void performModerationAction({
             action: "timeout",
+            hubId: undefined,
             serverId: selectedServerId || "",
             targetUserId: userContextMenu.userId,
             timeoutSeconds: 3600,
@@ -106,6 +120,7 @@ export function useModeration(setUrlSelection: (serverId: string | null, channel
         onClick: () => {
           void performModerationAction({
             action: "kick",
+            hubId: undefined,
             serverId: selectedServerId || "",
             targetUserId: userContextMenu.userId,
             reason: "Kick requested via context menu"

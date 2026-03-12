@@ -47,6 +47,7 @@ export type ModalType =
     | "profile"
     | "dm-picker"
     | "search"
+    | "moderation"
     | null;
 
 export interface ChatState {
@@ -129,6 +130,9 @@ export interface ChatState {
     searchResults: ChatMessage[];
     isSearching: boolean;
     highlightedMessageId: string | null;
+    moderationTargetUserId: string | null;
+    moderationTargetDisplayName: string | null;
+    moderationTargetMessageId: string | null;
 }
 
 type ChatAction =
@@ -204,6 +208,7 @@ type ChatAction =
     | { type: "SET_SEARCH_RESULTS", payload: ChatMessage[] }
     | { type: "SET_IS_SEARCHING", payload: boolean }
     | { type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: string | null }
+    | { type: "SET_MODERATION_TARGET", payload: { userId: string | null; displayName: string | null; messageId?: string | null } }
     | { type: "SET_NOTIFICATION_PREFERENCE", payload: { channelId: string; preference: 'all' | 'mentions' | 'none'; isMuted?: boolean } };
 
 const initialState: ChatState = {
@@ -280,7 +285,10 @@ const initialState: ChatState = {
     searchQuery: "",
     searchResults: [],
     isSearching: false,
-    highlightedMessageId: null
+    highlightedMessageId: null,
+    moderationTargetUserId: null,
+    moderationTargetDisplayName: null,
+    moderationTargetMessageId: null
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -523,6 +531,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return { ...state, isSearching: action.payload };
         case "SET_HIGHLIGHTED_MESSAGE_ID":
             return { ...state, highlightedMessageId: action.payload };
+        case "SET_MODERATION_TARGET":
+            return {
+                ...state,
+                moderationTargetUserId: action.payload.userId,
+                moderationTargetDisplayName: action.payload.displayName,
+                moderationTargetMessageId: action.payload.messageId ?? null
+            };
         default:
             return state;
     }

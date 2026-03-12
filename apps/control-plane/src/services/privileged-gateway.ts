@@ -8,6 +8,8 @@ function toModerationActionType(action: PrivilegedAction): ModerationActionType 
   if (action === "moderation.ban") return "ban";
   if (action === "moderation.unban") return "unban";
   if (action === "moderation.timeout") return "timeout";
+  if (action === "moderation.warn") return "warn";
+  if (action === "moderation.strike") return "strike";
   if (action === "moderation.redact") return "redact_message";
   if (action === "channel.lock") return "lock_channel";
   if (action === "channel.unlock") return "unlock_channel";
@@ -18,7 +20,7 @@ function toModerationActionType(action: PrivilegedAction): ModerationActionType 
 export async function executePrivilegedAction<T>(input: {
   actorUserId: string;
   action: PrivilegedAction;
-  scope: { hubId?: string; serverId: string; channelId?: string };
+  scope: { hubId?: string; serverId?: string; channelId?: string };
   reason: string;
   targetUserId?: string;
   targetMessageId?: string;
@@ -46,13 +48,14 @@ export async function executePrivilegedAction<T>(input: {
   await withDb(async (db) => {
     await db.query(
       `insert into moderation_actions
-       (id, action_type, actor_user_id, server_id, channel_id, target_user_id, target_message_id, reason, metadata)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       (id, action_type, actor_user_id, hub_id, server_id, channel_id, target_user_id, target_message_id, reason, metadata)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         `mod_${crypto.randomUUID().replaceAll("-", "")}`,
         toModerationActionType(input.action),
         input.actorUserId,
-        input.scope.serverId,
+        input.scope.hubId ?? null,
+        input.scope.serverId ?? null,
         input.scope.channelId ?? null,
         input.targetUserId ?? null,
         input.targetMessageId ?? null,

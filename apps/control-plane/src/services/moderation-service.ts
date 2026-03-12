@@ -3,9 +3,14 @@ import type { ModerationAction, ModerationReport, ReportStatus, Role } from "@sk
 import { withDb } from "../db/client.js";
 import { executePrivilegedAction } from "./privileged-gateway.js";
 
+const REPORT_RATE_LIMITS = new Map<string, number>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_REPORTS_PER_WINDOW = 5;
+
 interface BaseModerationInput {
   actorUserId: string;
-  serverId: string;
+  hubId?: string;
+  serverId?: string;
   channelId?: string;
   targetUserId?: string;
   targetMessageId?: string;
@@ -78,178 +83,230 @@ export async function setChannelControls(input: {
 }
 
 export async function performModerationAction(
-  input: BaseModerationInput & { action: "kick" | "ban" | "unban" | "timeout" | "redact_message"; timeoutSeconds?: number }
+  input: BaseModerationInput & { action: "kick" | "ban" | "unban" | "timeout" | "redact_message" | "warn" | "strike"; timeoutSeconds?: number }
 ): Promise<void> {
   const actionMap = {
     kick: "moderation.kick",
     ban: "moderation.ban",
     unban: "moderation.unban",
     timeout: "moderation.timeout",
+    warn: "moderation.warn",
+    strike: "moderation.strike",
     redact_message: "moderation.redact"
   } as const;
 
   await executePrivilegedAction({
     actorUserId: input.actorUserId,
     action: actionMap[input.action],
-    scope: { serverId: input.serverId, channelId: input.channelId },
+    scope: { hubId: input.hubId, serverId: input.serverId, channelId: input.channelId },
     reason: input.reason,
     targetUserId: input.targetUserId,
     targetMessageId: input.targetMessageId,
     metadata: input.timeoutSeconds ? { timeoutSeconds: input.timeoutSeconds } : undefined,
     run: async () => {
-      const { kickUser, banUser, unbanUser, redactEvent } = await import("../matrix/synapse-adapter.js");
-      const { getDiscordBridgeConnection } = await import("./discord-bridge-service.js");
-      const { 
-        kickDiscordMember, 
-        banDiscordMember, 
-        unbanDiscordMember, 
-        timeoutDiscordMember 
-      } = await import("./discord-bot-client.js");
+      const { kickUser, banUser, unbanUser, redactEvent, setUserMuted } = await import("../matrix/synapse-adapter.js");
+      const { fetchServerScope } = await import("./policy-service.js");
 
-      const dbData = await withDb(async (db) => {
-        let channelMatrixId: string | null = null;
+      // Resolve scope for Matrix operations
+      const scope = await withDb(async (db) => {
         if (input.channelId) {
-          const chRow = await db.query<{ matrix_room_id: string }>(
-            "select matrix_room_id from channels where id = $1",
+          const room = await db.query<{ matrix_room_id: string; server_id: string }>(
+            "select matrix_room_id, server_id from channels where id = $1",
             [input.channelId]
           );
-          channelMatrixId = chRow.rows[0]?.matrix_room_id ?? null;
+          return { roomId: room.rows[0]?.matrix_room_id, serverId: room.rows[0]?.server_id };
         }
-
-        const srvRow = await db.query<{ matrix_space_id: string }>(
-          "select matrix_space_id from servers where id = $1",
-          [input.serverId]
-        );
-        const serverMatrixId = srvRow.rows[0]?.matrix_space_id ?? null;
-
-        // Check if there's a Discord ID associated or if targetUserId IS a discord ID
-        let discordId: string | null = null;
-        if (input.targetUserId?.startsWith("discord_")) {
-          discordId = input.targetUserId.replace("discord_", "");
-        } else if (input.targetUserId) {
-          const idRow = await db.query<{ oidc_subject: string }>(
-            "select oidc_subject from identity_mappings where product_user_id = $1 and provider = 'discord' limit 1",
-            [input.targetUserId]
+        if (input.serverId) {
+          const server = await db.query<{ matrix_space_id: string }>(
+            "select matrix_space_id from servers where id = $1",
+            [input.serverId]
           );
-          discordId = idRow.rows[0]?.oidc_subject ?? null;
+          return { roomId: server.rows[0]?.matrix_space_id, serverId: input.serverId };
         }
-
-        return { channelMatrixId, serverMatrixId, discordId };
+        return { roomId: null, serverId: null };
       });
 
-      if (!dbData.serverMatrixId) {
-        throw new Error("Target server has no associated Matrix Space ID.");
+      if (input.action === "warn") {
+        await warnUser(input);
+        return;
       }
 
-      const connection = await getDiscordBridgeConnection(input.serverId);
-
-      // 1. Handle Discord-side moderation if applicable
-      if (dbData.discordId && connection && connection.guildId && connection.status === "connected") {
-        try {
-          switch (input.action) {
-            case "kick":
-              await kickDiscordMember(connection.guildId, dbData.discordId, input.reason);
-              break;
-            case "ban":
-              await banDiscordMember(connection.guildId, dbData.discordId, input.reason);
-              break;
-            case "unban":
-              await unbanDiscordMember(connection.guildId, dbData.discordId, input.reason);
-              break;
-            case "timeout":
-              await timeoutDiscordMember(connection.guildId, dbData.discordId, input.timeoutSeconds ?? 3600, input.reason);
-              break;
-          }
-        } catch (error) {
-          console.error("Failed to perform Discord moderation:", error);
-          // Continue with Matrix moderation even if Discord fails
-        }
+      if (input.action === "strike") {
+        await applyStrike(input);
+        return;
       }
 
-      // 2. Handle Matrix-side moderation
-      // If targetUserId is just a virtual discord user and they aren't in Matrix yet, 
-      // some calls might fail. We wrap them or check existence.
-      const isVirtualDiscordUser = input.targetUserId?.startsWith("discord_");
-      
-      try {
-        switch (input.action) {
-          case "kick":
-            if (!input.targetUserId) throw new Error("targetUserId is required for kick");
-            await kickUser({
-              roomId: dbData.serverMatrixId,
-              userId: input.targetUserId,
-              reason: input.reason
-            });
-            break;
-          case "ban":
-            if (!input.targetUserId) throw new Error("targetUserId is required for ban");
-            await banUser({
-              roomId: dbData.serverMatrixId,
-              userId: input.targetUserId,
-              reason: input.reason
-            });
-            break;
-          case "unban":
-            if (!input.targetUserId) throw new Error("targetUserId is required for unban");
-            await unbanUser({
-              roomId: dbData.serverMatrixId,
-              userId: input.targetUserId,
-              reason: input.reason
-            });
-            break;
-          case "redact_message":
-            if (!input.targetMessageId) throw new Error("targetMessageId is required for redact");
-            if (!dbData.channelMatrixId) throw new Error("Channel has no associated Matrix Room ID.");
-            await redactEvent({
-              roomId: dbData.channelMatrixId,
-              eventId: input.targetMessageId,
-              reason: input.reason
-            });
-            break;
-          case "timeout":
-            if (!input.targetUserId) throw new Error("targetUserId is required for timeout");
-            const timeoutSeconds = input.timeoutSeconds ?? 3600;
-            const expiresAt = new Date(Date.now() + timeoutSeconds * 1000).toISOString();
-            
-            // 1. Save restriction in DB
-            await withDb(async (db) => {
-              await db.query(
-                `insert into moderation_time_restrictions (id, server_id, target_user_id, status, expires_at)
-                 values ($1, $2, $3, 'active', $4)`,
-                [
-                  `timerest_${crypto.randomUUID().replaceAll("-", "")}`,
-                  input.serverId,
-                  input.targetUserId,
-                  expiresAt
-                ]
-              );
-            });
+      if (input.action === "timeout" && input.targetUserId) {
+        if (!scope.roomId) throw new Error("Could not resolve Matrix room for timeout");
+        await setUserMuted(scope.roomId, input.targetUserId, true);
 
-            // 2. Mute them in Matrix
-            const channels = await withDb(async (db) => {
-              const res = await db.query<{ matrix_room_id: string }>(
-                "select matrix_room_id from channels where server_id = $1 and matrix_room_id is not null",
-                [input.serverId]
-              );
-              return res.rows.map(r => r.matrix_room_id);
-            });
+        await withDb(async (db) => {
+          const expiresAt = input.timeoutSeconds
+            ? new Date(Date.now() + input.timeoutSeconds * 1000)
+            : null;
 
-            const { setUserMuted } = await import("../matrix/synapse-adapter.js");
-            const roomIds = [dbData.serverMatrixId, ...channels];
-            await Promise.allSettled(
-              roomIds.map(roomId => setUserMuted(roomId, input.targetUserId!, true))
+          await db.query(
+            `insert into moderation_time_restrictions (id, hub_id, server_id, channel_id, target_user_id, action_type, expires_at)
+             values ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              `mtr_${crypto.randomUUID().replaceAll("-", "")}`,
+              input.hubId || null,
+              input.serverId || null,
+              input.channelId || null,
+              input.targetUserId,
+              "timeout",
+              expiresAt
+            ]
+          );
+        });
+      }
+
+      if (input.action === "kick" && input.targetUserId) {
+        if (!scope.roomId) throw new Error("Could not resolve Matrix room for kick");
+        await kickUser({ roomId: scope.roomId, userId: input.targetUserId, reason: input.reason });
+      }
+
+      if (input.action === "ban" && input.targetUserId) {
+        if (!scope.roomId) throw new Error("Could not resolve Matrix room for ban");
+        await banUser({ roomId: scope.roomId, userId: input.targetUserId, reason: input.reason });
+      }
+
+      if (input.action === "unban" && input.targetUserId) {
+        if (!scope.roomId) throw new Error("Could not resolve Matrix room for unban");
+        await unbanUser({ roomId: scope.roomId, userId: input.targetUserId });
+      }
+
+      if (input.action === "redact_message" && input.targetMessageId) {
+        if (!scope.roomId) throw new Error("Could not resolve Matrix room for redaction");
+        await redactEvent({ roomId: scope.roomId, eventId: input.targetMessageId, reason: input.reason });
+      }
+
+      // Audit Log
+      await withDb(async (db) => {
+        await db.query(
+          `insert into moderation_actions (id, action_type, hub_id, server_id, channel_id, actor_user_id, target_user_id, target_message_id, reason)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            `act_${crypto.randomUUID().replaceAll("-", "")}`,
+            input.action,
+            input.hubId || null,
+            input.serverId || null,
+            input.channelId || null,
+            input.actorUserId,
+            input.targetUserId || null,
+            input.targetMessageId || null,
+            input.reason
+          ]
+        );
+      });
+
+      // Handle Discord-side moderation if applicable (Hub/Space level)
+      if (input.targetUserId && input.serverId) {
+        const { getDiscordBridgeConnection } = await import("./discord-bridge-service.js");
+        const {
+          kickDiscordMember,
+          banDiscordMember,
+          unbanDiscordMember,
+          timeoutDiscordMember
+        } = await import("./discord-bot-client.js");
+
+        const discordData = await withDb(async (db) => {
+          let discordId: string | null = null;
+          if (input.targetUserId?.startsWith("discord_")) {
+            discordId = input.targetUserId.replace("discord_", "");
+          } else if (input.targetUserId) {
+            const idRow = await db.query<{ oidc_subject: string }>(
+              "select oidc_subject from identity_mappings where product_user_id = $1 and provider = 'discord' limit 1",
+              [input.targetUserId]
             );
-            break;
-        }
-      } catch (error) {
-        if (isVirtualDiscordUser) {
-           // It's expected that virtual users might not be in Matrix yet.
-           // We've already handled Discord native moderation if possible.
-           console.log(`Skipping Matrix moderation for virtual Discord user ${input.targetUserId} as they likely aren't in Matrix.`);
-        } else {
-          throw error;
+            discordId = idRow.rows[0]?.oidc_subject ?? null;
+          }
+          return { discordId };
+        });
+
+        const connection = await getDiscordBridgeConnection(input.serverId);
+        if (discordData.discordId && connection?.guildId && connection.status === "connected") {
+          try {
+            switch (input.action) {
+              case "kick":
+                await kickDiscordMember(connection.guildId, discordData.discordId, input.reason);
+                break;
+              case "ban":
+                await banDiscordMember(connection.guildId, discordData.discordId, input.reason);
+                break;
+              case "unban":
+                await unbanDiscordMember(connection.guildId, discordData.discordId, input.reason);
+                break;
+              case "timeout":
+                await timeoutDiscordMember(connection.guildId, discordData.discordId, input.timeoutSeconds ?? 3600, input.reason);
+                break;
+            }
+          } catch (error) {
+            console.error("Failed to perform Discord moderation:", error);
+          }
         }
       }
+    }
+  });
+}
+
+export async function warnUser(input: BaseModerationInput): Promise<void> {
+  if (!input.targetUserId) return;
+
+  const { getIdentityByProductUserId } = await import("./identity-service.js");
+
+  const identity = await getIdentityByProductUserId(input.targetUserId);
+  if (identity?.matrixUserId) {
+    console.log(`[WARN] User ${input.targetUserId} (${identity.matrixUserId}) warned: ${input.reason}`);
+  }
+
+  await withDb(async (db) => {
+    await db.query(
+      `insert into moderation_warnings (id, hub_id, server_id, channel_id, target_user_id, actor_user_id, reason, message_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        `wrn_${crypto.randomUUID().replaceAll("-", "")}`,
+        input.hubId || null,
+        input.serverId || null,
+        input.channelId || null,
+        input.targetUserId,
+        input.actorUserId,
+        input.reason,
+        input.targetMessageId || null
+      ]
+    );
+  });
+}
+
+export async function applyStrike(input: BaseModerationInput): Promise<void> {
+  if (!input.targetUserId) return;
+
+  await withDb(async (db) => {
+    const strikeId = `stk_${crypto.randomUUID().replaceAll("-", "")}`;
+    await db.query(
+      `insert into moderation_strikes (id, hub_id, server_id, channel_id, target_user_id, actor_user_id, reason)
+       values ($1, $2, $3, $4, $5, $6, $7)`,
+      [strikeId, input.hubId || null, input.serverId || null, input.channelId || null, input.targetUserId, input.actorUserId, input.reason]
+    );
+
+    const countRes = await db.query<{ count: string }>(
+      "select count(*) from moderation_strikes where target_user_id = $1 and (server_id = $2 or hub_id = $3)",
+      [input.targetUserId, input.serverId || null, input.hubId || null]
+    );
+    const count = parseInt(countRes.rows[0]?.count ?? "0", 10);
+
+    if (count >= 7) {
+      await performModerationAction({ ...input, action: "ban", reason: `Escalation: ${count} strikes accumulated` });
+      await db.query("update moderation_strikes set action_taken = 'ban' where id = $1", [strikeId]);
+    } else if (count >= 5) {
+      await performModerationAction({ ...input, action: "kick", reason: `Escalation: ${count} strikes accumulated` });
+      await db.query("update moderation_strikes set action_taken = 'kick' where id = $1", [strikeId]);
+    } else if (count >= 3) {
+      await performModerationAction({ ...input, action: "timeout", timeoutSeconds: 3600, reason: `Escalation: ${count} strikes accumulated` });
+      await db.query("update moderation_strikes set action_taken = 'timeout' where id = $1", [strikeId]);
+    } else {
+      await warnUser({ ...input, reason: `Strike added. Current strike count: ${count}. Reason: ${input.reason}` });
+      await db.query("update moderation_strikes set action_taken = 'warn' where id = $1", [strikeId]);
     }
   });
 }
@@ -262,6 +319,15 @@ export async function createReport(input: {
   targetMessageId?: string;
   reason: string;
 }): Promise<ModerationReport> {
+  const now = Date.now();
+  const limitKey = `report_${input.reporterUserId}`;
+  const lastReportTime = REPORT_RATE_LIMITS.get(limitKey) || 0;
+
+  if (now - lastReportTime < (RATE_LIMIT_WINDOW_MS / MAX_REPORTS_PER_WINDOW)) {
+    throw new Error("You are reporting too fast. Please wait a moment.");
+  }
+  REPORT_RATE_LIMITS.set(limitKey, now);
+
   return withDb(async (db) => {
     const id = `rpt_${crypto.randomUUID().replaceAll("-", "")}`;
     const row = await db.query<{
@@ -408,7 +474,8 @@ export async function listAuditLogs(serverId: string): Promise<ModerationAction[
       id: string;
       action_type: ModerationAction["actionType"];
       actor_user_id: string;
-      server_id: string;
+      hub_id: string | null;
+      server_id: string | null;
       channel_id: string | null;
       target_user_id: string | null;
       target_message_id: string | null;
@@ -424,6 +491,42 @@ export async function listAuditLogs(serverId: string): Promise<ModerationAction[
       id: row.id,
       actionType: row.action_type,
       actorUserId: row.actor_user_id,
+      hubId: row.hub_id,
+      serverId: row.server_id,
+      channelId: row.channel_id,
+      targetUserId: row.target_user_id,
+      targetMessageId: row.target_message_id,
+      reason: row.reason,
+      metadata: row.metadata ?? {},
+      createdAt: row.created_at
+    }));
+  });
+}
+
+export async function listHubAuditLogs(hubId: string): Promise<ModerationAction[]> {
+  return withDb(async (db) => {
+    const rows = await db.query<{
+      id: string;
+      action_type: ModerationAction["actionType"];
+      actor_user_id: string;
+      hub_id: string | null;
+      server_id: string | null;
+      channel_id: string | null;
+      target_user_id: string | null;
+      target_message_id: string | null;
+      reason: string;
+      metadata: Record<string, unknown>;
+      created_at: string;
+    }>(
+      "select * from moderation_actions where hub_id = $1 order by created_at desc limit 200",
+      [hubId]
+    );
+
+    return rows.rows.map((row) => ({
+      id: row.id,
+      actionType: row.action_type,
+      actorUserId: row.actor_user_id,
+      hubId: row.hub_id,
       serverId: row.server_id,
       channelId: row.channel_id,
       targetUserId: row.target_user_id,

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { performModerationAction, performBulkModerationAction } from "../lib/control-plane";
+import React, { useState, useMemo, useEffect } from "react";
+import { performModerationAction, performBulkModerationAction, getUserModerationStatus } from "../lib/control-plane";
 import { useToast } from "./toast-provider";
+import { useChat } from "../context/chat-context";
 
 export interface MemberEntry {
   productUserId: string;
@@ -23,10 +24,33 @@ interface MemberTableProps {
 
 export default function MemberTable({ serverId, hubId, members, onRefresh }: MemberTableProps) {
   const { showToast } = useToast();
+  const { state, dispatch } = useChat();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "skerry" | "discord">("all");
   const [modifying, setModifying] = useState(false);
+  const [moderationStats, setModerationStats] = useState<Record<string, { warningCount: number; strikeCount: number }>>({});
+
+  useEffect(() => {
+    if (!members.length) return;
+    
+    // Fetch moderation status for SKERRY users (not discord ones as much for now)
+    const fetchStats = async () => {
+        const stats: Record<string, { warningCount: number; strikeCount: number }> = {};
+        for (const member of members) {
+            if (!member.isBridged) {
+                try {
+                    const s = await getUserModerationStatus(member.productUserId, { hubId, serverId });
+                    stats[member.productUserId] = s;
+                } catch (e) {
+                    // Ignore errors for individual members
+                }
+            }
+        }
+        setModerationStats(stats);
+    };
+    fetchStats();
+  }, [members, serverId, hubId]);
 
   const filteredMembers = useMemo(() => {
     return members.filter(m => {
@@ -165,7 +189,27 @@ export default function MemberTable({ serverId, hubId, members, onRefresh }: Mem
                       alt=""
                     />
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 600 }}>{member.displayName}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 600 }}>{member.displayName}</span>
+                        {(() => {
+                          const stats = moderationStats[member.productUserId];
+                          if (!stats) return null;
+                          return (
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              {stats.warningCount > 0 && (
+                                <span className="badge warning" title={`${stats.warningCount} Warnings`}>
+                                  ⚠️ {stats.warningCount}
+                                </span>
+                              )}
+                              {stats.strikeCount > 0 && (
+                                <span className="badge danger" title={`${stats.strikeCount} Strikes`}>
+                                  ❗ {stats.strikeCount}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{member.productUserId}</span>
                     </div>
                   </div>
@@ -197,18 +241,24 @@ export default function MemberTable({ serverId, hubId, members, onRefresh }: Mem
                       <button
                         className="ghost"
                         style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                        onClick={() => {
+                          dispatch({ 
+                            type: "SET_MODERATION_TARGET", 
+                            payload: { userId: member.productUserId, displayName: member.displayName } 
+                          });
+                          dispatch({ type: "SET_ACTIVE_MODAL", payload: "moderation" });
+                        }}
+                        disabled={modifying}
+                      >
+                        Moderate
+                      </button>
+                      <button
+                        className="ghost"
+                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                         onClick={() => handleIndividualAction(member.productUserId, "kick")}
                         disabled={modifying}
                       >
                         Kick
-                      </button>
-                      <button
-                        className="ghost"
-                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: 'var(--danger)' }}
-                        onClick={() => handleIndividualAction(member.productUserId, "ban")}
-                        disabled={modifying}
-                      >
-                        Ban
                       </button>
                     </div>
                   )}

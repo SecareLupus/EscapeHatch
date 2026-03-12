@@ -702,8 +702,9 @@ export async function listMentions(channelId: string, limit = 100): Promise<Ment
 }
 
 export async function performModerationAction(input: {
-  action: "kick" | "ban" | "unban" | "timeout" | "redact_message";
-  serverId: string;
+  action: "kick" | "ban" | "unban" | "timeout" | "redact_message" | "warn" | "strike";
+  hubId?: string;
+  serverId?: string;
   channelId?: string;
   targetUserId?: string;
   targetMessageId?: string;
@@ -715,6 +716,19 @@ export async function performModerationAction(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
   });
+}
+
+export async function getUserModerationStatus(userId: string, scope: { hubId?: string; serverId?: string; channelId?: string }): Promise<{ warningCount: number; strikeCount: number }> {
+    const params = new URLSearchParams();
+    params.set("userId", userId);
+    if (scope.hubId) params.set("hubId", scope.hubId);
+    if (scope.serverId) params.set("serverId", scope.serverId);
+    if (scope.channelId) params.set("channelId", scope.channelId);
+
+    const res = await apiFetch(`/v1/moderation/user-status?${params.toString()}`, {
+      method: "GET"
+    });
+    return res as { warningCount: number; strikeCount: number };
 }
 
 export async function createReport(input: {

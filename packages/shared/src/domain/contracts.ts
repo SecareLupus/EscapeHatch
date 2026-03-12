@@ -7,6 +7,8 @@ export type ModerationActionType =
     | "ban"
     | "unban"
     | "timeout"
+    | "warn"
+    | "strike"
     | "redact_message"
     | "lock_channel"
     | "unlock_channel"
@@ -19,6 +21,8 @@ export type PrivilegedAction =
     | "moderation.ban"
     | "moderation.unban"
     | "moderation.timeout"
+    | "moderation.warn"
+    | "moderation.strike"
     | "moderation.redact"
     | "channel.lock"
     | "channel.unlock"
@@ -130,7 +134,8 @@ export interface ModerationAction {
     id: string;
     actionType: ModerationActionType;
     actorUserId: string;
-    serverId: string;
+    hubId: string | null;
+    serverId: string | null;
     channelId: string | null;
     targetUserId: string | null;
     targetMessageId: string | null;

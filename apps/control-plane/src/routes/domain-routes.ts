@@ -1372,8 +1372,9 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
   app.post("/v1/moderation/actions", initializedAuthHandlers, async (request, reply) => {
     const payload = z
       .object({
-        action: z.enum(["kick", "ban", "unban", "timeout", "redact_message"]),
-        serverId: z.string().min(1),
+        action: z.enum(["kick", "ban", "unban", "timeout", "warn", "strike", "redact_message"]),
+        hubId: z.string().optional(),
+        serverId: z.string().optional(),
         channelId: z.string().optional(),
         targetUserId: z.string().optional(),
         targetMessageId: z.string().optional(),

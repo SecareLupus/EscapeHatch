@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useToast } from "./toast-provider";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { ProfileModal } from "./profile-modal";
+import { ModerationModal } from "./moderation-modal";
 import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
 import { getChannelName } from "../lib/channel-utils";
 import { ThreadPanel } from "./thread-panel";
@@ -2169,6 +2170,7 @@ export function ChatClient() {
       }
 
       {activeModal === "profile" && <ProfileModal />}
+      {activeModal === "moderation" && <ModerationModal />}
       {activeModal === "dm-picker" && <DMPickerModal />}
       {activeModal === "search" && <SearchModal />}
 

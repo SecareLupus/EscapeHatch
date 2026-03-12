@@ -430,12 +430,29 @@ export function ChatWindow({
 
         if (isModerator && !isAuthor) {
             items.push({
+                label: "Moderate User...",
+                icon: "🛡️",
+                danger: true,
+                onClick: () => {
+                    dispatch({
+                        type: "SET_MODERATION_TARGET",
+                        payload: {
+                            userId: contextMenu.message?.authorUserId || "",
+                            displayName: contextMenu.message?.authorDisplayName || "User",
+                            messageId: contextMenu.message?.id
+                        }
+                    });
+                    dispatch({ type: "SET_ACTIVE_MODAL", payload: "moderation" });
+                }
+            });
+            items.push({
                 label: "Timeout User (Shadow Mute)",
                 icon: "⏳",
                 danger: true,
                 onClick: () => {
                     void performModerationAction({
                         action: "timeout",
+                        hubId: undefined,
                         serverId: selectedServerId || "",
                         targetUserId: contextMenu.message?.authorUserId,
                         timeoutSeconds: 3600,
@@ -450,6 +467,7 @@ export function ChatWindow({
                 onClick: () => {
                     void performModerationAction({
                         action: "kick",
+                        hubId: undefined,
                         serverId: selectedServerId || "",
                         targetUserId: contextMenu.message?.authorUserId,
                         reason: "Kick requested via message context"
