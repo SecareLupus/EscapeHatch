@@ -71,7 +71,7 @@ export function RoleModal() {
                 <>
                   <option value="user">👤 Regular User</option>
                   <option value="space_moderator">🛡️ Space Moderator</option>
-                  <option value="space_admin">👮 Space Admin</option>
+                  <option value="space_admin">⭐ Space Admin</option>
                   <option value="space_owner">👑 Space Owner</option>
                 </>
               ) : (

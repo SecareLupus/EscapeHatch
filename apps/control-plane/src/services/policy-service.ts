@@ -381,7 +381,7 @@ async function authorizeRoleGrant(input: {
 
   const actorCanAssign = new Set<Role>();
   for (const binding of managerBindings) {
-    if (binding.role === "hub_admin") {
+    if (binding.role === "hub_owner" || binding.role === "hub_admin") {
       actorCanAssign.add("hub_admin");
       actorCanAssign.add("space_owner");
       actorCanAssign.add("space_admin");
@@ -392,9 +392,7 @@ async function authorizeRoleGrant(input: {
     if (binding.role === "space_owner" || binding.role === "space_admin") {
       actorCanAssign.add("space_moderator");
       actorCanAssign.add("user");
-      // Space Owners/Admins cannot assign "space_admin" to others to prevent horizontal escalation 
-      // without Hub Admin oversight, or maybe they can? 
-      // Usually "Admin" can appoint other "Admins".
+      // Space Owners/Admins can assign "space_admin" to others to delegate administration
       actorCanAssign.add("space_admin");
     }
   }
