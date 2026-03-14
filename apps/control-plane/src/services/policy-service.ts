@@ -55,6 +55,23 @@ export const permissionMatrix: Record<Role, PrivilegedAction[]> = {
     "audit.read",
     "badges.manage"
   ],
+  space_admin: [
+    "moderation.kick",
+    "moderation.ban",
+    "moderation.unban",
+    "moderation.timeout",
+    "moderation.warn",
+    "moderation.strike",
+    "moderation.redact",
+    "channel.lock",
+    "channel.unlock",
+    "channel.slowmode",
+    "channel.posting",
+    "voice.token.issue",
+    "reports.triage",
+    "audit.read",
+    "badges.manage"
+  ],
   space_moderator: [
     "moderation.kick",
     "moderation.ban",
@@ -85,7 +102,8 @@ interface RoleBinding {
 }
 
 const HUB_MANAGER_ROLES: Role[] = ["hub_owner", "hub_admin"];
-const SERVER_MANAGER_ROLES: Role[] = ["hub_owner", "hub_admin", "space_owner"];
+const SERVER_MANAGER_ROLES: Role[] = ["hub_owner", "hub_admin", "space_owner", "space_admin"];
+
 
 export async function fetchServerScope(
   db: Parameters<Parameters<typeof withDb>[0]>[0],
@@ -328,11 +346,11 @@ async function authorizeRoleGrant(input: {
     };
   }
 
-  if ((input.role === "space_owner" || input.role === "space_moderator") && !scope.serverId) {
+  if ((input.role === "space_owner" || input.role === "space_admin" || input.role === "space_moderator") && !scope.serverId) {
     return {
       allowed: false,
       code: "role_escalation_denied",
-      message: "Space Owner and Space Moderator grants must target a server scope.",
+      message: "Space roles must target a server scope.",
       scope
     };
   }
@@ -366,13 +384,18 @@ async function authorizeRoleGrant(input: {
     if (binding.role === "hub_admin") {
       actorCanAssign.add("hub_admin");
       actorCanAssign.add("space_owner");
+      actorCanAssign.add("space_admin");
       actorCanAssign.add("space_moderator");
       actorCanAssign.add("user");
       continue;
     }
-    if (binding.role === "space_owner") {
+    if (binding.role === "space_owner" || binding.role === "space_admin") {
       actorCanAssign.add("space_moderator");
       actorCanAssign.add("user");
+      // Space Owners/Admins cannot assign "space_admin" to others to prevent horizontal escalation 
+      // without Hub Admin oversight, or maybe they can? 
+      // Usually "Admin" can appoint other "Admins".
+      actorCanAssign.add("space_admin");
     }
   }
 

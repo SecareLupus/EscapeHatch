@@ -387,8 +387,8 @@ export async function listHubMembers(hubId: string): Promise<IdentityMapping[]> 
     const rows = await db.query<IdentityRow>(
       `select distinct on (im.product_user_id) im.*
        from identity_mappings im
-       join role_bindings rb on rb.product_user_id = im.product_user_id
-       where rb.hub_id = $1
+       join hub_members hm on hm.product_user_id = im.product_user_id
+       where hm.hub_id = $1
        order by im.product_user_id, im.preferred_username is not null desc, im.updated_at desc`,
       [hubId]
     );

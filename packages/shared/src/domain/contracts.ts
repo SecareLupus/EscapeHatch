@@ -1,6 +1,7 @@
 export type AccessLevel = "hidden" | "locked" | "read" | "chat";
 
-export type Role = "hub_owner" | "hub_admin" | "space_owner" | "space_moderator" | "user" | "visitor";
+export type Role = "hub_owner" | "hub_admin" | "space_owner" | "space_admin" | "space_moderator" | "user" | "visitor";
+
 
 export type ChannelType = "text" | "voice" | "announcement" | "dm" | "forum";
 

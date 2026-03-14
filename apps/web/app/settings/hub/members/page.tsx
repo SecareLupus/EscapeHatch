@@ -51,7 +51,7 @@ export default function HubMembersPage() {
       {loading ? (
         <p>Loading members...</p>
       ) : (
-        <MemberTable members={members} onRefresh={loadMembers} />
+        <MemberTable hubId={hub.id} members={members} onRefresh={loadMembers} />
       )}
     </div>
   );

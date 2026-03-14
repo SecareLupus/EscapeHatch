@@ -9,6 +9,7 @@ export const metadata: Metadata = {
 
 import { ToastProvider } from "../components/toast-provider";
 import { ChatProvider } from "../context/chat-context";
+import { ModalManager } from "../components/modal-manager";
 import { AppInitializer } from "../components/app-initializer";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <AppInitializer>
               {children}
             </AppInitializer>
+            <ModalManager />
           </ChatProvider>
         </ToastProvider>
       </body>

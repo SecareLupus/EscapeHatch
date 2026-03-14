@@ -134,6 +134,12 @@ export interface ChatState {
     moderationTargetUserId: string | null;
     moderationTargetDisplayName: string | null;
     moderationTargetMessageId: string | null;
+    roleContext: {
+        targetUserId: string;
+        targetDisplayName?: string;
+        scope: "hub" | "space";
+        serverId?: string;
+    } | null;
 }
 
 type ChatAction =
@@ -210,7 +216,9 @@ type ChatAction =
     | { type: "SET_IS_SEARCHING", payload: boolean }
     | { type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: string | null }
     | { type: "SET_MODERATION_TARGET", payload: { userId: string | null; displayName: string | null; messageId?: string | null } }
-    | { type: "SET_NOTIFICATION_PREFERENCE", payload: { channelId: string; preference: 'all' | 'mentions' | 'none'; isMuted?: boolean } };
+    | { type: "SET_NOTIFICATION_PREFERENCE", payload: { channelId: string; preference: 'all' | 'mentions' | 'none'; isMuted?: boolean } }
+    | { type: "SET_ROLE_CONTEXT", payload: ChatState["roleContext"] };
+
 
 const initialState: ChatState = {
     viewer: null,
@@ -289,7 +297,8 @@ const initialState: ChatState = {
     highlightedMessageId: null,
     moderationTargetUserId: null,
     moderationTargetDisplayName: null,
-    moderationTargetMessageId: null
+    moderationTargetMessageId: null,
+    roleContext: null
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -539,6 +548,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 moderationTargetDisplayName: action.payload.displayName,
                 moderationTargetMessageId: action.payload.messageId ?? null
             };
+        case "SET_ROLE_CONTEXT":
+            return { ...state, roleContext: action.payload };
         default:
             return state;
     }

@@ -9,34 +9,37 @@ import type { Role } from "@skerry/shared";
 export function RoleModal() {
   const { state, dispatch } = useChat();
   const {
-    moderationTargetUserId,
-    moderationTargetDisplayName,
-    selectedServerId,
+    roleContext,
     hubs
   } = state;
   const { showToast } = useToast();
 
-  const [role, setRole] = useState<Role>("space_moderator");
-  const [scope, setScope] = useState<"space" | "hub">("space");
+  const targetUserId = roleContext?.targetUserId;
+  const targetDisplayName = roleContext?.targetDisplayName;
+  const scope = roleContext?.scope || "space";
+  const serverId = roleContext?.serverId;
+
+  const [role, setRole] = useState<Role>(scope === "space" ? "space_moderator" : "user");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!moderationTargetUserId) return;
+    if (!targetUserId) return;
 
     setSubmitting(true);
     try {
       const hubId = hubs[0]?.id;
       
       await grantRole({
-        productUserId: moderationTargetUserId,
+        productUserId: targetUserId,
         role,
         hubId: scope === "hub" ? hubId : undefined,
-        serverId: scope === "space" ? (selectedServerId || undefined) : undefined,
+        serverId: scope === "space" ? (serverId || undefined) : undefined,
       });
 
-      showToast(`Successfully granted role ${role} to ${moderationTargetDisplayName}`, "success");
+      showToast(`Successfully granted role ${role} to ${targetDisplayName}`, "success");
       dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
+      dispatch({ type: "SET_ROLE_CONTEXT", payload: null });
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to grant role", "error");
     } finally {
@@ -44,49 +47,54 @@ export function RoleModal() {
     }
   };
 
-  if (!moderationTargetUserId) return null;
+  if (!targetUserId) return null;
 
   return (
-    <div className="modal-overlay" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
+    <div className="modal-overlay" onClick={() => {
+      dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
+      dispatch({ type: "SET_ROLE_CONTEXT", payload: null });
+    }}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Grant Role to {moderationTargetDisplayName}</h2>
-          <button className="close-button" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>✕</button>
+          <h2>Grant Role to {targetDisplayName}</h2>
+          <button className="close-button" onClick={() => {
+            dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
+            dispatch({ type: "SET_ROLE_CONTEXT", payload: null });
+          }}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="role-form">
           <div className="field">
-            <label>Select Role</label>
+            <label>Select {scope === "space" ? "Space" : "Hub"} Role</label>
             <select value={role} onChange={(e) => setRole(e.target.value as any)}>
-              <option value="user">👤 Regular User</option>
-              <option value="space_moderator">🛡️ Space Moderator</option>
-              <option value="space_owner">👑 Space Owner</option>
-              <option value="hub_admin">💎 Hub Administrator</option>
+              {scope === "space" ? (
+                <>
+                  <option value="user">👤 Regular User</option>
+                  <option value="space_moderator">🛡️ Space Moderator</option>
+                  <option value="space_admin">👮 Space Admin</option>
+                  <option value="space_owner">👑 Space Owner</option>
+                </>
+              ) : (
+                <>
+                  <option value="user">👤 Regular User</option>
+                  <option value="hub_admin">💎 Hub Administrator</option>
+                  <option value="hub_owner">👑 Hub Owner</option>
+                </>
+              )}
             </select>
             <p className="help-text">
-              Selecting a role grants the user administrative privileges within the chosen scope.
+              This role will apply to the <strong>{scope === "space" ? "current Space" : "entire Hub"}</strong>.
             </p>
-          </div>
-
-          <div className="field">
-            <label>Assignment Scope</label>
-            <div className="scope-options">
-              <label className={`scope-option ${scope === "space" ? "active" : ""}`}>
-                <input type="radio" name="scope" value="space" checked={scope === "space"} onChange={() => setScope("space")} />
-                <span>Current Space</span>
-              </label>
-              <label className={`scope-option ${scope === "hub" ? "active" : ""}`}>
-                <input type="radio" name="scope" value="hub" checked={scope === "hub"} onChange={() => setScope("hub")} />
-                <span>Entire Hub</span>
-              </label>
-            </div>
           </div>
 
           <div className="modal-actions">
             <button type="submit" className="primary-button" disabled={submitting}>
               {submitting ? "Granting..." : "Confirm Grant"}
             </button>
-            <button type="button" className="secondary-button" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
+            <button type="button" className="secondary-button" onClick={() => {
+              dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
+              dispatch({ type: "SET_ROLE_CONTEXT", payload: null });
+            }}>
               Cancel
             </button>
           </div>

@@ -242,15 +242,20 @@ export default function MemberTable({ serverId, hubId, members, onRefresh }: Mem
                   </div>
                 </td>
                 <td style={{ textAlign: 'right' }}>
-                  {serverId && isModerator && (
+                  {isModerator && (
                     <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
                       <button
                         className="ghost"
                         style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
                         onClick={() => {
                           dispatch({ 
-                            type: "SET_MODERATION_TARGET", 
-                            payload: { userId: member.productUserId, displayName: member.displayName } 
+                            type: "SET_ROLE_CONTEXT", 
+                            payload: { 
+                                targetUserId: member.productUserId, 
+                                targetDisplayName: member.displayName,
+                                scope: serverId ? "space" : "hub",
+                                serverId: serverId
+                            } 
                           });
                           dispatch({ type: "SET_ACTIVE_MODAL", payload: "grant-role" });
                         }}
@@ -272,14 +277,16 @@ export default function MemberTable({ serverId, hubId, members, onRefresh }: Mem
                       >
                         Moderate
                       </button>
-                      <button
-                        className="ghost"
-                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
-                        onClick={() => handleIndividualAction(member.productUserId, "kick")}
-                        disabled={modifying}
-                      >
-                        Kick
-                      </button>
+                      {serverId && (
+                        <button
+                          className="ghost"
+                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                          onClick={() => handleIndividualAction(member.productUserId, "kick")}
+                          disabled={modifying}
+                        >
+                          Kick
+                        </button>
+                      )}
                     </div>
                   )}
                 </td>

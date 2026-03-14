@@ -6,19 +6,14 @@ import { useChat, MessageItem, ModalType } from "../context/chat-context";
 import { AuthOverlay } from "./auth-overlay";
 import { Sidebar } from "./sidebar";
 import { ChatWindow } from "./chat-window";
-import { SearchModal } from "./search-modal";
 import { ErrorBoundary } from "./error-boundary";
 import Link from "next/link";
 import { useToast } from "./toast-provider";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
-import { ProfileModal } from "./profile-modal";
-import { ModerationModal } from "./moderation-modal";
 import { PermissionsEditor } from "./permissions-editor";
 import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
 import { getChannelName } from "../lib/channel-utils";
 import { ThreadPanel } from "./thread-panel";
-import { DMPickerModal } from "./dm-picker-modal";
-import { RoleModal } from "./role-modal";
 import {
   bootstrapAdmin,
   createReport,
@@ -2250,11 +2245,6 @@ export function ChatClient() {
         )
       }
 
-      {activeModal === "profile" && <ProfileModal />}
-      {activeModal === "moderation" && <ModerationModal />}
-      {activeModal === "dm-picker" && <DMPickerModal />}
-      {activeModal === "search" && <SearchModal />}
-      {activeModal === "grant-role" && <RoleModal />}
 
       {/* Invite Modal */}
       {isInviting && (
