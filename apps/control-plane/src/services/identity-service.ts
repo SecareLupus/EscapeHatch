@@ -7,7 +7,7 @@ function randomId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
-interface IdentityRow {
+export interface IdentityRow {
   id: string;
   provider: IdentityMapping["provider"];
   oidc_subject: string;
@@ -28,7 +28,7 @@ interface IdentityRow {
   updated_at: string;
 }
 
-function mapRow(result: IdentityRow): IdentityMapping {
+export function mapRow(result: IdentityRow): IdentityMapping {
   return {
     id: result.id,
     provider: result.provider,
@@ -391,10 +391,13 @@ export async function listHubMembers(hubId: string): Promise<IdentityMapping[]> 
        left join server_members sm on sm.product_user_id = im.product_user_id
        left join servers s on s.id = sm.server_id and s.hub_id = $1
        left join role_bindings rb on rb.product_user_id = im.product_user_id and rb.hub_id = $1
-       where hm.hub_id is not null or s.id is not null or rb.hub_id is not null
+       left join hubs h on h.id = $1 and h.owner_user_id = im.product_user_id
+       where (hm.hub_id is not null or s.id is not null or rb.hub_id is not null or h.id is not null)
+         and (im.matrix_user_id is null or im.matrix_user_id not like '@discord_%')
        order by im.product_user_id, im.preferred_username is not null desc, im.updated_at desc`,
       [hubId]
     );
     return rows.rows.map(mapRow);
   });
 }
+

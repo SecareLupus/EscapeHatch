@@ -7,6 +7,9 @@ export interface ScopedAuthContext {
   productUserId: string;
   provider: string;
   oidcSubject: string;
+  realProductUserId?: string;
+  isMasquerading: boolean;
+  readOnly: boolean;
 }
 
 declare module "fastify" {
@@ -28,11 +31,27 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
     return;
   }
 
+  const isMasquerading = Boolean(session.realProductUserId);
+
   request.auth = {
     productUserId: session.productUserId,
     provider: session.provider,
-    oidcSubject: session.oidcSubject
+    oidcSubject: session.oidcSubject,
+    realProductUserId: session.realProductUserId,
+    isMasquerading,
+    readOnly: isMasquerading
   };
+
+  // Block mutations if masquerading
+  if (isMasquerading && request.method !== "GET" && request.method !== "HEAD") {
+    reply.code(403).send({
+      statusCode: 403,
+      error: "Forbidden",
+      message: "Permissions denied in masquerade mode. Mutations are blocked.",
+      code: "masquerade_read_only"
+    });
+    return;
+  }
 
   // Background token rotation/refresh
   void ensureIdentityTokenValid(session.productUserId).catch((err: unknown) => {

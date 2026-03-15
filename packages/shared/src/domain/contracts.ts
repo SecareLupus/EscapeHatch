@@ -321,7 +321,9 @@ export interface DelegationAuditEvent {
     | "space_owner_assigned"
     | "space_owner_revoked"
     | "space_owner_transfer_started"
-    | "space_owner_transfer_completed";
+    | "space_owner_transfer_completed"
+    | "hub_owner_transfer_started"
+    | "hub_owner_transfer_completed";
     actorUserId: string;
     targetUserId: string | null;
     assignmentId: string | null;

@@ -12,6 +12,7 @@ import type {
     Server,
     VoicePresenceMember,
     VoiceTokenGrant,
+    Hub,
     DiscordBridgeChannelMapping,
     DiscordBridgeConnection
 } from "@skerry/shared";
@@ -59,7 +60,7 @@ export interface ChatState {
     channels: Channel[];
     categories: Category[];
     messages: MessageItem[];
-    hubs: Array<{ id: string; name: string }>;
+    hubs: Hub[];
     viewerRoles: ViewerRoleBinding[];
     selectedServerId: string | null;
     selectedChannelId: string | null;
@@ -150,7 +151,7 @@ type ChatAction =
     | { type: "SET_CHANNELS"; payload: Channel[] }
     | { type: "SET_CATEGORIES"; payload: Category[] }
     | { type: "SET_MESSAGES"; payload: MessageItem[] }
-    | { type: "SET_HUBS"; payload: Array<{ id: string; name: string }> }
+    | { type: "SET_HUBS"; payload: Hub[] }
     | { type: "SET_VIEWER_ROLES"; payload: ViewerRoleBinding[] }
     | { type: "SET_SELECTED_SERVER_ID"; payload: string | null }
     | { type: "SET_SELECTED_CHANNEL_ID"; payload: string | null }

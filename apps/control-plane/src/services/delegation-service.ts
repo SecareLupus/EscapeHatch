@@ -48,7 +48,11 @@ function mapAudit(row: {
         ? "space_owner_transfer_started"
         : row.action_type === "space_owner_transfer_completed" || row.action_type === "space_admin_transfer_completed"
           ? "space_owner_transfer_completed"
-          : "space_owner_assigned";
+          : row.action_type === "hub_owner_transfer_started"
+            ? "hub_owner_transfer_started"
+            : row.action_type === "hub_owner_transfer_completed"
+              ? "hub_owner_transfer_completed"
+              : "space_owner_assigned";
 
   return {
     id: row.id,
@@ -348,6 +352,47 @@ export async function transferSpaceOwnership(input: {
     return {
       serverId: input.serverId,
       hubId: existing.hub_id,
+      previousOwnerUserId: existing.owner_user_id,
+      newOwnerUserId: input.newOwnerUserId
+    };
+  });
+}
+
+export async function transferHubOwnership(input: {
+  actorUserId: string;
+  hubId: string;
+  newOwnerUserId: string;
+}): Promise<{ hubId: string; previousOwnerUserId: string; newOwnerUserId: string }> {
+  return withDb(async (db) => {
+    const hub = await db.query<{ name: string; owner_user_id: string }>(
+      "select name, owner_user_id from hubs where id = $1 limit 1",
+      [input.hubId]
+    );
+    const existing = hub.rows[0];
+    if (!existing) {
+      throw new Error("Hub not found.");
+    }
+
+    await insertDelegationAudit({
+      actionType: "hub_owner_transfer_started",
+      actorUserId: input.actorUserId,
+      targetUserId: input.newOwnerUserId,
+      hubId: input.hubId,
+      metadata: { previousOwnerUserId: existing.owner_user_id }
+    });
+
+    await db.query("update hubs set owner_user_id = $2 where id = $1", [input.hubId, input.newOwnerUserId]);
+
+    await insertDelegationAudit({
+      actionType: "hub_owner_transfer_completed",
+      actorUserId: input.actorUserId,
+      targetUserId: input.newOwnerUserId,
+      hubId: input.hubId,
+      metadata: { previousOwnerUserId: existing.owner_user_id, newOwnerUserId: input.newOwnerUserId }
+    });
+
+    return {
+      hubId: input.hubId,
       previousOwnerUserId: existing.owner_user_id,
       newOwnerUserId: input.newOwnerUserId
     };

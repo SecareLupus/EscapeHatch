@@ -11,6 +11,7 @@ import { ToastProvider } from "../components/toast-provider";
 import { ChatProvider } from "../context/chat-context";
 import { ModalManager } from "../components/modal-manager";
 import { AppInitializer } from "../components/app-initializer";
+import { MasqueradeBanner } from "../components/masquerade-banner";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <ToastProvider>
           <ChatProvider>
+            <MasqueradeBanner />
             <AppInitializer>
               {children}
             </AppInitializer>

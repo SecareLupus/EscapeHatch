@@ -18,6 +18,8 @@ import {
   deleteBadge,
   listBadges,
   listUserBadges,
+  listBadgeAssignments,
+  listServerBadgeAssignments,
   revokeBadgeFromUser,
   setChannelBadgeRule,
   setServerBadgeRule,
@@ -133,7 +135,8 @@ import {
   listDelegationAuditEvents,
   listSpaceOwnerAssignments,
   revokeSpaceOwnerAssignment,
-  transferSpaceOwnership
+  transferSpaceOwnership,
+  transferHubOwnership
 } from "../services/delegation-service.js";
 import {
   getChannelSettings,
@@ -618,8 +621,17 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     }).parse(request.params);
 
     // TODO: Permission check
-    await revokeBadgeFromUser(params.userId, params.badgeId);
     reply.code(204).send();
+  });
+
+  app.get("/v1/badges/:badgeId/assignments", initializedAuthHandlers, async (request, reply) => {
+    const { badgeId } = z.object({ badgeId: z.string().min(1) }).parse(request.params);
+    return { items: await listBadgeAssignments(badgeId) };
+  });
+
+  app.get("/v1/servers/:serverId/badge-assignments", initializedAuthHandlers, async (request, reply) => {
+    const { serverId } = z.object({ serverId: z.string().min(1) }).parse(request.params);
+    return { items: await listServerBadgeAssignments(serverId) };
   });
 
   app.put("/v1/channels/:channelId/badge-rules", initializedAuthHandlers, async (request, reply) => {
@@ -1353,7 +1365,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     const payload = z
       .object({
         productUserId: z.string().min(1),
-        role: z.enum(["hub_admin", "space_owner", "space_moderator", "user"]),
+        role: z.enum(["hub_admin", "space_admin", "space_moderator", "user"]),
         hubId: z.string().optional(),
         serverId: z.string().optional(),
         channelId: z.string().optional()
@@ -1508,6 +1520,30 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         limit: query.limit
       })
     };
+  });
+
+  app.post("/v1/hubs/:hubId/ownership/transfer", initializedAuthHandlers, async (request, reply) => {
+    const params = z.object({ hubId: z.string().min(1) }).parse(request.params);
+    const payload = z.object({ newOwnerUserId: z.string().min(1) }).parse(request.body);
+
+    const hubRows = await withDb(db => db.query("select owner_user_id from hubs where id = $1", [params.hubId]));
+    const hub = hubRows.rows[0];
+    if (!hub) {
+      reply.code(404).send({ message: "Hub not found." });
+      return;
+    }
+
+    const isOwner = hub.owner_user_id === request.auth!.productUserId;
+    if (!isOwner) {
+      reply.code(403).send({ message: "Forbidden: only the hub owner can transfer ownership." });
+      return;
+    }
+
+    return await transferHubOwnership({
+      actorUserId: request.auth!.productUserId,
+      hubId: params.hubId,
+      newOwnerUserId: payload.newOwnerUserId
+    });
   });
 
   app.get("/v1/me/roles", initializedAuthHandlers, async (request) => {

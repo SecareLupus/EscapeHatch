@@ -72,13 +72,11 @@ export function RoleModal() {
                   <option value="user">👤 Regular User</option>
                   <option value="space_moderator">🛡️ Space Moderator</option>
                   <option value="space_admin">⭐ Space Admin</option>
-                  <option value="space_owner">👑 Space Owner</option>
                 </>
               ) : (
                 <>
                   <option value="user">👤 Regular User</option>
                   <option value="hub_admin">💎 Hub Administrator</option>
-                  <option value="hub_owner">👑 Hub Owner</option>
                 </>
               )}
             </select>

@@ -7,6 +7,7 @@ export interface SessionPayload {
   provider: string;
   oidcSubject: string;
   expiresAt: number;
+  realProductUserId?: string; // Original actor if masquerading
 }
 
 export function createSessionToken(payload: SessionPayload): string {
@@ -41,9 +42,12 @@ function verify(token: string): SessionPayload | null {
   return decoded;
 }
 
-export function setSessionCookie(reply: FastifyReply, payload: Omit<SessionPayload, "expiresAt">): void {
+export function setSessionCookie(
+  reply: FastifyReply,
+  payload: Omit<SessionPayload, "expiresAt"> & { expiresAt?: number }
+): void {
   const ttlSeconds = Math.max(60, config.sessionTtlSeconds);
-  const expiresAt = Date.now() + ttlSeconds * 1000;
+  const expiresAt = payload.expiresAt ?? (Date.now() + ttlSeconds * 1000);
   const token = createSessionToken({ ...payload, expiresAt });
   const cookieOptions = `; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ttlSeconds}${
     config.baseDomain && config.baseDomain !== "127.0.0.1" ? `; Domain=${config.baseDomain}` : ""

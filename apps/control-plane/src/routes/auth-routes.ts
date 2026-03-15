@@ -25,6 +25,10 @@ import {
   completeDiscordOauthAndListGuilds,
   consumeDiscordOauthState
 } from "../services/discord-bridge-service.js";
+import { withDb } from "../db/client.js";
+import { canManageHub, listRoleBindings } from "../services/policy-service.js";
+import { listHubsForUser } from "../services/hub-service.js";
+import { createSessionToken, type SessionPayload } from "../auth/session.js";
 
 const providerSchema = z.enum(["discord", "keycloak", "google", "github", "twitch", "dev"]);
 
@@ -374,7 +378,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         customStatus: identity.customStatus,
         theme: identity.theme
       })),
-      needsOnboarding: !onboardingComplete
+      needsOnboarding: !onboardingComplete,
+      isMasquerading: auth.isMasquerading,
+      realProductUserId: auth.realProductUserId
     };
   });
 
@@ -442,6 +448,99 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       preferredUsername: normalizedUsername
     });
     reply.code(204).send();
+  });
+
+  app.post("/auth/masquerade", { preHandler: requireAuth }, async (request, reply) => {
+    const actor = request.auth!;
+    if (actor.isMasquerading) {
+      reply.code(400).send({ message: "Already masquerading." });
+      return;
+    }
+
+    const { targetProductUserId } = z.object({
+      targetProductUserId: z.string().min(1)
+    }).parse(request.body);
+
+    // 1. Authorization: Hub Admin/Owner can masquerade as ANYONE.
+    // Assuming single-hub for now, passing empty string to canManageHub as it might check session-local hub if needed.
+    // But we know if they have any hub-level managerial role.
+    const isHubManager = (await listRoleBindings({ productUserId: actor.productUserId }))
+      .some(rb => rb.role === "hub_owner" || rb.role === "hub_admin");
+
+    if (!isHubManager) {
+      // 2. Scoping for Space Managers
+      const managedServerIds = (await listRoleBindings({ productUserId: actor.productUserId }))
+        .filter(rb => (rb.role === "space_owner" || rb.role === "space_admin") && rb.serverId)
+        .map(rb => rb.serverId!);
+
+      if (managedServerIds.length === 0) {
+        reply.code(403).send({ message: "You do not have permission to masquerade." });
+        return;
+      }
+
+      // Check if target is in any of the managed spaces
+      const isTargetInManagedScope = await withDb(async (db) => {
+        const res = await db.query(
+          "select 1 from server_members where server_id = any($1) and product_user_id = $2",
+          [managedServerIds, targetProductUserId]
+        );
+        return res.rows.length > 0 || targetProductUserId === actor.productUserId;
+      });
+
+      if (!isTargetInManagedScope) {
+        reply.code(403).send({ message: "Target user is outside your management scope." });
+        return;
+      }
+    }
+
+    // 3. Get target identity info to build new session
+    const targetIdentities = await listIdentitiesByProductUserId(targetProductUserId);
+    const targetIdentity = targetIdentities[0];
+
+    if (!targetIdentity) {
+      reply.code(404).send({ message: "Target user or identity not found." });
+      return;
+    }
+
+    const payload: SessionPayload = {
+      productUserId: targetProductUserId,
+      provider: targetIdentity.provider,
+      oidcSubject: targetIdentity.oidcSubject,
+      expiresAt: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hour for masquerade
+      realProductUserId: actor.productUserId
+    };
+
+    setSessionCookie(reply, payload);
+
+    return { success: true, targetProductUserId };
+  });
+
+  app.post("/auth/unmasquerade", { preHandler: requireAuth }, async (request, reply) => {
+    const auth = request.auth!;
+    if (!auth.isMasquerading || !auth.realProductUserId) {
+      reply.code(400).send({ message: "Not currently masquerading." });
+      return;
+    }
+
+    // Restore original session
+    const originalIdentities = await listIdentitiesByProductUserId(auth.realProductUserId);
+    const originalIdentity = originalIdentities[0];
+
+    if (!originalIdentity) {
+      reply.code(500).send({ message: "Could not restore original identity." });
+      return;
+    }
+
+    const payload: SessionPayload = {
+      productUserId: auth.realProductUserId,
+      provider: originalIdentity.provider,
+      oidcSubject: originalIdentity.oidcSubject,
+      expiresAt: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+    };
+
+    setSessionCookie(reply, payload);
+
+    return { success: true, restoredProductUserId: auth.realProductUserId };
   });
 
   app.route({

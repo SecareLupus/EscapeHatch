@@ -5,6 +5,7 @@ import { fetchHubSettings, updateHubSettings, suspendHubOwner, unsuspendHubOwner
 import { useChat } from "../../../context/chat-context";
 import { useToast } from "../../../components/toast-provider";
 import { HubSuspension } from "@skerry/shared";
+import { HubOwnershipTransfer } from "../../../components/hub-ownership-transfer";
 
 export default function HubSettingsPage() {
     const { state } = useChat();
@@ -178,6 +179,8 @@ export default function HubSettingsPage() {
                     {saving ? "Saving..." : "Save Changes"}
                 </button>
             </div>
+
+            <HubOwnershipTransfer hubId={hubId} />
         </div>
     );
 }

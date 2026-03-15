@@ -66,6 +66,8 @@ export interface ViewerSession {
     theme?: "light" | "dark" | null;
   }>;
   needsOnboarding: boolean;
+  isMasquerading?: boolean;
+  realProductUserId?: string;
 }
 
 export interface BootstrapStatus {
@@ -1348,5 +1350,40 @@ export async function performBulkModerationAction(input: {
 export function connectHubStream(hubId: string): EventSource {
   return new EventSource(`${controlPlaneBaseUrl}/v1/hubs/${encodeURIComponent(hubId)}/stream`, {
     withCredentials: true
+  });
+}
+
+export async function transferHubOwnership(input: {
+  hubId: string;
+  newOwnerUserId: string;
+}): Promise<{ hubId: string; previousOwnerUserId: string; newOwnerUserId: string }> {
+  return apiFetch(`/v1/hubs/${encodeURIComponent(input.hubId)}/ownership/transfer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newOwnerUserId: input.newOwnerUserId })
+  });
+}
+
+export async function fetchBadgeAssignments(badgeId: string): Promise<any[]> {
+  const json = await apiFetch<{ items: any[] }>(`/v1/badges/${encodeURIComponent(badgeId)}/assignments`);
+  return json.items;
+}
+
+export async function fetchServerBadgeAssignments(serverId: string): Promise<Record<string, any[]>> {
+  const json = await apiFetch<{ items: Record<string, any[]> }>(`/v1/servers/${encodeURIComponent(serverId)}/badge-assignments`);
+  return json.items;
+}
+
+export async function masquerade(targetProductUserId: string): Promise<void> {
+  await apiFetch("/auth/masquerade", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetProductUserId })
+  });
+}
+
+export async function unmasquerade(): Promise<void> {
+  await apiFetch("/auth/unmasquerade", {
+    method: "POST"
   });
 }

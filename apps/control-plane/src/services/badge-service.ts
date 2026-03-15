@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
-import type { Badge, ChannelBadgeRule, UserBadge } from "@skerry/shared";
+import type { Badge, ChannelBadgeRule, UserBadge, IdentityMapping } from "@skerry/shared";
 import { withDb } from "../db/client.js";
+import { mapRow, type IdentityRow } from "./identity-service.js";
 
 function randomId(prefix: string): string {
     return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -156,5 +157,46 @@ export async function listServerBadgeRules(serverId: string): Promise<any[]> {
             [serverId]
         );
         return rows.rows;
+    });
+}
+
+export async function listBadgeAssignments(badgeId: string): Promise<IdentityMapping[]> {
+    return withDb(async (db) => {
+        const rows = await db.query<IdentityRow>(
+            `select distinct on (im.product_user_id) im.*
+             from user_badges ub
+             join identity_mappings im on im.product_user_id = ub.product_user_id
+             where ub.badge_id = $1
+             order by im.product_user_id, im.preferred_username is not null desc, im.updated_at desc`,
+            [badgeId]
+        );
+        return rows.rows.map(mapRow);
+    });
+}
+
+export async function listServerBadgeAssignments(serverId: string): Promise<Record<string, IdentityMapping[]>> {
+    return withDb(async (db) => {
+        const rows = await db.query<{ badge_id: string } & IdentityRow>(
+            `select ub.badge_id, im.*
+             from user_badges ub
+             join badges b on b.id = ub.badge_id
+             join identity_mappings im on im.product_user_id = ub.product_user_id
+             where b.server_id = $1
+             order by ub.badge_id, im.product_user_id, im.preferred_username is not null desc, im.updated_at desc`,
+            [serverId]
+        );
+
+        const result: Record<string, IdentityMapping[]> = {};
+        for (const row of rows.rows) {
+            let badgeList = result[row.badge_id];
+            if (!badgeList) {
+                badgeList = [];
+                result[row.badge_id] = badgeList;
+            }
+            if (!badgeList.find(m => m.productUserId === row.product_user_id)) {
+                badgeList.push(mapRow(row));
+            }
+        }
+        return result;
     });
 }

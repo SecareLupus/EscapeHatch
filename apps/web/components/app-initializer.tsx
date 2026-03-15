@@ -30,7 +30,7 @@ export function AppInitializer({ children }: { children: React.ReactNode }) {
             if (viewer) dispatch({ type: "SET_VIEWER", payload: viewer });
             if (bootstrap) dispatch({ type: "SET_BOOTSTRAP_STATUS", payload: bootstrap });
             dispatch({ type: "SET_VIEWER_ROLES", payload: roles });
-            dispatch({ type: "SET_HUBS", payload: hubs.map(h => ({ id: h.id, name: h.name })) });
+            dispatch({ type: "SET_HUBS", payload: hubs });
             dispatch({ type: "SET_SERVERS", payload: servers });
         } catch (err) {
             console.error("Global initialization failed:", err);

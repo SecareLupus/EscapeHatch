@@ -9,7 +9,8 @@ import {
     deleteBadge, 
     listServerMembers,
     assignBadge,
-    revokeBadge
+    revokeBadge,
+    fetchBadgeAssignments
 } from "../../../../../lib/control-plane";
 import { useChat } from "../../../../../context/chat-context";
 import { useToast } from "../../../../../components/toast-provider";
@@ -135,10 +136,43 @@ function BadgeItem({ badge, members, onDelete }: { badge: any, members: any[], o
     const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // In a full implementation we'd fetch assigned users for this badge.
-    // For now we'll assume the badge object might have them or we fetch them.
-    // Let's add a dummy fetch or use the members list to filter if we had the association.
-    
+    const loadAssignments = async () => {
+        try {
+            const assignments = await fetchBadgeAssignments(badge.id);
+            setAssignedUsers(assignments);
+        } catch (err) {
+            console.error("Failed to load badge assignments", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadAssignments();
+    }, [badge.id]);
+
+    const handleAssign = async (userId: string, displayName: string) => {
+        try {
+            await assignBadge(badge.id, userId);
+            showToast(`Assigned to ${displayName}`, "success");
+            setIsAssigning(false);
+            loadAssignments();
+        } catch (err) {
+            showToast("Failed to assign badge", "error");
+        }
+    };
+
+    const handleRevoke = async (userId: string) => {
+        if (!confirm("Remove this badge from user?")) return;
+        try {
+            await revokeBadge(badge.id, userId);
+            showToast("Badge revoked", "success");
+            loadAssignments();
+        } catch (err) {
+            showToast("Failed to revoke badge", "error");
+        }
+    };
+
     return (
         <div style={{ border: '1px solid var(--border)', padding: '1.5rem', borderRadius: '8px', backgroundColor: 'var(--panel-bg-lighter)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -151,28 +185,52 @@ function BadgeItem({ badge, members, onDelete }: { badge: any, members: any[], o
             
             <div style={{ marginTop: '1rem' }}>
                 <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>Assigned Members</h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    {/* Assigned users tags would go here */}
-                    <button className="btn-secondary btn-small" onClick={() => setIsAssigning(true)}>+</button>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                    {loading ? (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading...</span>
+                    ) : assignedUsers.length === 0 ? (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No one assigned</span>
+                    ) : (
+                        assignedUsers.map(user => (
+                            <div key={user.productUserId} style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.4rem', 
+                                padding: '0.2rem 0.6rem', 
+                                background: 'var(--bg-surface-hover)', 
+                                border: '1px solid var(--border)', 
+                                borderRadius: '12px',
+                                fontSize: '0.8rem'
+                            }}>
+                                <span>{user.displayName || user.preferredUsername}</span>
+                                <button 
+                                    onClick={() => handleRevoke(user.productUserId)}
+                                    style={{ 
+                                        background: 'transparent', 
+                                        border: 'none', 
+                                        color: 'var(--text-muted)', 
+                                        cursor: 'pointer',
+                                        fontSize: '1rem',
+                                        padding: '0 0.2rem'
+                                    }}
+                                >✕</button>
+                            </div>
+                        ))
+                    )}
+                    <button className="btn-secondary btn-small" onClick={() => setIsAssigning(true)} style={{ borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>+</button>
                 </div>
             </div>
 
             {isAssigning && (
                 <div className="modal-overlay" style={{ zIndex: 1000 }}>
-                    <div className="modal-content" style={{ maxWidth: '400px' }}>
+                    <div className="modal-content" style={{ maxWidth: '400px', backgroundColor: 'var(--bg-card)', padding: '1.5rem', borderRadius: '8px' }}>
                         <h3>Assign Badge: {badge.name}</h3>
                         <p className="settings-description">Select a member to grant this badge.</p>
-                        <div style={{ maxHeight: '300px', overflowY: 'auto', marginTop: '1rem' }}>
-                            {members.map(m => (
-                                <div key={m.productUserId} className="member-row" style={{ padding: '0.5rem', cursor: 'pointer' }} onClick={async () => {
-                                    try {
-                                        await assignBadge(badge.id, m.productUserId);
-                                        showToast(`Assigned to ${m.displayName}`, "success");
-                                        setIsAssigning(false);
-                                    } catch (err) {
-                                        showToast("Failed to assign badge", "error");
-                                    }
-                                }}>
+                        <div style={{ maxHeight: '300px', overflowY: 'auto', marginTop: '1rem', border: '1px solid var(--border)', borderRadius: '4px' }}>
+                            {members.length === 0 ? (
+                                <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>No members found</div>
+                            ) : members.map(m => (
+                                <div key={m.productUserId} className="member-row" style={{ padding: '0.75rem', cursor: 'pointer', borderBottom: '1px solid var(--border)' }} onClick={() => handleAssign(m.productUserId, m.displayName)}>
                                     {m.displayName}
                                 </div>
                             ))}
@@ -181,6 +239,19 @@ function BadgeItem({ badge, members, onDelete }: { badge: any, members: any[], o
                     </div>
                 </div>
             )}
+            <style jsx>{`
+                .member-row:hover {
+                    background-color: var(--bg-surface-hover);
+                }
+                .modal-overlay {
+                    position: fixed;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.7);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+            `}</style>
         </div>
     );
 }
