@@ -7,6 +7,7 @@ import { ModerationModal } from "./moderation-modal";
 import { DMPickerModal } from "./dm-picker-modal";
 import { SearchModal } from "./search-modal";
 import { RoleModal } from "./role-modal";
+import { MasqueradeDrawer } from "./masquerade-drawer";
 
 export function ModalManager() {
   const { state } = useChat();
@@ -19,6 +20,7 @@ export function ModalManager() {
       {activeModal === "dm-picker" && <DMPickerModal />}
       {activeModal === "search" && <SearchModal />}
       {activeModal === "grant-role" && <RoleModal />}
+      {activeModal === "masquerade" && <MasqueradeDrawer />}
     </>
   );
 }

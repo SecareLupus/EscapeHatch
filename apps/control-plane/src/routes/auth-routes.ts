@@ -381,7 +381,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       })),
       needsOnboarding: !onboardingComplete,
       isMasquerading: auth.isMasquerading,
-      realProductUserId: auth.realProductUserId
+      realProductUserId: auth.realProductUserId,
+      masqueradeRole: auth.masqueradeRole,
+      masqueradeServerId: auth.masqueradeServerId,
+      masqueradeBadgeIds: auth.masqueradeBadgeIds
     };
   });
 

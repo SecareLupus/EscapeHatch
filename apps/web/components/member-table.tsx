@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { performModerationAction, performBulkModerationAction, getUserModerationStatus, masquerade } from "../lib/control-plane";
+import { performModerationAction, performBulkModerationAction, getUserModerationStatus } from "../lib/control-plane";
 import { useToast } from "./toast-provider";
 import { useChat } from "../context/chat-context";
 
@@ -137,24 +137,6 @@ export default function MemberTable({ serverId, hubId, members, onRefresh }: Mem
     }
   };
 
-  const handleMasquerade = async (userId: string) => {
-    if (!window.confirm(`Are you sure you want to masquerade as user ${userId}? You will have read-only access and can stop at any time.`)) {
-      return;
-    }
-
-    setModifying(true);
-    try {
-      await masquerade(userId);
-      showToast("Masquerading started. Refreshing...", "success");
-      // Force a full reload to pick up the new session and state
-      window.location.reload();
-    } catch (err) {
-      showToast(`Failed to start masquerade: ${err instanceof Error ? err.message : String(err)}`, "error");
-    } finally {
-      setModifying(false);
-    }
-  };
-
   return (
     <div className="settings-section">
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
@@ -280,15 +262,6 @@ export default function MemberTable({ serverId, hubId, members, onRefresh }: Mem
                         disabled={modifying}
                       >
                         Role
-                      </button>
-                      <button
-                        className="ghost"
-                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
-                        onClick={() => handleMasquerade(member.productUserId)}
-                        disabled={modifying}
-                        title="Masquerade as this user"
-                      >
-                        🎭
                       </button>
                       <button
                         className="ghost"

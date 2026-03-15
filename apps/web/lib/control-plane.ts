@@ -1399,14 +1399,6 @@ export async function fetchServerBadgeAssignments(serverId: string): Promise<Rec
   return json.items;
 }
 
-export async function masquerade(targetProductUserId: string): Promise<void> {
-  await apiFetch("/auth/masquerade", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ targetProductUserId })
-  });
-}
-
 export async function unmasquerade(): Promise<void> {
   await apiFetch("/auth/unmasquerade", {
     method: "POST"
