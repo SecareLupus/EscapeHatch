@@ -453,6 +453,11 @@ export function ChatWindow({
                 icon: "⏳",
                 danger: true,
                 onClick: () => {
+                    const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                    if (isMasquerade) {
+                        showToast("Masquerade: Moderation is blocked.", "error");
+                        return;
+                    }
                     void performModerationAction({
                         action: "timeout",
                         hubId: undefined,
@@ -468,6 +473,11 @@ export function ChatWindow({
                 icon: "👢",
                 danger: true,
                 onClick: () => {
+                    const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                    if (isMasquerade) {
+                        showToast("Masquerade: Moderation is blocked.", "error");
+                        return;
+                    }
                     void performModerationAction({
                         action: "kick",
                         hubId: undefined,
@@ -485,6 +495,11 @@ export function ChatWindow({
                 label: isPinned ? "Unpin Message" : "Pin Message",
                 icon: "📌",
                 onClick: async () => {
+                    const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                    if (isMasquerade) {
+                        showToast(`Masquerade: Cannot ${isPinned ? "unpin" : "pin"} message.`, "error");
+                        return;
+                    }
                     try {
                         if (isPinned) {
                             await unpinMessage(contextMenu.message!.channelId, contextMenu.message!.id);
@@ -542,6 +557,11 @@ export function ChatWindow({
                 icon: "⏳",
                 danger: true,
                 onClick: () => {
+                    const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                    if (isMasquerade) {
+                        showToast("Masquerade: Moderation is blocked.", "error");
+                        return;
+                    }
                     void performModerationAction({
                         action: "timeout",
                         serverId: selectedServerId || "",
@@ -556,6 +576,11 @@ export function ChatWindow({
                 icon: "👢",
                 danger: true,
                 onClick: () => {
+                    const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                    if (isMasquerade) {
+                        showToast("Masquerade: Moderation is blocked.", "error");
+                        return;
+                    }
                     void performModerationAction({
                         action: "kick",
                         serverId: selectedServerId || "",
@@ -591,6 +616,11 @@ export function ChatWindow({
 
         setIsUploading(true);
         try {
+            const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+            if (isMasquerade) {
+                showToast("Masquerade: File uploads are local-only.", "error");
+                throw new Error("Masquerade upload blocked");
+            }
             const res = await uploadMedia(activeServer.id, file);
             setAttachments((prev) => [...prev, {
                 id: `att_tmp_${Date.now()}_${Math.random().toString(16).slice(2)}`,
@@ -808,6 +838,11 @@ export function ChatWindow({
                                             type="button"
                                             className="hover-action-item"
                                             onClick={(e) => {
+                                                const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                                                if (isMasquerade) {
+                                                    showToast("Masquerade: Reactions are local-only.", "success");
+                                                    return;
+                                                }
                                                 const rect = e.currentTarget.getBoundingClientRect();
                                                 setReactionPickerPos({ x: rect.left, y: rect.bottom });
                                                 setReactionTargetMessageId(message.id);
@@ -835,6 +870,11 @@ export function ChatWindow({
                                                 type="button"
                                                 className="hover-action-item"
                                                 onClick={() => {
+                                                    const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                                                    if (isMasquerade) {
+                                                        showToast("Masquerade: Edits are local-only.", "success");
+                                                        return;
+                                                    }
                                                     setEditingMessageId(message.id);
                                                     setEditContent(message.content);
                                                 }}
@@ -854,6 +894,12 @@ export function ChatWindow({
                                                     if (e.key === "Enter" && !e.shiftKey) {
                                                         e.preventDefault();
                                                         if (editContent.trim()) {
+                                                            const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                                                            if (isMasquerade) {
+                                                                showToast("Masquerade: Edit is local-only.", "success");
+                                                                setEditingMessageId(null);
+                                                                return;
+                                                            }
                                                             void updateMessage(message.channelId, message.id, editContent).then(() => setEditingMessageId(null));
                                                         }
                                                     } else if (e.key === "Escape") {
@@ -868,6 +914,12 @@ export function ChatWindow({
                                                 <button type="button" className="inline-action" onClick={() => setEditingMessageId(null)}>Cancel</button>
                                                 <button type="button" className="inline-action" onClick={() => {
                                                     if (editContent.trim()) {
+                                                        const isMasquerade = !!sessionStorage.getItem("masquerade_token");
+                                                        if (isMasquerade) {
+                                                            showToast("Masquerade: Edit is local-only.", "success");
+                                                            setEditingMessageId(null);
+                                                            return;
+                                                        }
                                                         void updateMessage(message.channelId, message.id, editContent).then(() => setEditingMessageId(null));
                                                     }
                                                 }}>Save</button>
