@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useToast } from "./toast-provider";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { PermissionsEditor } from "./permissions-editor";
-import type { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
+import type { Category, Channel, ChannelType, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
 import { getChannelName } from "../lib/channel-utils";
 import { ThreadPanel } from "./thread-panel";
 import {
@@ -282,7 +282,7 @@ export function ChatClient() {
 
   const [spaceName, setSpaceName] = useState("New Space");
   const [roomName, setRoomName] = useState("new-room");
-  const [roomType, setRoomType] = useState<"text" | "announcement" | "voice" | "forum">("text");
+  const [roomType, setRoomType] = useState<ChannelType>("text");
   const [selectedHubIdForCreate, setSelectedHubIdForCreate] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("New Category");
   const [spaceSettingsTab, setSpaceSettingsTab] = useState<"general" | "permissions">("general");
