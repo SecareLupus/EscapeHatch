@@ -71,7 +71,7 @@ export async function updateHubSettings(hubId: string, settings: {
 export async function getServerSettings(serverId: string): Promise<Partial<Server>> {
   return withDb(async (db) => {
     const res = await db.query(
-      "select starting_channel_id, icon_url, hub_admin_access, space_member_access, hub_member_access, visitor_access, auto_join_hub_members from servers where id = $1",
+      "select starting_channel_id, icon_url, hub_admin_access, space_member_access, hub_member_access, visitor_access, auto_join_hub_members, join_policy from servers where id = $1",
       [serverId]
     );
     const row = res.rows[0];
@@ -83,7 +83,8 @@ export async function getServerSettings(serverId: string): Promise<Partial<Serve
       spaceMemberAccess: row.space_member_access as any,
       hubMemberAccess: row.hub_member_access as any,
       visitorAccess: row.visitor_access as any,
-      autoJoinHubMembers: row.auto_join_hub_members
+      autoJoinHubMembers: row.auto_join_hub_members,
+      joinPolicy: row.join_policy as any
     };
   });
 }
@@ -96,6 +97,7 @@ export async function updateServerSettings(serverId: string, settings: {
   hubMemberAccess?: string;
   visitorAccess?: string;
   autoJoinHubMembers?: boolean;
+  joinPolicy?: string;
 }): Promise<void> {
   return withDb(async (db) => {
     await db.query(
@@ -106,7 +108,8 @@ export async function updateServerSettings(serverId: string, settings: {
         space_member_access = coalesce($5, space_member_access),
         hub_member_access = coalesce($8, hub_member_access),
         visitor_access = coalesce($10, visitor_access),
-        auto_join_hub_members = coalesce($9, auto_join_hub_members)
+        auto_join_hub_members = coalesce($9, auto_join_hub_members),
+        join_policy = coalesce($11, join_policy)
       where id = $1`,
       [
         serverId,
@@ -118,7 +121,8 @@ export async function updateServerSettings(serverId: string, settings: {
         settings.iconUrl === null,
         settings.hubMemberAccess,
         settings.autoJoinHubMembers,
-        settings.visitorAccess
+        settings.visitorAccess,
+        settings.joinPolicy
       ]
     );
   });

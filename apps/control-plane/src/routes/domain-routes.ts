@@ -556,7 +556,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
         serverId: z.string().min(1),
         categoryId: z.string().optional(),
         name: z.string().min(2).max(80),
-        type: z.enum(["text", "voice", "announcement", "forum"])
+        type: z.enum(["text", "voice", "announcement", "forum", "landing"])
       })
       .parse(request.body);
 
@@ -762,7 +762,8 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       startingChannelId: z.string().min(1).nullable().optional(),
       iconUrl: z.string().url().nullable().optional(),
       visibility: z.string().optional(),
-      visitorPrivacy: z.string().optional()
+      visitorPrivacy: z.string().optional(),
+      joinPolicy: z.enum(["open", "approval", "invite"]).optional()
     }).parse(request.body);
 
     const allowed = await canManageServer({
@@ -1481,9 +1482,9 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       .object({
         serverId: z.string().min(1),
         name: z.string().min(2).max(80).optional(),
-        type: z.enum(["text", "voice", "announcement", "forum"]).optional(),
+        type: z.enum(["text", "voice", "announcement", "forum", "landing"]).optional(),
         categoryId: z.string().min(1).nullable().optional(),
-        topic: z.string().max(255).nullable().optional(),
+        topic: z.string().nullable().optional(),
         position: z.number().int().min(0).optional()
       })
       .parse(request.body);

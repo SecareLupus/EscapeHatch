@@ -356,23 +356,7 @@ export function Sidebar({
                             <h2 className="server-title">{activeServer?.name || "Channels"}</h2>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            {activeServer && !(activeServer as any).isMember && activeServer.type !== 'dm' && (
-                                <button
-                                    type="button"
-                                    className="join-space-button"
-                                    onClick={async () => {
-                                        try {
-                                            await joinServer(activeServer.id);
-                                            // Refresh server list manually or via parent
-                                            await handleServerChange(activeServer.id);
-                                        } catch (err) {
-                                            console.error("Failed to join server", err);
-                                        }
-                                    }}
-                                >
-                                    Join Space
-                                </button>
-                            )}
+
                             {canManageCurrentSpace && (
                             <div style={{ position: "relative" }}>
                                 <button
@@ -469,7 +453,7 @@ export function Sidebar({
                                                     onContextMenu={(e) => handleChannelContextMenu(e, channel)}
                                                 >
                                                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: (state.muteStatusByChannel[channel.id] || channel.hubMemberAccess === 'locked' || channel.spaceMemberAccess === 'locked') ? 0.5 : 1 }}>
-                                                        {channel.type === 'voice' ? '🔊' : '#'}
+                                                        {channel.type === 'voice' ? '🔊' : (channel.type === 'landing' ? '🏠' : '#')}
                                                         {getChannelName(channel, viewer?.productUserId)}
                                                         {state.muteStatusByChannel[channel.id] && <span title="Muted">🔇</span>}
                                                         {(channel.hubMemberAccess === 'locked' || channel.spaceMemberAccess === 'locked') && <span title="Locked">🔒</span>}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { AccessLevel, Badge, ServerBadgeRule, ChannelBadgeRule } from "@skerry/shared";
+import { AccessLevel, Badge, ServerBadgeRule, ChannelBadgeRule, JoinPolicy } from "@skerry/shared";
 import { listBadges, setServerBadgeRule, setChannelBadgeRule } from "../lib/control-plane";
 
 interface PermissionsEditorProps {
@@ -12,12 +12,14 @@ interface PermissionsEditorProps {
         spaceMemberAccess: AccessLevel;
         hubMemberAccess: AccessLevel;
         visitorAccess: AccessLevel;
+        joinPolicy?: JoinPolicy;
     };
     onSaveDefaults: (access: {
         hubAdminAccess: AccessLevel;
         spaceMemberAccess: AccessLevel;
         hubMemberAccess: AccessLevel;
         visitorAccess: AccessLevel;
+        joinPolicy?: JoinPolicy;
     }) => Promise<void>;
 }
 
@@ -113,6 +115,20 @@ export function PermissionsEditor({
                     >
                         {ACCESS_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                     </select>
+
+                    {!channelId && (
+                        <>
+                            <label>Join Policy</label>
+                            <select 
+                                value={access.joinPolicy || "open"}
+                                onChange={(e) => setAccess({ ...access, joinPolicy: e.target.value as JoinPolicy })}
+                            >
+                                <option value="open">Open (Anyone can join)</option>
+                                <option value="approval">Approval (Admins must approve)</option>
+                                <option value="invite">Invite Only (Explicit invite required)</option>
+                            </select>
+                        </>
+                    )}
                 </div>
                 <button onClick={handleSaveDefaults} disabled={loading}>Save Defaults</button>
             </section>

@@ -14,6 +14,7 @@
   "dependencies": {
     "@matrix-org/matrix-sdk-crypto-wasm": "^17.1.0",
     "@skerry/shared": "workspace:*",
+    "dompurify": "^3.3.3",
     "emoji-picker-react": "^4.18.0",
     "livekit-client": "^2.17.2",
     "matrix-js-sdk": "^40.3.0-rc.0",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@types/dompurify": "^3.2.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

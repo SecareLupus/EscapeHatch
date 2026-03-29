@@ -156,6 +156,7 @@ export function ChatClient() {
     renameRoomName,
     renameRoomType,
     renameRoomCategoryId,
+    renameRoomTopic,
     selectedCategoryIdForCreate,
     unreadCountByChannel,
     creatingSpace,
@@ -1414,9 +1415,10 @@ export function ChatClient() {
         serverId: selectedServerId,
         name: renameRoomName.trim(),
         type: renameRoomType,
-        categoryId: renameRoomCategoryId
+        categoryId: renameRoomCategoryId,
+        topic: renameRoomTopic
       });
-      dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: "", type: renameRoomType, categoryId: renameRoomCategoryId } });
+      dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: "", type: renameRoomType, categoryId: renameRoomCategoryId, topic: "" } });
       
       const isMasquerade = !!sessionStorage.getItem("masquerade_token");
       if (isMasquerade) {
@@ -2017,7 +2019,8 @@ export function ChatClient() {
                         hubAdminAccess: activeServer?.hubAdminAccess ?? 'chat',
                         spaceMemberAccess: activeServer?.spaceMemberAccess ?? 'chat',
                         hubMemberAccess: activeServer?.hubMemberAccess ?? 'chat',
-                        visitorAccess: activeServer?.visitorAccess ?? 'hidden'
+                        visitorAccess: activeServer?.visitorAccess ?? 'hidden',
+                        joinPolicy: activeServer?.joinPolicy
                       }}
                       onSaveDefaults={async (access) => {
                         await updateServerSettings(renameSpaceId, access);
@@ -2135,12 +2138,13 @@ export function ChatClient() {
                     required
                   />
                   <label htmlFor="room-type-modal">Type</label>
-                  <select id="room-type-modal" value={roomType} onChange={(e) => setRoomType(e.target.value as any)}>
-                    <option value="text">Text Room</option>
-                    <option value="announcement">Announcement Room</option>
-                    <option value="forum">Forum Room</option>
-                    <option value="voice">Voice Room</option>
-                  </select>
+                    <select id="room-type-modal" value={roomType} onChange={(e) => setRoomType(e.target.value as any)}>
+                      <option value="text">Text Room</option>
+                      <option value="announcement">Announcement Room</option>
+                      <option value="forum">Forum Room</option>
+                      <option value="voice">Voice Room</option>
+                      <option value="landing">Landing Page</option>
+                    </select>
                   <button type="submit" disabled={creatingRoom}>Create Room</button>
                 </form>
               )}
@@ -2174,29 +2178,56 @@ export function ChatClient() {
                           id="rename-room-modal"
                           autoFocus
                           value={renameRoomName}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: e.target.value, type: renameRoomType, categoryId: renameRoomCategoryId } })}
+                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: e.target.value, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic } })}
                           minLength={2}
                           maxLength={80}
                           required
                         />
 
+                        <label htmlFor="rename-room-topic">
+                          {renameRoomType === 'landing' ? 'Landing Page HTML/CSS' : 'Room Topic'}
+                        </label>
+                        {renameRoomType === 'landing' ? (
+                          <textarea
+                            id="rename-room-topic"
+                            value={renameRoomTopic}
+                            onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value } })}
+                            rows={15}
+                            style={{ 
+                              fontFamily: 'var(--font-mono, monospace)', 
+                              fontSize: '0.9rem',
+                              resize: 'vertical'
+                            }}
+                            placeholder="<h1>Welcome</h1><p>This is a landing page.</p>"
+                          />
+                        ) : (
+                          <input
+                            id="rename-room-topic"
+                            value={renameRoomTopic}
+                            onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value } })}
+                            maxLength={255}
+                            placeholder="Set a topic for this room..."
+                          />
+                        )}
+
                         <label htmlFor="rename-room-type">Type</label>
                         <select
                           id="rename-room-type"
                           value={renameRoomType}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: e.target.value as any, categoryId: renameRoomCategoryId } })}
+                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: e.target.value as any, categoryId: renameRoomCategoryId, topic: renameRoomTopic } })}
                         >
                           <option value="text">Text Room</option>
                           <option value="announcement">Announcement Room</option>
                           <option value="forum">Forum Room</option>
                           <option value="voice">Voice Room</option>
+                          <option value="landing">Landing Page</option>
                         </select>
 
                         <label htmlFor="rename-room-category">Category</label>
                         <select
                           id="rename-room-category"
                           value={renameRoomCategoryId ?? ""}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: e.target.value || null } })}
+                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: e.target.value || null, topic: renameRoomTopic } })}
                         >
                           <option value="">(None)</option>
                           {categories.map(c => (

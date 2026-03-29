@@ -18,7 +18,9 @@ export const MasqueradeParamsSchema = z.object({
 });
 
 
-export type ChannelType = "text" | "voice" | "announcement" | "dm" | "forum";
+export type ChannelType = "text" | "voice" | "announcement" | "dm" | "forum" | "landing";
+
+export type JoinPolicy = "open" | "approval" | "invite";
 
 export type HubSuspension = {
     isSuspended: boolean;
@@ -138,6 +140,7 @@ export interface Server {
     hubMemberAccess: AccessLevel;
     visitorAccess: AccessLevel;
     autoJoinHubMembers: boolean;
+    joinPolicy: JoinPolicy;
     createdAt: string;
     isMember?: boolean;
 }
