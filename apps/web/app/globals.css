@@ -102,6 +102,7 @@ body {
   max-width: 440px;
   overflow: hidden;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
   padding: 1.5rem;
 }
@@ -396,6 +397,7 @@ body {
 
 .stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5rem;
   max-width: 480px;
 }
