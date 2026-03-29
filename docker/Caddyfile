@@ -12,6 +12,9 @@
     handle /health {
         reverse_proxy control-plane:4000
     }
+    handle /metrics {
+        reverse_proxy control-plane:4000
+    }
     handle /bootstrap/* {
         reverse_proxy control-plane:4000
     }

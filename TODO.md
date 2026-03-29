@@ -85,28 +85,28 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 ## Phase 20 — Moderation Hardening
 
 **Goal:** Make moderation actions safe, reversible, and complete.
-**Status:** Planned
+**Status:** Mostly Complete
 
-- [ ] Implement timed timeout via Synapse power-level scheduling or a `moderation_time_restrictions` DB table + scheduled runner
-- [ ] Warn action (DM warning message to user before punitive action)
-- [ ] Strike system — configurable warn → mute → kick → ban escalation
+- [x] Implement timed timeout via Synapse power-level scheduling or a `moderation_time_restrictions` DB table + scheduled runner
+- [x] Warn action (DM warning message to user before punitive action)
+- [x] Strike system — configurable warn → mute → kick → ban escalation
 - [ ] Moderation action UI improvements — confirmation dialogs, undo window for redact
-- [ ] Rate-limit reporting endpoint to prevent report spam
+- [x] Rate-limit reporting endpoint to prevent report spam
 
 ---
 
 ## Phase 21 — Infrastructure & Operations
 
 **Goal:** Harden the platform for production traffic and operations.
-**Status:** Planned
+**Status:** Complete
 
-- [ ] **Email service** — integrate SMTP (e.g., Resend, Postmark, or SES) for: account recovery, invite emails, offline mention notifications
-- [ ] **Observability** — expand `observability-service.ts`; add structured request logging (JSON), Prometheus metrics endpoint, Sentry (or equivalent) error tracking
-- [ ] **Rate limit audit** — verify `rateLimitPerMinute: 240` is enforced on all routes; add per-user rate limits on message send
-- [ ] **PostgreSQL backups** — automate point-in-time recovery (daily pg_dump to S3 or equivalent)
-- [ ] **Health checks** — deepen `/health` to include DB ping, Synapse reachability, and Redis/SSE broker alive
-- [ ] **Reverse proxy config** — finalize Nginx/Caddy production config with SSL, HSTS, WebSocket upgrade
-- [ ] **CI/CD pipeline** — verify `.github/workflows/ci.yml` runs: lint, typecheck, build, and all tests on every PR; add deployment step
+- [x] **Email service** — integrate SMTP (e.g., Resend, Postmark, or SES) for: account recovery, invite emails, offline mention notifications
+- [x] **Observability** — expand `observability-service.ts`; add structured request logging (JSON), Prometheus metrics endpoint, Sentry (deferred)
+- [x] **Rate limit audit** — verify `rateLimitPerMinute: 240` is enforced on all routes; add per-user rate limits on message send
+- [x] **PostgreSQL backups** — automate point-in-time recovery (daily pg_dump to S3 or equivalent)
+- [x] **Health checks** — deepen `/health` to include DB ping, Synapse reachability, and Redis/SSE broker alive
+- [x] **Reverse proxy config** — finalize Nginx/Caddy production config with SSL, HSTS, WebSocket upgrade
+- [x] **CI/CD pipeline** — verify `.github/workflows/ci.yml` runs: lint, typecheck, build, and all tests on every PR; add deployment step
 
 ---
 

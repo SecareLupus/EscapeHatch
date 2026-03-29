@@ -3,10 +3,17 @@ import { STATUS_CODES } from "node:http";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import { ZodError } from "zod";
+import rateLimit from "@fastify/rate-limit";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { registerDomainRoutes } from "./routes/domain-routes.js";
 import { config } from "./config.js";
-import { logEvent } from "./services/observability-service.js";
+import { logEvent, httpRequestsTotal, httpRequestDurationSeconds } from "./services/observability-service.js";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    startTime: number;
+  }
+}
 
 export async function buildApp() {
   const app = Fastify({ logger: false, bodyLimit: config.bodyLimit });
@@ -35,46 +42,52 @@ export async function buildApp() {
   });
   await app.register(sensible);
 
-  const requestBuckets = new Map<string, { count: number; windowStartedAt: number }>();
+  await app.register(rateLimit, {
+    max: config.rateLimitPerMinute,
+    timeWindow: "1 minute",
+    keyGenerator: (request) => {
+      const forwardedFor = request.headers["x-forwarded-for"];
+      return (typeof forwardedFor === "string" ? forwardedFor.split(",")[0]?.trim() : request.ip) || request.id;
+    },
+    errorResponseBuilder: (request, context) => ({
+      statusCode: 429,
+      error: "Too Many Requests",
+      code: "rate_limited",
+      message: `Rate limit exceeded. Retry in ${context.after}.`,
+      requestId: request.id
+    })
+  });
 
   app.addHook("onSend", async (request, reply) => {
     reply.header("x-request-id", request.id);
   });
 
-  app.addHook("onRequest", async (request, reply) => {
-    const now = Date.now();
-    const forwardedFor = request.headers["x-forwarded-for"];
-    const ip = typeof forwardedFor === "string" ? forwardedFor.split(",")[0]?.trim() : request.ip;
-    const route = request.routeOptions?.url ?? request.url;
-    const key = `${ip}:${route}`;
-    const current = requestBuckets.get(key);
-    if (!current || now - current.windowStartedAt >= 60_000) {
-      requestBuckets.set(key, { count: 1, windowStartedAt: now });
-      return;
-    }
-    current.count += 1;
-    if (current.count > config.rateLimitPerMinute) {
-      logEvent("warn", "rate_limit_triggered", {
-        requestId: request.id,
-        ip,
-        route
-      });
-      reply.code(429).send({
-        statusCode: 429,
-        error: "Too Many Requests",
-        code: "rate_limited",
-        message: "Rate limit exceeded. Retry shortly.",
-        requestId: request.id
-      });
-    }
+  app.addHook("onRequest", async (request) => {
+    request.startTime = Date.now();
   });
 
   app.addHook("onResponse", async (request, reply) => {
+    const duration = (Date.now() - (request.startTime || Date.now())) / 1000;
+    const route = request.routeOptions?.url ?? request.url;
+
+    httpRequestsTotal.inc({
+      method: request.method,
+      route,
+      status_code: reply.statusCode
+    });
+
+    httpRequestDurationSeconds.observe({
+      method: request.method,
+      route,
+      status_code: reply.statusCode
+    }, duration);
+
     logEvent("info", "request_completed", {
       requestId: request.id,
       method: request.method,
-      route: request.routeOptions?.url ?? request.url,
-      statusCode: reply.statusCode
+      route,
+      statusCode: reply.statusCode,
+      durationMs: Math.round(duration * 1000)
     });
   });
 

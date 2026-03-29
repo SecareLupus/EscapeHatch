@@ -127,7 +127,8 @@ import {
   upsertDiscordChannelMapping
 } from "../services/discord-bridge-service.js";
 import { fetchDiscordUserProfile } from "../services/discord-bot-client.js";
-import { logEvent } from "../services/observability-service.js";
+import { logEvent, getMetrics } from "../services/observability-service.js";
+import { checkSynapseHealth } from "../matrix/synapse-adapter.js";
 import {
   assignSpaceOwner,
   expireSpaceOwnerAssignments,
@@ -189,7 +190,55 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
   }
 
   app.get("/health", async () => {
-    return { status: "ok", service: "control-plane" };
+    const dbOk = await withDb(async (db) => {
+      const res = await db.query("SELECT 1");
+      return res.rowCount === 1;
+    }).catch(() => false);
+
+    const synapseOk = await checkSynapseHealth().catch(() => false);
+
+    const status = (dbOk && synapseOk) ? "ok" : "degraded";
+
+    return { 
+      status, 
+      service: "control-plane",
+      checks: {
+        database: dbOk ? "up" : "down",
+        synapse: synapseOk ? "up" : "down"
+      }
+    };
+  });
+
+  app.get("/metrics", async (request, reply) => {
+    const { token, allowedIps } = config.metrics;
+    const forwardedFor = request.headers["x-forwarded-for"];
+    const clientIp = (typeof forwardedFor === "string" ? forwardedFor.split(",")[0]?.trim() : request.ip) || "";
+    
+    let authorized = false;
+    
+    // Check Token
+    if (token) {
+      const authHeader = request.headers["authorization"];
+      const providedToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : request.headers["x-metrics-token"];
+      if (providedToken === token) authorized = true;
+    }
+    
+    // Check IP
+    if (!authorized && allowedIps.length > 0) {
+      if (allowedIps.includes(clientIp)) authorized = true;
+    }
+    
+    // If neither is configured, we allow it (warning is logged on startup)
+    if (!token && allowedIps.length === 0) authorized = true;
+
+    if (!authorized) {
+      logEvent("warn", "metrics_access_denied", { clientIp, requestId: request.id });
+      reply.code(403).send({ error: "Forbidden", message: "Metrics access denied." });
+      return;
+    }
+
+    reply.type("text/plain; version=0.0.4; charset=utf-8");
+    return getMetrics();
   });
 
   app.get("/bootstrap/default-server", async () => {

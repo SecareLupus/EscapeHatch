@@ -1,5 +1,30 @@
 import fs from "node:fs";
 import { config } from "../config.js";
+import { Registry, Counter, Histogram, collectDefaultMetrics } from "prom-client";
+
+const registry = new Registry();
+collectDefaultMetrics({ register: registry });
+
+export const httpRequestsTotal = new Counter({
+  name: "http_requests_total",
+  help: "Total number of HTTP requests",
+  labelNames: ["method", "route", "status_code"],
+  registers: [registry],
+});
+
+export const httpRequestDurationSeconds = new Histogram({
+  name: "http_request_duration_seconds",
+  help: "Duration of HTTP requests in seconds",
+  labelNames: ["method", "route", "status_code"],
+  buckets: [0.1, 0.5, 1, 2, 5],
+  registers: [registry],
+});
+
+export const activeConnections = new Counter({
+  name: "active_connections",
+  help: "Number of active connections",
+  registers: [registry],
+});
 
 type LogLevel = "info" | "warn" | "error";
 
@@ -24,4 +49,14 @@ export function logEvent(level: LogLevel, message: string, fields: Record<string
     ...fields
   };
   writeLine(JSON.stringify(payload));
+}
+
+export async function getMetrics(): Promise<string> {
+  return registry.metrics();
+}
+
+if (!config.metrics.token && config.metrics.allowedIps.length === 0) {
+  logEvent("warn", "metrics_unprotected", {
+    message: "Metrics endpoint has NO IP or Token restrictions! This is insecure for production."
+  });
 }

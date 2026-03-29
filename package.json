@@ -12,5 +12,11 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @escapehatch/web test:e2e",
     "test:all": "pnpm test && pnpm test:e2e"
+  },
+  "dependencies": {
+    "@fastify/rate-limit": "^10.3.0",
+    "@types/nodemailer": "^7.0.11",
+    "nodemailer": "^8.0.4",
+    "prom-client": "^15.1.3"
   }
 }

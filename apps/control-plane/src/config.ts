@@ -86,6 +86,17 @@ export const config = {
     publicUrlPrefix: process.env.S3_PUBLIC_URL_PREFIX,
   },
   bodyLimit: Number(process.env.BODY_LIMIT ?? "15728640"), // 15MB
+  smtp: {
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT ?? "587"),
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+    from: process.env.EMAIL_FROM ?? `noreply@${baseDomain}`,
+  },
+  metrics: {
+    token: process.env.METRICS_TOKEN,
+    allowedIps: process.env.METRICS_ALLOWED_IPS?.split(",").map(ip => ip.trim()).filter(Boolean) ?? [],
+  }
 };
 
 // Config verification logging

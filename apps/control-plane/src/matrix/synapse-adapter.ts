@@ -240,3 +240,8 @@ export async function setUserMuted(roomId: string, userId: string, muted: boolea
     { method: "PUT" }
   );
 }
+
+export async function checkSynapseHealth(): Promise<boolean> {
+  const response = await synapseRequest<any>("/_matrix/client/versions", {}, { method: "GET" });
+  return !!response;
+}
