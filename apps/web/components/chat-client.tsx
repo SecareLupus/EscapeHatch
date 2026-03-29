@@ -1924,10 +1924,10 @@ export function ChatClient() {
 
       {
         activeModal && (
-          <div className="modal-backdrop" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
+          <div className="modal-backdrop" style={{ display: 'flex' }} onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
             <div 
-              className={cn("modal-panel", activeModal === "rename-room" && renameRoomType === "landing" && "modal-wide")} 
-              style={activeModal === "rename-room" && renameRoomType === "landing" ? { maxWidth: "800px", width: "100%" } : undefined}
+              className={cn("modal-panel", (activeModal === "rename-room" && renameRoomType === "landing") && "modal-wide")} 
+              style={(activeModal === "rename-room" && renameRoomType === "landing") ? { maxWidth: "800px", width: "100%" } : undefined}
               onClick={(e) => e.stopPropagation()}
             >
               <header className="modal-header">
@@ -2197,8 +2197,8 @@ export function ChatClient() {
                   </div>
 
                   {roomSettingsTab === "general" ? (
-                    <div className={cn("stack", renameRoomType === "landing" && "wide-stack")} style={renameRoomType === "landing" ? { maxWidth: "800px", width: "100%" } : undefined}>
-                      <form className={cn("stack", renameRoomType === "landing" && "wide-stack")} style={renameRoomType === "landing" ? { maxWidth: "800px", width: "100%" } : undefined} onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
+                    <>
+                      <form className={cn("stack", renameRoomType === "landing" && "wide-stack")} style={renameRoomType === 'landing' ? { maxWidth: '800px', width: '100%' } : { width: '100%' }} onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
                         void handleRenameRoom(event);
                         dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
                       }}>
@@ -2226,7 +2226,8 @@ export function ChatClient() {
                             style={{ 
                               fontFamily: 'var(--font-mono, monospace)', 
                               fontSize: '0.9rem',
-                              resize: 'vertical'
+                              resize: 'vertical',
+                              width: '100%'
                             }}
                             placeholder="<h1>Welcome</h1><p>This is a landing page.</p>"
                           />
@@ -2265,10 +2266,10 @@ export function ChatClient() {
                           ))}
                         </select>
 
-                        <button type="submit" disabled={mutatingStructure}>Save Changes</button>
+                        <button type="submit" disabled={mutatingStructure} style={{ width: '100%' }}>Save Changes</button>
                       </form>
 
-                      <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                      <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem", width: '100%' }}>
                         <p>Reorder Room</p>
                         <div style={{ display: "flex", gap: "0.5rem" }}>
                           <button
@@ -2299,7 +2300,7 @@ export function ChatClient() {
                           </button>
                         </div>
                       </div>
-                    </div>
+                    </>
                   ) : (
                     <PermissionsEditor 
                       serverId={activeChannel?.serverId ?? renameSpaceId}
