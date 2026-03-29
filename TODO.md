@@ -90,7 +90,7 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 - [x] Implement timed timeout via Synapse power-level scheduling or a `moderation_time_restrictions` DB table + scheduled runner
 - [x] Warn action (DM warning message to user before punitive action)
 - [x] Strike system — configurable warn → mute → kick → ban escalation
-- [ ] Moderation action UI improvements — confirmation dialogs, undo window for redact
+- [x] Moderation action UI improvements — confirmation dialogs, undo window for redact
 - [x] Rate-limit reporting endpoint to prevent report spam
 
 ---
