@@ -2193,8 +2193,8 @@ export function ChatClient() {
                   </div>
 
                   {roomSettingsTab === "general" ? (
-                    <div className="stack">
-                      <form className="stack" onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
+                    <div className={cn("stack", renameRoomType === "landing" && "wide-stack")}>
+                      <form className={cn("stack", renameRoomType === "landing" && "wide-stack")} onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
                         void handleRenameRoom(event);
                         dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
                       }}>
