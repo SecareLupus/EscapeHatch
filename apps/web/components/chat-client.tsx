@@ -8,6 +8,7 @@ import { Sidebar } from "./sidebar";
 import { ChatWindow } from "./chat-window";
 import { ErrorBoundary } from "./error-boundary";
 import Link from "next/link";
+import { LandingPageView } from "./landing-page-view";
 import { useToast } from "./toast-provider";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { PermissionsEditor } from "./permissions-editor";
@@ -102,22 +103,84 @@ function formatMessageTime(value: string): string {
 }
 
 const DEFAULT_LANDING_HTML = `
-<div class="landing-page" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top right, rgba(88, 101, 242, 0.1), transparent), radial-gradient(circle at bottom left, rgba(235, 69, 158, 0.05), transparent); padding: 40px 20px; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #fff;">
-  <div class="card" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 32px; padding: 60px 40px; max-width: 540px; width: 100%; text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
-    <div class="server-badge" style="display: inline-block; padding: 8px 16px; background: rgba(88, 101, 242, 0.1); border: 1px solid rgba(88, 101, 242, 0.2); border-radius: 100px; color: #5865F2; font-size: 13px; font-weight: 700; margin-bottom: 32px; text-transform: uppercase; letter-spacing: 1.5px;">
+<div class="landing-page">
+  <div class="card">
+    <div class="server-badge">
       Welcome to Skerry
     </div>
-    <h1 style="color: #fff; font-size: 48px; font-weight: 800; margin: 0 0 20px 0; line-height: 1.1; letter-spacing: -1.5px;">
+    <h1>
       {{SERVER_NAME}}
     </h1>
-    <p style="color: rgba(255, 255, 255, 0.5); font-size: 18px; line-height: 1.6; margin: 0 0 48px 0; font-weight: 400;">
+    <p>
       A private sanctuary for creators and their communities. Join us to start collaborating in a secure, decentralized environment.
     </p>
-    <div style="display: flex; justify-content: center;">
+    <div class="button-container">
       <skerry-join-button></skerry-join-button>
     </div>
   </div>
 </div>
+`;
+
+const DEFAULT_LANDING_CSS = `
+.landing-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top right, rgba(88, 101, 242, 0.1), transparent), radial-gradient(circle at bottom left, rgba(235, 69, 158, 0.05), transparent);
+  padding: 40px 20px;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #fff;
+}
+
+.landing-page .card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 32px;
+  padding: 60px 40px;
+  max-width: 540px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.landing-page .server-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  background: rgba(88, 101, 242, 0.1);
+  border: 1px solid rgba(88, 101, 242, 0.2);
+  border-radius: 100px;
+  color: #5865F2;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 32px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+.landing-page h1 {
+  color: #fff;
+  font-size: 48px;
+  font-weight: 800;
+  margin: 0 0 20px 0;
+  line-height: 1.1;
+  letter-spacing: -1.5px;
+}
+
+.landing-page p {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 18px;
+  line-height: 1.6;
+  margin: 0 0 48px 0;
+  font-weight: 400;
+}
+
+.landing-page .button-container {
+  display: flex;
+  justify-content: center;
+}
 `;
 
 function cn(...classes: any[]) {
@@ -176,6 +239,7 @@ export function ChatClient() {
     renameRoomType,
     renameRoomCategoryId,
     renameRoomTopic,
+    renameRoomStyleContent,
     selectedCategoryIdForCreate,
     unreadCountByChannel,
     creatingSpace,
@@ -286,7 +350,7 @@ export function ChatClient() {
   const [selectedHubIdForCreate, setSelectedHubIdForCreate] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("New Category");
   const [spaceSettingsTab, setSpaceSettingsTab] = useState<"general" | "permissions">("general");
-  const [roomSettingsTab, setRoomSettingsTab] = useState<"general" | "permissions">("general");
+  const [roomSettingsTab, setRoomSettingsTab] = useState<"general" | "permissions" | "preview">("general");
 
   const messagesRef = useRef<HTMLOListElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
@@ -764,7 +828,7 @@ export function ChatClient() {
 
   useEffect(() => {
     const selected = channels.find((channel) => channel.id === selectedChannelId);
-    dispatch({ type: "SET_RENAME_ROOM", payload: { id: selected?.id ?? "", name: (selected?.name ?? "").replace(/^#/, ""), type: selected?.type ?? "text", categoryId: selected?.categoryId ?? null } });
+    dispatch({ type: "SET_RENAME_ROOM", payload: { id: selected?.id ?? "", name: (selected?.name ?? "").replace(/^#/, ""), type: selected?.type ?? "text", categoryId: selected?.categoryId ?? null, topic: selected?.topic ?? "", styleContent: selected?.styleContent ?? "" } });
     dispatch({ type: "SET_SELECTED_CATEGORY_FOR_CREATE", payload: selected?.categoryId ?? "" });
   }, [channels, selectedChannelId, dispatch]);
 
@@ -1230,9 +1294,11 @@ export function ChatClient() {
     dispatch({ type: "SET_ERROR", payload: null });
     try {
       let topic: string | undefined;
+      let styleContent: string | undefined;
       if (roomType === "landing") {
         const server = servers.find(s => s.id === selectedServerId);
         topic = DEFAULT_LANDING_HTML.replace("{{SERVER_NAME}}", server?.name || "This Space");
+        styleContent = DEFAULT_LANDING_CSS;
       }
 
       const created = await createChannel({
@@ -1240,7 +1306,8 @@ export function ChatClient() {
         name: roomName.trim(),
         type: roomType,
         categoryId: selectedCategoryIdForCreate || undefined,
-        topic
+        topic,
+        styleContent
       });
       setRoomName("new-room");
       await refreshChatState(selectedServerId, created.id);
@@ -1442,19 +1509,21 @@ export function ChatClient() {
         name: renameRoomName.trim(),
         type: renameRoomType,
         categoryId: renameRoomCategoryId,
-        topic: renameRoomTopic
+        topic: renameRoomTopic,
+        styleContent: renameRoomStyleContent
       });
-      dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: "", type: renameRoomType, categoryId: renameRoomCategoryId, topic: "" } });
+      showToast("Room updated successfully", "success");
+      dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
       
       const isMasquerade = !!sessionStorage.getItem("masquerade_token");
       if (isMasquerade) {
-        showToast("Masquerade: Room renamed locally.", "success");
         return;
       }
       
       await refreshChatState(selectedServerId, renameRoomId);
     } catch (cause) {
-      dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to update room." });
+      console.error("Failed to update room:", cause);
+      showToast(cause instanceof Error ? cause.message : "Failed to update room.", "error");
     } finally {
       dispatch({ type: "SET_MUTATING_STRUCTURE", payload: false });
     }
@@ -2194,13 +2263,20 @@ export function ChatClient() {
                     >
                       Permissions
                     </button>
+                    {renameRoomType === "landing" && (
+                      <button 
+                        className={cn("tab-button", roomSettingsTab === "preview" && "active")}
+                        onClick={() => setRoomSettingsTab("preview")}
+                      >
+                        Preview
+                      </button>
+                    )}
                   </div>
 
-                  {roomSettingsTab === "general" ? (
+                  {roomSettingsTab === "general" && (
                     <>
                       <form className={cn("stack", renameRoomType === "landing" && "wide-stack")} style={renameRoomType === 'landing' ? { maxWidth: '800px', width: '100%' } : { width: '100%' }} onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
                         void handleRenameRoom(event);
-                        dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
                       }}>
                         <p>Editing Room: <strong>{channels.find(c => c.id === renameRoomId)?.name}</strong></p>
                         <label htmlFor="rename-room-modal">Room Name</label>
@@ -2208,20 +2284,21 @@ export function ChatClient() {
                           id="rename-room-modal"
                           autoFocus
                           value={renameRoomName}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: e.target.value, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic } })}
+                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: e.target.value, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
                           minLength={2}
                           maxLength={80}
                           required
                         />
 
                         <label htmlFor="rename-room-topic">
-                          {renameRoomType === 'landing' ? 'Landing Page HTML/CSS' : 'Room Topic'}
+                          {renameRoomType === 'landing' ? 'Landing Page HTML' : 'Room Topic'}
                         </label>
+                        {/* TODO: Support alternatives to HTML (Markdown, Pug, Handlebars, etc.) here. */}
                         {renameRoomType === 'landing' ? (
                           <textarea
                             id="rename-room-topic"
                             value={renameRoomTopic}
-                            onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value } })}
+                            onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value, styleContent: renameRoomStyleContent } })}
                             rows={15}
                             style={{ 
                               fontFamily: 'var(--font-mono, monospace)', 
@@ -2235,17 +2312,40 @@ export function ChatClient() {
                           <input
                             id="rename-room-topic"
                             value={renameRoomTopic}
-                            onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value } })}
+                            onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value, styleContent: renameRoomStyleContent } })}
                             maxLength={255}
                             placeholder="Set a topic for this room..."
                           />
+                        )}
+
+                        {renameRoomType === 'landing' && (
+                          <>
+                            <label htmlFor="rename-room-style">Landing Page CSS (Optional)</label>
+                            {/* TODO: Support Stylus, Sass, or Less here. */}
+                            <textarea
+                              id="rename-room-style"
+                              value={renameRoomStyleContent}
+                              onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: e.target.value } })}
+                              rows={8}
+                              style={{ 
+                                fontFamily: 'var(--font-mono, monospace)', 
+                                fontSize: '0.9rem',
+                                resize: 'vertical',
+                                width: '100%'
+                              }}
+                              placeholder=".landing-page { color: gold; }"
+                            />
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '-0.5rem' }}>
+                              Tip: Styles are scoped to this page. You can add global resets if needed.
+                            </p>
+                          </>
                         )}
 
                         <label htmlFor="rename-room-type">Type</label>
                         <select
                           id="rename-room-type"
                           value={renameRoomType}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: e.target.value as any, categoryId: renameRoomCategoryId, topic: renameRoomTopic } })}
+                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: e.target.value as any, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
                         >
                           <option value="text">Text Room</option>
                           <option value="announcement">Announcement Room</option>
@@ -2258,7 +2358,7 @@ export function ChatClient() {
                         <select
                           id="rename-room-category"
                           value={renameRoomCategoryId ?? ""}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: e.target.value || null, topic: renameRoomTopic } })}
+                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: e.target.value || null, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
                         >
                           <option value="">(None)</option>
                           {categories.map(c => (
@@ -2301,7 +2401,9 @@ export function ChatClient() {
                         </div>
                       </div>
                     </>
-                  ) : (
+                  )}
+
+                  {roomSettingsTab === "permissions" && (
                     <PermissionsEditor 
                       serverId={activeChannel?.serverId ?? renameSpaceId}
                       channelId={renameRoomId}
@@ -2320,6 +2422,30 @@ export function ChatClient() {
                         void refreshChatState();
                       }}
                     />
+                  )}
+
+                  {roomSettingsTab === "preview" && (
+                    <div className="preview-container stack" style={{ minHeight: '400px', display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
+                      <p>Full-fidelity preview of your landing page:</p>
+                      <div className="preview-frame" style={{ 
+                        flex: 1, 
+                        border: '1px solid var(--border)', 
+                        borderRadius: '8px', 
+                        overflow: 'hidden',
+                        background: 'var(--bg-primary)',
+                        minHeight: '600px',
+                        position: 'relative'
+                      }}>
+                        <LandingPageView 
+                          topic={renameRoomTopic} 
+                          styleContent={renameRoomStyleContent} 
+                          serverId={selectedServerId!} 
+                        />
+                      </div>
+                      <div className="preview-hint" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        Note: Interactive elements like "Join" buttons will use the actual server context.
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
