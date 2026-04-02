@@ -2443,7 +2443,7 @@ export function ChatClient() {
                         />
                       </div>
                       <div className="preview-hint" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        Note: Interactive elements like "Join" buttons will use the actual server context.
+                        Note: Interactive elements like &quot;Join&quot; buttons will use the actual server context.
                       </div>
                     </div>
                   )}

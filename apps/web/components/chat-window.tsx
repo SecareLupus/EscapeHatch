@@ -307,7 +307,7 @@ export function ChatWindow({
         }
 
         return grouped;
-    }, [messages]);
+    }, [messages, state.pendingActionIds]);
 
     useEffect(() => {
         if (selectedChannelId && activeChannelData?.type === "dm") {
@@ -555,7 +555,7 @@ export function ChatWindow({
         }
 
         return items;
-    }, [contextMenu, viewer, allowedActions, selectedServerId, showToast]);
+    }, [contextMenu, viewer, allowedActions, selectedServerId, showToast, dispatch]);
 
     const userContextMenuItems: ContextMenuItem[] = useMemo(() => {
         if (!userContextMenu) return [];
@@ -631,7 +631,7 @@ export function ChatWindow({
         }
 
         return items;
-    }, [userContextMenu, viewer, allowedActions, selectedServerId, dispatch]);
+    }, [userContextMenu, viewer, allowedActions, selectedServerId, dispatch, showToast]);
 
 
     const handleUserContextMenu = (event: React.MouseEvent, userId: string, displayName: string) => {
