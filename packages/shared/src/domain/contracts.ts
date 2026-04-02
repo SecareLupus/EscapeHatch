@@ -121,6 +121,7 @@ export interface Hub {
     spaceCustomizationLimits?: Record<string, any>;
     oidcConfig?: Record<string, any>;
     allowSpaceDiscordBridge?: boolean;
+    allowSpaceCustomization?: boolean;
     suspension?: HubSuspension;
     createdAt: string;
 }
@@ -141,6 +142,7 @@ export interface Server {
     visitorAccess: AccessLevel;
     autoJoinHubMembers: boolean;
     joinPolicy: JoinPolicy;
+    theme?: Record<string, any>;
     createdAt: string;
     isMember?: boolean;
 }

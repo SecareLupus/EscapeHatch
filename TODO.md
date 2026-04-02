@@ -147,3 +147,20 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 Current focus is **Phase 20** (Moderation Hardening) and **Phase 23** (Extensions & Ecosystem).
 - [x] Phase 19: Rich Media & Embeds (URL previews, image lightbox, video previews, GIF support)
 - [x] Phase 22: Test Coverage Expansion
+
+---
+
+## Phase 24 — Creator Suite & Branding
+
+**Goal:** Empower hub and space admins with professional branding and landing page tools.
+**Status:** In Progress (Foundations & Code Editor Complete)
+
+- [x] **Hierarchical CSS Theming** — Hub > Space > Page variable injection
+- [x] **Professional Code Editor** — Integrated PrismJS with live side-by-side preview
+- [x] **Variable Interpolation** — Dynamic tokens like `{{serverName}}`, `{{viewerName}}`
+- [x] **Template Library** — Preset landing page layouts (Hero, Profile, Splash)
+- [x] **Asset Integration** — Direct "Upload & Insert" help for images in the editor
+- [ ] **SEO & Social Metadata** — Per-page meta tags (og:title, og:image) and favicon customization
+- [ ] **PWA Support** — Manifest.json generation per Hub for "Add to Home Screen" experience
+- [ ] **Custom Domains** — Path-based routing with Caddy (Maintenance and support for user domains)
+

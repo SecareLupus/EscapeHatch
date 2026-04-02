@@ -85,6 +85,9 @@ import {
   type PrivilegedAction,
   type ViewerSession
 } from "../lib/control-plane";
+import { CodeEditor } from "./code-editor";
+import { ThemeEngine } from "./theme-engine";
+import { LANDING_PAGE_TEMPLATES } from "../lib/landing-page-templates";
 
 // Custom Hooks
 import { useVoice } from "../hooks/use-voice";
@@ -1995,8 +1998,7 @@ export function ChatClient() {
         activeModal && (
           <div className="modal-backdrop" style={{ display: 'flex' }} onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
             <div 
-              className={cn("modal-panel", (activeModal === "rename-room" && renameRoomType === "landing") && "modal-wide")} 
-              style={(activeModal === "rename-room" && renameRoomType === "landing") ? { maxWidth: "800px", width: "100%" } : undefined}
+              className={cn("modal-panel", (activeModal === "rename-room" && renameRoomType === "landing") && "wide-layout")} 
               onClick={(e) => e.stopPropagation()}
             >
               <header className="modal-header">
@@ -2249,203 +2251,291 @@ export function ChatClient() {
               )}
 
               {activeModal === "rename-room" && (
-                <div className={cn("stack", renameRoomType === "landing" && "wide-stack")}>
-                  <div className="tabs">
-                    <button 
-                      className={cn("tab-button", roomSettingsTab === "general" && "active")}
-                      onClick={() => setRoomSettingsTab("general")}
-                    >
-                      General
-                    </button>
-                    <button 
-                      className={cn("tab-button", roomSettingsTab === "permissions")}
-                      onClick={() => setRoomSettingsTab("permissions")}
-                    >
-                      Permissions
-                    </button>
-                    {renameRoomType === "landing" && (
-                      <button 
-                        className={cn("tab-button", roomSettingsTab === "preview" && "active")}
-                        onClick={() => setRoomSettingsTab("preview")}
-                      >
-                        Preview
-                      </button>
-                    )}
-                  </div>
+                <div className={cn("stack", renameRoomType === "landing" && "creator-layout")} style={renameRoomType === "landing" ? { height: 'calc(100vh - 200px)', minHeight: '600px' } : {}}>
+                  {renameRoomType === "landing" ? (
+                    <div style={{ display: 'flex', gap: '2rem', height: '100%', overflow: 'hidden' }}>
+                      {/* Left Side: Editor */}
+                      <div className="stack scroll-container" style={{ flex: '1', minWidth: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                        <div className="stack" style={{ gap: '1.5rem' }}>
+                          <form className="stack" onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
+                            void handleRenameRoom(event);
+                          }}>
+                            <div className="stack" style={{ gap: '1rem', background: 'var(--surface-alt)', padding: '1rem', borderRadius: '12px' }}>
+                              <label htmlFor="rename-room-modal">Room Name</label>
+                              <input
+                                id="rename-room-modal"
+                                value={renameRoomName}
+                                onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: e.target.value, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
+                                minLength={2}
+                                maxLength={80}
+                                required
+                              />
 
-                  {roomSettingsTab === "general" && (
-                    <>
-                      <form className={cn("stack", renameRoomType === "landing" && "wide-stack")} style={renameRoomType === 'landing' ? { maxWidth: '800px', width: '100%' } : { width: '100%' }} onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
-                        void handleRenameRoom(event);
-                      }}>
-                        <p>Editing Room: <strong>{channels.find(c => c.id === renameRoomId)?.name}</strong></p>
-                        <label htmlFor="rename-room-modal">Room Name</label>
-                        <input
-                          id="rename-room-modal"
-                          autoFocus
-                          value={renameRoomName}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: e.target.value, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
-                          minLength={2}
-                          maxLength={80}
-                          required
-                        />
+                              <label htmlFor="rename-room-template">Start from Template</label>
+                              <select 
+                                id="rename-room-template" 
+                                value="" 
+                                onChange={(e) => {
+                                  const template = LANDING_PAGE_TEMPLATES.find(t => t.id === e.target.value);
+                                  if (template && confirm(`Are you sure? This will overwrite your current content and style for "${template.name}".`)) {
+                                    dispatch({ 
+                                      type: "SET_RENAME_ROOM", 
+                                      payload: { 
+                                        id: renameRoomId, 
+                                        name: renameRoomName, 
+                                        type: renameRoomType, 
+                                        categoryId: renameRoomCategoryId, 
+                                        topic: template.html, 
+                                        styleContent: template.css 
+                                      } 
+                                    });
+                                  }
+                                }}
+                              >
+                                <option value="" disabled>Select a template...</option>
+                                {LANDING_PAGE_TEMPLATES.map(t => (
+                                  <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                              </select>
+                            </div>
 
-                        <label htmlFor="rename-room-topic">
-                          {renameRoomType === 'landing' ? 'Landing Page HTML' : 'Room Topic'}
-                        </label>
-                        {/* TODO: Support alternatives to HTML (Markdown, Pug, Handlebars, etc.) here. */}
-                        {renameRoomType === 'landing' ? (
-                          <textarea
-                            id="rename-room-topic"
-                            value={renameRoomTopic}
-                            onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value, styleContent: renameRoomStyleContent } })}
-                            rows={15}
-                            style={{ 
-                              fontFamily: 'var(--font-mono, monospace)', 
-                              fontSize: '0.9rem',
-                              resize: 'vertical',
-                              width: '100%'
-                            }}
-                            placeholder="<h1>Welcome</h1><p>This is a landing page.</p>"
-                          />
-                        ) : (
-                          <input
-                            id="rename-room-topic"
-                            value={renameRoomTopic}
-                            onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value, styleContent: renameRoomStyleContent } })}
-                            maxLength={255}
-                            placeholder="Set a topic for this room..."
-                          />
-                        )}
-
-                        {renameRoomType === 'landing' && (
-                          <>
-                            <label htmlFor="rename-room-style">Landing Page CSS (Optional)</label>
-                            {/* TODO: Support Stylus, Sass, or Less here. */}
-                            <textarea
-                              id="rename-room-style"
-                              value={renameRoomStyleContent}
-                              onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: e.target.value } })}
-                              rows={8}
-                              style={{ 
-                                fontFamily: 'var(--font-mono, monospace)', 
-                                fontSize: '0.9rem',
-                                resize: 'vertical',
-                                width: '100%'
+                            <label>Landing Page HTML</label>
+                            <CodeEditor 
+                              value={renameRoomTopic} 
+                              onChange={(val) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: val, styleContent: renameRoomStyleContent } })} 
+                              language="html"
+                              placeholder="<h1>Welcome</h1>"
+                              onUploadImage={async () => {
+                                const input = document.createElement('input');
+                                input.type = 'file';
+                                input.accept = 'image/*';
+                                return new Promise((resolve) => {
+                                  input.onchange = async () => {
+                                    if (input.files?.[0]) {
+                                      const upload = await uploadMedia(selectedServerId!, input.files[0]);
+                                      resolve(upload.url);
+                                    } else {
+                                      resolve(null);
+                                    }
+                                  };
+                                  input.click();
+                                });
                               }}
+                            />
+
+                            <label>Landing Page CSS (Optional)</label>
+                            <CodeEditor 
+                              value={renameRoomStyleContent || ""} 
+                              onChange={(val) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: val } })} 
+                              language="css"
                               placeholder=".landing-page { color: gold; }"
                             />
-                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '-0.5rem' }}>
-                              Tip: Styles are scoped to this page. You can add global resets if needed.
-                            </p>
-                          </>
-                        )}
 
-                        <label htmlFor="rename-room-type">Type</label>
-                        <select
-                          id="rename-room-type"
-                          value={renameRoomType}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: e.target.value as any, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
-                        >
-                          <option value="text">Text Room</option>
-                          <option value="announcement">Announcement Room</option>
-                          <option value="forum">Forum Room</option>
-                          <option value="voice">Voice Room</option>
-                          <option value="landing">Landing Page</option>
-                        </select>
+                            <label htmlFor="rename-room-type">Room Type</label>
+                            <select
+                              id="rename-room-type"
+                              value={renameRoomType}
+                              onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: e.target.value as any, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
+                            >
+                              <option value="text">Text Room</option>
+                              <option value="announcement">Announcement Room</option>
+                              <option value="forum">Forum Room</option>
+                              <option value="voice">Voice Room</option>
+                              <option value="landing">Landing Page</option>
+                            </select>
 
-                        <label htmlFor="rename-room-category">Category</label>
-                        <select
-                          id="rename-room-category"
-                          value={renameRoomCategoryId ?? ""}
-                          onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: e.target.value || null, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
-                        >
-                          <option value="">(None)</option>
-                          {categories.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
+                            <button type="submit" disabled={mutatingStructure} style={{ padding: '1rem', fontSize: '1.1rem' }}>Save Changes</button>
+                          </form>
 
-                        <button type="submit" disabled={mutatingStructure} style={{ width: '100%' }}>Save Changes</button>
-                      </form>
+                          <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                            <p>Room Organization</p>
+                            <div style={{ display: "flex", gap: "0.5rem" }}>
+                              <button
+                                type="button"
+                                disabled={mutatingStructure}
+                                onClick={() => moveChannelPosition(renameRoomId, "up")}
+                              >
+                                Move Up
+                              </button>
+                              <button
+                                type="button"
+                                disabled={mutatingStructure}
+                                onClick={() => moveChannelPosition(renameRoomId, "down")}
+                              >
+                                Move Down
+                              </button>
+                            </div>
+                          </div>
 
-                      <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem", width: '100%' }}>
-                        <p>Reorder Room</p>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <button
-                            type="button"
-                            disabled={mutatingStructure || (() => {
-                              const channel = channels.find(c => c.id === renameRoomId);
-                              if (!channel) return true;
-                              const peers = channels.filter(c => c.categoryId === channel.categoryId)
-                                .sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
-                              return peers.findIndex(c => c.id === renameRoomId) === 0;
-                            })()}
-                            onClick={() => moveChannelPosition(renameRoomId, "up")}
-                          >
-                            Move Up
-                          </button>
-                          <button
-                            type="button"
-                            disabled={mutatingStructure || (() => {
-                              const channel = channels.find(c => c.id === renameRoomId);
-                              if (!channel) return true;
-                              const peers = channels.filter(c => c.categoryId === channel.categoryId)
-                                .sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
-                              return peers.findIndex(c => c.id === renameRoomId) === peers.length - 1;
-                            })()}
-                            onClick={() => moveChannelPosition(renameRoomId, "down")}
-                          >
-                            Move Down
-                          </button>
+                          <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                            <p>Danger Zone</p>
+                            <button
+                              type="button"
+                              className="danger"
+                              disabled={mutatingStructure}
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete the room "${renameRoomName}"? All messages and content will be lost.`)) {
+                                  void performDeleteRoom(selectedServerId!, renameRoomId);
+                                  dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
+                                }
+                              }}
+                            >
+                              Delete Room
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </>
-                  )}
 
-                  {roomSettingsTab === "permissions" && (
-                    <PermissionsEditor 
-                      serverId={activeChannel?.serverId ?? renameSpaceId}
-                      channelId={renameRoomId}
-                      initialAccess={{
-                        hubAdminAccess: activeChannel?.hubAdminAccess ?? 'chat',
-                        spaceMemberAccess: activeChannel?.spaceMemberAccess ?? 'chat',
-                        hubMemberAccess: activeChannel?.hubMemberAccess ?? 'chat',
-                        visitorAccess: activeChannel?.visitorAccess ?? 'hidden'
-                      }}
-                      onSaveDefaults={async (access) => {
-                        await updateChannelSettings(renameRoomId, {
-                          serverId: activeChannel?.serverId ?? selectedServerId ?? "",
-                          ...access
-                        });
-                        showToast("Permissions updated", "success");
-                        void refreshChatState();
-                      }}
-                    />
-                  )}
-
-                  {roomSettingsTab === "preview" && (
-                    <div className="preview-container stack" style={{ minHeight: '400px', display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
-                      <p>Full-fidelity preview of your landing page:</p>
-                      <div className="preview-frame" style={{ 
-                        flex: 1, 
-                        border: '1px solid var(--border)', 
-                        borderRadius: '8px', 
-                        overflow: 'hidden',
-                        background: 'var(--bg-primary)',
-                        minHeight: '600px',
-                        position: 'relative'
-                      }}>
-                        <LandingPageView 
-                          topic={renameRoomTopic} 
-                          styleContent={renameRoomStyleContent} 
-                          serverId={selectedServerId!} 
-                        />
-                      </div>
-                      <div className="preview-hint" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        Note: Interactive elements like &quot;Join&quot; buttons will use the actual server context.
+                      {/* Right Side: Live Preview */}
+                      <div className="live-preview-pane" style={{ flex: '1.2', display: 'flex', flexDirection: 'column', background: 'var(--bg)', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+                        <div className="preview-header" style={{ padding: '0.75rem 1rem', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Live Preview</span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Updates as you type</span>
+                        </div>
+                        <div className="preview-content" style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+                          <ThemeEngine key={`theme-engine-${selectedServerId}`} />
+                          <LandingPageView 
+                            key={`preview-${renameRoomTopic.length}-${renameRoomStyleContent?.length}`}
+                            topic={renameRoomTopic} 
+                            styleContent={renameRoomStyleContent} 
+                            serverId={selectedServerId!} 
+                          />
+                        </div>
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      <div className="tabs">
+                        <button 
+                          className={cn("tab-button", roomSettingsTab === "general" && "active")}
+                          onClick={() => setRoomSettingsTab("general")}
+                        >
+                          General
+                        </button>
+                        <button 
+                          className={cn("tab-button", roomSettingsTab === "permissions" && "active")}
+                          onClick={() => setRoomSettingsTab("permissions")}
+                        >
+                          Permissions
+                        </button>
+                      </div>
+
+                      {roomSettingsTab === "general" && (
+                        <>
+                          <form className="stack" style={{ width: '100%' }} onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
+                            void handleRenameRoom(event);
+                          }}>
+                            <p>Editing Room: <strong>{channels.find(c => c.id === renameRoomId)?.name}</strong></p>
+                            <label htmlFor="rename-room-modal">Room Name</label>
+                            <input
+                              id="rename-room-modal"
+                              autoFocus
+                              value={renameRoomName}
+                              onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: e.target.value, type: renameRoomType, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
+                              minLength={2}
+                              maxLength={80}
+                              required
+                            />
+
+                            <label htmlFor="rename-room-topic">Room Topic</label>
+                            <input
+                              id="rename-room-topic"
+                              value={renameRoomTopic}
+                              onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: renameRoomCategoryId, topic: e.target.value, styleContent: renameRoomStyleContent } })}
+                              maxLength={255}
+                              placeholder="Set a topic for this room..."
+                            />
+
+                            <label htmlFor="rename-room-type">Type</label>
+                            <select
+                              id="rename-room-type"
+                              value={renameRoomType}
+                              onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: e.target.value as any, categoryId: renameRoomCategoryId, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
+                            >
+                              <option value="text">Text Room</option>
+                              <option value="announcement">Announcement Room</option>
+                              <option value="forum">Forum Room</option>
+                              <option value="voice">Voice Room</option>
+                              <option value="landing">Landing Page</option>
+                            </select>
+
+                            <label htmlFor="rename-room-category">Category</label>
+                            <select
+                              id="rename-room-category"
+                              value={renameRoomCategoryId || ""}
+                              onChange={(e) => dispatch({ type: "SET_RENAME_ROOM", payload: { id: renameRoomId, name: renameRoomName, type: renameRoomType, categoryId: e.target.value || null, topic: renameRoomTopic, styleContent: renameRoomStyleContent } })}
+                            >
+                              <option value="">No Category</option>
+                              {categories
+                                .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+                                .map((cat) => (
+                                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                ))}
+                            </select>
+
+                            <button type="submit" disabled={mutatingStructure}>Save Changes</button>
+                          </form>
+
+                          <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem", width: '100%' }}>
+                            <p>Reorder Room</p>
+                            <div style={{ display: "flex", gap: "0.5rem" }}>
+                              <button
+                                type="button"
+                                disabled={mutatingStructure}
+                                onClick={() => moveChannelPosition(renameRoomId, "up")}
+                              >
+                                Move Up
+                              </button>
+                              <button
+                                type="button"
+                                disabled={mutatingStructure}
+                                onClick={() => moveChannelPosition(renameRoomId, "down")}
+                              >
+                                Move Down
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="stack" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem", width: '100%' }}>
+                            <p>Danger Zone</p>
+                            <button
+                              type="button"
+                              className="danger"
+                              disabled={mutatingStructure}
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete the room "${renameRoomName}"? All messages and content will be lost.`)) {
+                                  void performDeleteRoom(selectedServerId!, renameRoomId);
+                                  dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
+                                }
+                              }}
+                            >
+                              Delete Room
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {roomSettingsTab === "permissions" && (
+                        <PermissionsEditor 
+                          serverId={activeChannel?.serverId ?? renameSpaceId}
+                          channelId={renameRoomId}
+                          initialAccess={{
+                            hubAdminAccess: activeChannel?.hubAdminAccess ?? 'chat',
+                            spaceMemberAccess: activeChannel?.spaceMemberAccess ?? 'chat',
+                            hubMemberAccess: activeChannel?.hubMemberAccess ?? 'chat',
+                            visitorAccess: activeChannel?.visitorAccess ?? 'hidden'
+                          }}
+                          onSaveDefaults={async (access) => {
+                            await updateChannelSettings(renameRoomId, {
+                              serverId: activeChannel?.serverId ?? selectedServerId ?? "",
+                              ...access
+                            });
+                            showToast("Permissions updated", "success");
+                            void refreshChatState();
+                          }}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               )}

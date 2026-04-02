@@ -1,6 +1,6 @@
 :root {
   --bg: #f7f3ea;
-  --bg-strong: #f0e6d2;
+  --strong: #f0e6d2;
   --surface: #fffaf2;
   --surface-alt: #f8efd9;
   --text: #2f2419;
@@ -9,6 +9,16 @@
   --accent: #1f7a5a;
   --accent-strong: #15563f;
   --danger: #a32121;
+
+  /* Skerry Design Tokens for Creators */
+  --sk-bg: var(--bg);
+  --sk-surface: var(--surface);
+  --sk-text: var(--text);
+  --sk-text-muted: var(--text-muted);
+  --sk-border: var(--border);
+  --sk-accent: var(--accent);
+  --sk-danger: var(--danger);
+  --sk-font-main: "Space Grotesk", "IBM Plex Sans", sans-serif;
 }
 
 [data-theme="dark"] {
@@ -22,6 +32,20 @@
   --accent: #2da178;
   --accent-strong: #3ac091;
   --danger: #e64a4a;
+
+  /* Skerry Design Tokens for Creators (Dark) */
+  --sk-bg: var(--bg);
+  --sk-surface: var(--surface);
+  --sk-text: var(--text);
+  --sk-text-muted: var(--text-muted);
+  --sk-border: var(--border);
+  --sk-accent: var(--accent);
+  --sk-danger: var(--danger);
+}
+
+.modal-panel.wide-layout {
+  max-width: 1200px;
+  width: 95vw;
 }
 
 * {

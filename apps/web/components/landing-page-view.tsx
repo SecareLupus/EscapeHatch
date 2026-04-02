@@ -4,6 +4,8 @@ import React, { useMemo, useRef, useEffect, useState } from "react";
 import DOMPurify from "dompurify";
 import ReactDOM from "react-dom";
 import { LandingJoinButton } from "./landing-join-button";
+import { useChat } from "../context/chat-context";
+import { processInterpolation } from "../lib/interpolation";
 import type { Channel } from "@skerry/shared";
 
 interface LandingPageViewProps {
@@ -21,18 +23,32 @@ function JoinButtonPortal({ target, serverId }: { target: HTMLElement, serverId:
 }
 
 export function LandingPageView({ channel, topic, styleContent, serverId }: LandingPageViewProps) {
+    const { state } = useChat();
+    const { hubs, servers, viewer } = state;
+    
     const activeTopic = topic !== undefined ? topic : channel?.topic;
     const activeStyle = styleContent !== undefined ? styleContent : channel?.styleContent;
     const activeServerId = serverId || channel?.serverId || "";
 
+    const activeServer = useMemo(() => servers.find(s => s.id === activeServerId), [servers, activeServerId]);
+    const activeHub = useMemo(() => hubs.find(h => h.id === activeServer?.hubId), [hubs, activeServer?.hubId]);
+
     const html = useMemo(() => {
         if (!activeTopic) return "<div style='display:flex; align-items:center; justify-content:center; height:100%; opacity:0.6;'>No content configured for this landing page. Use 'Edit Room' to add HTML and CSS.</div>";
-        return DOMPurify.sanitize(activeTopic, {
+        
+        const interpolated = processInterpolation(activeTopic, {
+            hub: activeHub,
+            server: activeServer,
+            channel: channel,
+            viewerName: viewer?.identity?.displayName || viewer?.identity?.matrixUserId || undefined
+        });
+
+        return DOMPurify.sanitize(interpolated, {
             ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'b', 'i', 'strong', 'em', 'img', 'style', 'section', 'article', 'skerry-join-button'],
             ALLOWED_ATTR: ['class', 'id', 'style', 'src', 'href', 'target'],
             ADD_TAGS: ['skerry-join-button']
         });
-    }, [activeTopic]);
+    }, [activeTopic, activeHub, activeServer, channel, viewer]);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const [portalTargets, setPortalTargets] = useState<HTMLElement[]>([]);
