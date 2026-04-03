@@ -61,9 +61,10 @@ export function LandingPageView({ channel, topic, styleContent, serverId }: Land
     }, [html]);
 
     return (
-        <div className="landing-page-container" ref={containerRef} style={{ height: '100%', overflowY: 'auto' }}>
+        <div className="landing-page-container" ref={containerRef} style={{ height: '100%', width: '100%', overflowY: 'auto' }}>
             <div 
                 className="landing-html-renderer"
+                style={{ width: '100%' }}
                 dangerouslySetInnerHTML={{ __html: html }} 
             />
             {activeStyle && (

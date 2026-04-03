@@ -44,8 +44,63 @@
 }
 
 .modal-panel.wide-layout {
-  max-width: 1200px;
-  width: 95vw;
+  max-width: 1400px;
+  width: 98vw;
+  display: flex;
+  flex-direction: column;
+  padding: 0; /* Remove padding for edge-to-edge creator layout */
+  gap: 0;
+  overflow: hidden;
+}
+
+.creator-layout {
+  display: flex !important;
+  flex-direction: row !important;
+  height: calc(100vh - 150px);
+  min-height: 600px;
+  width: 100%;
+}
+
+.creator-resizer {
+  width: 8px;
+  background: var(--border);
+  cursor: col-resize;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.creator-resizer:hover, .creator-resizer.active {
+  background: var(--accent);
+}
+
+.creator-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: -4px; right: -4px;
+}
+
+.landing-html-renderer {
+  width: 100%;
+  min-height: 100%;
+  display: block; /* Ensure it's block level */
+}
+
+.live-preview-pane {
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.preview-content {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  background: var(--bg-strong);
 }
 
 * {

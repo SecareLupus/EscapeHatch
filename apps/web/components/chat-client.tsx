@@ -200,6 +200,36 @@ export function ChatClient() {
   const suggestedUsername = searchParams.get("suggestedUsername");
 
   const { state, dispatch: originalDispatch } = useChat();
+  const [previewWidth, setPreviewWidth] = useState<number>(600);
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState<boolean>(false);
+  const isResizingRef = useRef(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const modal = document.querySelector(".modal-panel.wide-layout");
+      if (modal) {
+        const rect = modal.getBoundingClientRect();
+        const newWidth = rect.right - e.clientX;
+        // Clamp between 300 and 800
+        setPreviewWidth(Math.max(300, Math.min(newWidth, 900)));
+      }
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      document.body.style.cursor = "default";
+      const resizer = document.querySelector(".creator-resizer") as HTMLElement;
+      if (resizer) resizer.classList.remove("active");
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
   const dispatch = useCallback((action: any) => {
     if (action.type?.startsWith("SET_VOICE_") || action.type === "SET_LOADING") {
       console.log("[ChatClient] DISPATCH:", action.type, action.payload);
@@ -2255,11 +2285,22 @@ export function ChatClient() {
                   {renameRoomType === "landing" ? (
                     <div style={{ display: 'flex', gap: '2rem', height: '100%', overflow: 'hidden' }}>
                       {/* Left Side: Editor */}
-                      <div className="stack scroll-container" style={{ flex: '1', minWidth: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-                        <div className="stack" style={{ gap: '1.5rem' }}>
+                      <div className="stack scroll-container" style={{ flex: '1', minWidth: '350px', overflowY: 'auto' }}>
+                        <div className="stack" style={{ gap: '1.5rem', padding: '1.5rem' }}>
                           <form className="stack" onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
                             void handleRenameRoom(event);
                           }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <p style={{ margin: 0 }}>Editing Landing Page: <strong>{channels.find(c => c.id === renameRoomId)?.name}</strong></p>
+                              <button 
+                                type="button" 
+                                className="ghost"
+                                onClick={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
+                                style={{ fontSize: '0.8rem', padding: '4px 8px' }}
+                              >
+                                {isPreviewCollapsed ? "Show Preview" : "Hide Preview"}
+                              </button>
+                            </div>
                             <div className="stack" style={{ gap: '1rem', background: 'var(--surface-alt)', padding: '1rem', borderRadius: '12px' }}>
                               <label htmlFor="rename-room-modal">Room Name</label>
                               <input
@@ -2386,13 +2427,41 @@ export function ChatClient() {
                         </div>
                       </div>
 
+                      {/* Resizer Handle */}
+                      {!isPreviewCollapsed && (
+                        <div 
+                          className="creator-resizer" 
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            isResizingRef.current = true;
+                            document.body.style.cursor = "col-resize";
+                            (e.currentTarget as HTMLElement).classList.add("active");
+                          }}
+                        />
+                      )}
+
                       {/* Right Side: Live Preview */}
-                      <div className="live-preview-pane" style={{ flex: '1.2', display: 'flex', flexDirection: 'column', background: 'var(--bg)', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                        <div className="preview-header" style={{ padding: '0.75rem 1rem', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div 
+                        className="live-preview-pane" 
+                        style={{ 
+                          width: isPreviewCollapsed ? '0px' : `${previewWidth}px`,
+                          flex: isPreviewCollapsed ? 'none' : 'none',
+                          minWidth: isPreviewCollapsed ? '0px' : '300px',
+                          borderLeft: isPreviewCollapsed ? 'none' : '1px solid var(--border)'
+                        }}
+                      >
+                        <div className="preview-header" style={{ padding: '0.75rem 1rem', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', whiteSpace: 'nowrap' }}>
                           <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Live Preview</span>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Updates as you type</span>
+                          <button 
+                            className="ghost" 
+                            type="button"
+                            onClick={() => setIsPreviewCollapsed(true)}
+                            style={{ fontSize: '1.2rem', padding: '0 4px', lineHeight: 1 }}
+                          >
+                            ×
+                          </button>
                         </div>
-                        <div className="preview-content" style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+                        <div className="preview-content">
                           <ThemeEngine key={`theme-engine-${selectedServerId}`} />
                           <LandingPageView 
                             key={`preview-${renameRoomTopic.length}-${renameRoomStyleContent?.length}`}
