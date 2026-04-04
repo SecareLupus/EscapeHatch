@@ -1517,6 +1517,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       type: payload.type,
       categoryId: payload.categoryId,
       topic: payload.topic,
+      iconUrl: payload.iconUrl,
       styleContent: payload.styleContent,
       position: payload.position
     });

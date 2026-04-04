@@ -569,6 +569,7 @@ export async function renameChannel(input: {
   type?: ChannelType;
   categoryId?: string | null;
   topic?: string | null;
+  iconUrl?: string | null;
   styleContent?: string | null;
   position?: number;
 }): Promise<Channel> {
@@ -578,6 +579,7 @@ export async function renameChannel(input: {
     type: input.type,
     categoryId: input.categoryId,
     topic: input.topic,
+    iconUrl: input.iconUrl,
     styleContent: input.styleContent,
     position: input.position
   });
