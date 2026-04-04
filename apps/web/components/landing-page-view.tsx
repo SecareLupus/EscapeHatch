@@ -44,8 +44,20 @@ export function LandingPageView({ channel, topic, styleContent, serverId }: Land
         });
 
         return DOMPurify.sanitize(interpolated, {
-            ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'b', 'i', 'strong', 'em', 'img', 'style', 'section', 'article', 'skerry-join-button'],
-            ALLOWED_ATTR: ['class', 'id', 'style', 'src', 'href', 'target'],
+            ALLOWED_TAGS: [
+                'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                'ul', 'ol', 'li', 'a', 'b', 'i', 'strong', 'em', 'img', 'style', 
+                'section', 'article', 'header', 'footer', 'main', 'nav', 'aside',
+                'details', 'summary', 'figure', 'figcaption',
+                'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption',
+                'br', 'hr', 'blockquote', 'code', 'pre', 'sub', 'sup', 'mark', 
+                'small', 'del', 'ins', 's', 'skerry-join-button'
+            ],
+            ALLOWED_ATTR: [
+                'class', 'id', 'style', 'src', 'href', 'target', 
+                'alt', 'title', 'loading', 'width', 'height', 
+                'colspan', 'rowspan', 'scope'
+            ],
             ADD_TAGS: ['skerry-join-button']
         });
     }, [activeTopic, activeHub, activeServer, channel, viewer]);
