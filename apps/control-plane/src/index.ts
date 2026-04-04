@@ -30,4 +30,8 @@ async function start() {
   }
 }
 
-start();
+start().catch(err => {
+  console.error("FATAL ERROR DURING STARTUP:");
+  console.error(err);
+  process.exit(1);
+});

@@ -63,6 +63,9 @@ services:
       target: control-plane
       args:
         NEXT_PUBLIC_BASE_DOMAIN: ${BASE_DOMAIN}
+    networks:
+      - default
+      - backend
     env_file:
       - .env
     environment:
@@ -102,6 +105,9 @@ services:
       target: web
       args:
         NEXT_PUBLIC_BASE_DOMAIN: ${BASE_DOMAIN}
+    networks:
+      - default
+      - backend
     env_file:
       - .env
     environment:
@@ -117,6 +123,9 @@ services:
   caddy:
     image: caddy:latest
     restart: unless-stopped
+    networks:
+      - default
+      - backend
     ports:
       - "80:80"
       - "443:443"
@@ -148,7 +157,11 @@ services:
     depends_on:
       - postgres
 
-# Networks removed to use standard compose default network
+networks:
+  default:
+    name: skerry_default
+  backend:
+    name: skerry_backend
 
 volumes:
   pg_data:

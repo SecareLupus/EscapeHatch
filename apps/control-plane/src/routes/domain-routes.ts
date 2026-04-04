@@ -1485,7 +1485,7 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
       .object({
         serverId: z.string().min(1),
         name: z.string().min(2).max(80).optional(),
-        type: z.enum(["text", "voice", "announcement", "forum", "landing"]).optional(),
+        type: z.enum(["text", "voice", "announcement", "dm", "forum", "landing"]).optional(),
         categoryId: z.string().nullable().optional(),
         topic: z.string().nullable().optional(),
         iconUrl: z.string().nullable().optional(),
