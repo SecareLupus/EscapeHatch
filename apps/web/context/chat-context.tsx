@@ -397,8 +397,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return {
                 ...state,
                 renameRoomId: action.payload.id,
-                renameRoomName: action.payload.name,
-                renameRoomType: action.payload.type,
+                renameRoomName: action.payload.name !== undefined ? action.payload.name : state.renameRoomName,
+                renameRoomType: action.payload.type !== undefined ? action.payload.type : state.renameRoomType,
                 renameRoomCategoryId: action.payload.categoryId !== undefined ? action.payload.categoryId : state.renameRoomCategoryId,
                 renameRoomTopic: action.payload.topic !== undefined ? (action.payload.topic ?? "") : state.renameRoomTopic,
                 renameRoomIconUrl: action.payload.iconUrl !== undefined ? action.payload.iconUrl : state.renameRoomIconUrl,
