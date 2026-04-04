@@ -7,6 +7,7 @@
     "dev": "npx dotenv-cli -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc --project tsconfig.json",
     "start": "npx dotenv-cli -e ../../.env -- node dist/index.js",
+    "start:prod": "node dist/index.js",
     "lint": "tsc --project tsconfig.json --noEmit",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "test": "npx dotenv-cli -e ../../.env -- tsx src/test/setup-test-db.ts && NODE_ENV=test DATABASE_URL=postgres://postgres:temporary_battery_horse_staple_password@localhost:5432/escapehatch_test npx dotenv-cli -e ../../.env -- tsx --test --test-concurrency=1 src/test/*.test.ts",

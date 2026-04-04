@@ -84,8 +84,6 @@ services:
       - postgres
       - synapse
       - livekit
-    networks:
-      - default
     volumes:
       - ./docker/synapse:/app/docker/synapse
     deploy:
@@ -111,8 +109,6 @@ services:
       - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
     depends_on:
       - control-plane
-    networks:
-      - default
     deploy:
       resources:
         limits:
@@ -131,8 +127,6 @@ services:
     environment:
       - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
       - EMAIL=${EMAIL}
-    networks:
-      - default
     deploy:
       resources:
         limits:
@@ -153,12 +147,8 @@ services:
     entrypoint: ["sh", "-c", "while true; do /usr/local/bin/backup-db.sh; sleep 86400; done"]
     depends_on:
       - postgres
-    networks:
-      - default
 
-networks:
-  default:
-    name: escapehatch_default
+# Networks removed to use standard compose default network
 
 volumes:
   pg_data:

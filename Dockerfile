@@ -2,6 +2,7 @@
 FROM node:20-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 COPY . /app
 WORKDIR /app
@@ -18,10 +19,10 @@ RUN echo "NEXT_PUBLIC_BASE_DOMAIN=${NEXT_PUBLIC_BASE_DOMAIN:-localhost}" > .env 
 FROM base AS control-plane
 COPY --from=build /app /app
 EXPOSE 4000
-CMD [ "pnpm", "--filter", "@skerry/control-plane", "start" ]
+CMD [ "pnpm", "--filter", "@skerry/control-plane", "start:prod" ]
 
 # --- Web App Runtime ---
 FROM base AS web
 COPY --from=build /app /app
 EXPOSE 3000
-CMD [ "pnpm", "--filter", "@skerry/web", "start" ]
+CMD [ "pnpm", "--filter", "@skerry/web", "start:prod" ]
