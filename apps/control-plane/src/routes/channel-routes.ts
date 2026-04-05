@@ -127,7 +127,11 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
     const payload = z.object({
       serverId: z.string().min(1),
       restrictedVisibility: z.boolean().optional(),
-      allowedRoleIds: z.array(z.string()).optional()
+      allowedRoleIds: z.array(z.string()).optional(),
+      hubAdminAccess: z.enum(["hidden", "locked", "read", "chat"]).optional(),
+      spaceMemberAccess: z.enum(["hidden", "locked", "read", "chat"]).optional(),
+      hubMemberAccess: z.enum(["hidden", "locked", "read", "chat"]).optional(),
+      visitorAccess: z.enum(["hidden", "locked", "read", "chat"]).optional()
     }).parse(request.body);
 
     const allowed = await canManageServer({
