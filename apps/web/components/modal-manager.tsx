@@ -22,6 +22,7 @@ export function ModalManager() {
       {activeModal === "search" && <SearchModal />}
       {activeModal === "grant-role" && <RoleModal />}
       {activeModal === "masquerade" && <MasqueradeDrawer />}
+      {activeModal === "confirmation" && <ConfirmationModal />}
     </>
   );
 }

@@ -410,13 +410,15 @@ export async function getFirstUnreadMessageId(channelId: string): Promise<string
 }
 
 export async function sendMessage(channelId: string, content: string, attachments?: ChatMessage["attachments"], parentId?: string): Promise<ChatMessage> {
-  // The API route accepts `mediaUrls` (URL strings), not full attachment objects.
-  // Extract URLs so the server can construct proper Attachment records.
-  const mediaUrls = attachments?.map((a) => a.url).filter(Boolean);
+  // Send structured mediaAttachments so the server preserves the exact contentType.
+  // This is essential for Synapse media URLs which have no file extension to infer from.
+  const mediaAttachments = attachments?.length
+    ? attachments.map((a) => ({ url: a.url, contentType: a.contentType, filename: a.filename }))
+    : undefined;
   return apiFetch(`/v1/channels/${encodeURIComponent(channelId)}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, mediaUrls: mediaUrls?.length ? mediaUrls : undefined, parentId })
+    body: JSON.stringify({ content, mediaAttachments, parentId })
   });
 }
 
@@ -1153,13 +1155,15 @@ export async function listDelegationAuditEvents(hubId: string, limit = 50): Prom
   return json.items;
 }
 
-export async function uploadMedia(serverId: string, file: File): Promise<{ url: string }> {
+export async function uploadMedia(serverId: string, file: File): Promise<{ url: string; contentType: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
         const base64Data = (reader.result as string).split(",")[1];
-        const res = await apiFetch<{ url: string }>("/v1/media/upload", {
+        // The server echoes back contentType alongside url, which is critical
+        // for Synapse media URLs that have no file extension.
+        const res = await apiFetch<{ url: string; contentType: string }>("/v1/media/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

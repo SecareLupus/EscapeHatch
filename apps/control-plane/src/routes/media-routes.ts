@@ -37,6 +37,9 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 
     const result = await uploadMedia(payload);
     reply.code(201);
-    return result;
+    // Return contentType alongside URL so the client can pass it back
+    // when creating the message, which is critical for extension-less
+    // Synapse media URLs that can't be type-inferred from the path.
+    return { url: result.url, contentType: payload.contentType };
   });
 }

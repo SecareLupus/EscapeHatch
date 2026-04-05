@@ -120,11 +120,20 @@ export async function registerMessageRoutes(app: FastifyInstance): Promise<void>
 
   app.post("/v1/channels/:channelId/messages", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({ channelId: z.string().min(1) }).parse(request.params);
+    const AttachmentInput = z.object({
+      url: z.string().url(),
+      contentType: z.string().min(1),
+      filename: z.string().optional()
+    });
     const payload = z
       .object({
         content: z.string().trim().min(1).max(2000),
         externalTransactionId: z.string().optional(),
-        mediaUrls: z.array(z.string().url()).max(8).optional()
+        // Legacy: array of plain URLs (content type is inferred from extension)
+        mediaUrls: z.array(z.string().url()).max(8).optional(),
+        // Preferred: structured objects carrying explicit contentType.
+        // Critical for Synapse media URLs which have no file extension.
+        mediaAttachments: z.array(AttachmentInput).max(8).optional()
       })
       .parse(request.body);
 
@@ -134,23 +143,26 @@ export async function registerMessageRoutes(app: FastifyInstance): Promise<void>
       return;
     }
 
-    const message = await createMessage({
-      channelId: params.channelId,
-      actorUserId: request.auth!.productUserId,
-      content: payload.content,
-      attachments: payload.mediaUrls?.map(url => {
-        // Infer content type from the URL's file extension
+    const contentTypeMap: Record<string, string> = {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      gif: "image/gif",
+      webp: "image/webp",
+      svg: "image/svg+xml",
+      mp4: "video/mp4",
+      webm: "video/webm"
+    };
+
+    const attachments = [
+      ...(payload.mediaAttachments ?? []).map(a => ({
+        id: "att_" + Math.random().toString(36).slice(2),
+        url: a.url,
+        contentType: a.contentType,
+        filename: a.filename ?? a.url.split("/").pop()?.split("?")[0] ?? "attachment"
+      })),
+      ...(payload.mediaUrls ?? []).map(url => {
         const ext = url.split("?")[0]!.split(".").pop()?.toLowerCase() ?? "";
-        const contentTypeMap: Record<string, string> = {
-          jpg: "image/jpeg",
-          jpeg: "image/jpeg",
-          png: "image/png",
-          gif: "image/gif",
-          webp: "image/webp",
-          svg: "image/svg+xml",
-          mp4: "video/mp4",
-          webm: "video/webm"
-        };
         return {
           id: "att_" + Math.random().toString(36).slice(2),
           url,
@@ -158,6 +170,13 @@ export async function registerMessageRoutes(app: FastifyInstance): Promise<void>
           filename: url.split("/").pop()?.split("?")[0] ?? "attachment"
         };
       })
+    ];
+
+    const message = await createMessage({
+      channelId: params.channelId,
+      actorUserId: request.auth!.productUserId,
+      content: payload.content,
+      attachments: attachments.length > 0 ? attachments : undefined
     });
 
     publishChannelMessage(message);
@@ -165,6 +184,8 @@ export async function registerMessageRoutes(app: FastifyInstance): Promise<void>
     reply.code(201);
     return message;
   });
+
+
 
   app.patch("/v1/channels/:channelId/messages/:messageId", initializedAuthHandlers, async (request, reply) => {
     const params = z.object({
