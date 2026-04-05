@@ -1,6 +1,6 @@
 import { withDb } from "../db/client.js";
 import type { HouseBotSettings, UserStats } from "@skerry/shared";
-import { createMessage } from "./chat-service.js";
+import { createMessage } from "./chat/message-service.js";
 
 interface HouseBotSettingsRow {
   server_id: string;

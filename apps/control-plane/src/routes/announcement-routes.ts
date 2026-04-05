@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireInitialized } from "../auth/middleware.js";
-import { getAnnouncementFeed } from "../services/chat-service.js";
+import { getAnnouncementFeed } from "../services/chat/message-service.js";
 import {
   followAnnouncement,
   unfollowAnnouncement,

@@ -12,8 +12,6 @@ import {
   listCategories,
   deleteChannel,
   updateChannelVideoControls,
-  listChannelReadStates,
-  upsertChannelReadState,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -21,7 +19,11 @@ import {
   listChannelMembers,
   inviteToChannel,
   moveChannelToCategory
-} from "../services/chat-service.js";
+} from "../services/chat/channel-service.js";
+import {
+  listChannelReadStates,
+  upsertChannelReadState
+} from "../services/chat/read-state-service.js";
 import {
   getChannelSettings,
   updateChannelSettings

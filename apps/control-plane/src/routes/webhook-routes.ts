@@ -8,7 +8,7 @@ import {
   deleteWebhook,
   getWebhookByToken
 } from "../services/extension-service.js";
-import { createMessage } from "../services/chat-service.js";
+import { createMessage } from "../services/chat/message-service.js";
 import { publishChannelMessage } from "../services/chat-realtime.js";
 import { withDb } from "../db/client.js";
 

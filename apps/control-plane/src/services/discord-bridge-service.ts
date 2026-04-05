@@ -3,7 +3,7 @@ import { ChannelType } from "discord.js";
 import type { DiscordBridgeChannelMapping, DiscordBridgeConnection } from "@skerry/shared";
 import { config } from "../config.js";
 import { withDb } from "../db/client.js";
-import { createMessage } from "./chat-service.js";
+import { createMessage } from "./chat/message-service.js";
 import { publishChannelMessage } from "./chat-realtime.js";
 
 import { getDiscordBotClient, startDiscordBot, provisionProjectEmoji } from "./discord-bot-client.js";

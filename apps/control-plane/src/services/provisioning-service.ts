@@ -4,7 +4,7 @@ import { withDb } from "../db/client.js";
 import { attachChildRoom, createChannelRoom, createSpace } from "../matrix/synapse-adapter.js";
 import { withRetry } from "./retry.js";
 import { applyFederationPolicyToRoom } from "./federation-service.js";
-import { validateChannelStyle, type ChannelRow } from "./chat-service.js";
+import { validateChannelStyle, type ChannelRow } from "./chat/mapping-helpers.js";
 
 function randomId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;

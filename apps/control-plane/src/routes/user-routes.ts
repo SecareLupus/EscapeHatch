@@ -6,7 +6,7 @@ import {
   searchIdentities
 } from "../services/identity-service.js";
 import { fetchDiscordUserProfile } from "../services/discord-bot-client.js";
-import { getUnreadSummary } from "../services/chat-service.js";
+import { getUnreadSummary } from "../services/chat/read-state-service.js";
 import { updateUserPresence } from "../services/presence-service.js";
 import {
   listAllowedActions,

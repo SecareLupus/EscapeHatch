@@ -1,7 +1,7 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { withDb, initDb } from "../db/client.js";
-import { createMessage } from "../services/chat-service.js";
+import { createMessage } from "../services/chat/message-service.js";
 
 test("Mention Email Notifications", async (t) => {
   // Ensure migrations are run on the test DB

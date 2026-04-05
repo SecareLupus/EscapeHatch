@@ -14,7 +14,7 @@ import {
   deleteServer,
   renameServer,
   listServerMembers
-} from "../services/chat-service.js";
+} from "../services/chat/server-service.js";
 import {
   joinServer,
   leaveServer

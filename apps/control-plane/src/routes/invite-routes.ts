@@ -6,7 +6,7 @@ import {
   createHubInvite,
   getHubInvite,
   useHubInvite
-} from "../services/chat-service.js";
+} from "../services/chat/server-service.js";
 
 export async function registerInviteRoutes(app: FastifyInstance): Promise<void> {
   const initializedAuthHandlers = { preHandler: [requireAuth, requireInitialized] };

@@ -8,19 +8,25 @@ import {
   listMessages,
   searchMessages,
   listMessagesAround,
-  getFirstUnreadMessageId,
-  listMentionMarkers,
   createMessage,
   updateMessage,
   deleteMessage,
   pinMessage,
   unpinMessage,
   listPins,
+  fetchMessage
+} from "../services/chat/message-service.js";
+import {
   addReaction,
-  removeReaction,
-  fetchMessage,
+  removeReaction
+} from "../services/chat/reaction-service.js";
+import {
+  getFirstUnreadMessageId,
+  listMentionMarkers
+} from "../services/chat/read-state-service.js";
+import {
   getOrCreateDMChannel
-} from "../services/chat-service.js";
+} from "../services/chat/channel-service.js";
 import {
   isUserTimedOut
 } from "../services/moderation-service.js";
