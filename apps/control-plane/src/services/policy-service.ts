@@ -505,7 +505,7 @@ export async function isActionAllowed(input: {
     );
 
     // For management actions, the traditional matrix wins.
-    const ACCESS_ACTIONS = ["channel.message.read", "channel.message.send", "channel.voice.join"];
+    const ACCESS_ACTIONS = ["channel.message.read", "channel.message.send", "channel.voice.join", "voice.token.issue"];
     if (!ACCESS_ACTIONS.includes(input.action)) {
       return isRoleAllowedByMatrix;
     }
@@ -640,7 +640,7 @@ export async function isActionAllowed(input: {
       return userAccessPriority >= ACCESS_PRIORITY.read;
     }
 
-    if (input.action === "channel.message.send" || input.action === "channel.voice.join") {
+    if (input.action === "channel.message.send" || input.action === "channel.voice.join" || input.action === "voice.token.issue") {
       return userAccessPriority >= ACCESS_PRIORITY.chat;
     }
 
