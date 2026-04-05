@@ -111,6 +111,12 @@ export function useChatInitialization({
         ? candidateServerId
         : (serverItems[0]?.id ?? null);
     
+    // Update local synced URL to prevent the sync effect from fighting this manual change
+    const targetChannelId = preferredChannelId ?? urlChannelId ?? null;
+    if (nextServerId) {
+      lastSyncedUrlRef.current = `${nextServerId}:${targetChannelId ?? "null"}:${urlMessageId ?? "null"}`;
+    }
+
     dispatch({ type: "SET_SELECTED_SERVER_ID", payload: nextServerId });
 
     if (!nextServerId) {
@@ -122,8 +128,11 @@ export function useChatInitialization({
       return;
     }
 
-    dispatch({ type: "SET_CHANNELS", payload: [] });
-    dispatch({ type: "SET_CATEGORIES", payload: [] });
+    const currentServerId = state.selectedServerId;
+    if (nextServerId !== currentServerId) {
+      dispatch({ type: "SET_CHANNELS", payload: [] });
+      dispatch({ type: "SET_CATEGORIES", payload: [] });
+    }
 
     const channelItems = await listChannels(nextServerId);
     if (requestId !== chatStateRequestIdRef.current) return;

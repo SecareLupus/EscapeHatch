@@ -515,21 +515,28 @@ export function ChatClient() {
   useEffect(() => {
     if (!bootstrapStatus?.initialized) return;
 
-    const currentUrlSelection = `${urlServerId}:${urlChannelId}:${urlMessageId}`;
+    const currentUrlSelection = `${urlServerId}:${urlChannelId ?? "null"}:${urlMessageId ?? "null"}`;
     if (currentUrlSelection === lastSyncedUrlRef.current) {
       return;
     }
-
-    const needsSync = (urlServerId && urlServerId !== selectedServerId) ||
-      (urlChannelId && urlChannelId !== selectedChannelId) ||
-      (urlMessageId && messages.every(m => m.id !== urlMessageId));
-
-    if (needsSync) {
-      console.log("[ChatClient] URL Sync triggered:", { urlServerId, urlChannelId, urlMessageId });
+    
+    // Only trigger if URL actually changed from its previous value (e.g. Back/Forward)
+    // and it doesn't match the current state we've already moved to.
+    const stateUrlMapping = `${selectedServerId}:${selectedChannelId ?? "null"}:${state.highlightedMessageId ?? "null"}`;
+    if (currentUrlSelection === stateUrlMapping) {
       lastSyncedUrlRef.current = currentUrlSelection;
-      void refreshChatState(urlServerId ?? undefined, urlChannelId ?? undefined);
+      return;
     }
-  }, [urlServerId, urlChannelId, urlMessageId, bootstrapStatus?.initialized, refreshChatState, selectedServerId, selectedChannelId, messages, lastSyncedUrlRef]);
+
+    console.log("[ChatClient] Actual URL drift detected! Syncing state to URL.", { 
+      from: lastSyncedUrlRef.current, 
+      to: currentUrlSelection,
+      state: stateUrlMapping
+    });
+    
+    lastSyncedUrlRef.current = currentUrlSelection;
+    void refreshChatState(urlServerId ?? undefined, urlChannelId ?? undefined);
+  }, [urlServerId, urlChannelId, urlMessageId, bootstrapStatus?.initialized, refreshChatState, selectedServerId, selectedChannelId, state.highlightedMessageId]);
 
   useEffect(() => {
     if (!canAccessWorkspace || !selectedServerId) {
