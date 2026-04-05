@@ -57,6 +57,37 @@ export async function listChannelReadStates(input: {
   });
 }
 
+export async function getChannelReadState(channelId: string, productUserId: string): Promise<ChannelReadState | null> {
+  return withDb(async (db) => {
+    const rows = await db.query<{
+      channel_id: string;
+      product_user_id: string;
+      last_read_at: string;
+      is_muted: boolean;
+      notification_preference: "all" | "mentions" | "none";
+      updated_at: string;
+    }>(
+      `select channel_id, product_user_id, last_read_at, is_muted, notification_preference, updatedAt
+       from channel_read_states
+       where product_user_id = $1 and channel_id = $2
+       limit 1`,
+      [productUserId, channelId]
+    );
+
+    const row = rows.rows[0];
+    if (!row) return null;
+
+    return {
+      channelId: row.channel_id,
+      userId: row.product_user_id,
+      lastReadAt: row.last_read_at,
+      isMuted: row.is_muted,
+      notificationPreference: row.notification_preference,
+      updatedAt: row.updated_at
+    };
+  });
+}
+
 export async function upsertChannelReadState(input: {
   productUserId: string;
   channelId: string;

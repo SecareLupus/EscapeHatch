@@ -257,6 +257,8 @@ type ChatAction =
             selectedChannelId?: string | null;
             activeChannelData?: Channel | null;
             messages?: MessageItem[];
+            members?: ChatMember[];
+            permissions?: PrivilegedAction[];
             highlightedMessageId?: string | null;
             error?: string | null;
         } 
@@ -626,6 +628,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 ...(action.payload.selectedChannelId !== undefined && { selectedChannelId: action.payload.selectedChannelId }),
                 ...(action.payload.activeChannelData !== undefined && { activeChannelData: action.payload.activeChannelData }),
                 ...(action.payload.messages !== undefined && { messages: action.payload.messages }),
+                ...(action.payload.members !== undefined && { members: action.payload.members }),
+                ...(action.payload.permissions !== undefined && { permissions: action.payload.permissions }),
                 ...(action.payload.highlightedMessageId !== undefined && { highlightedMessageId: action.payload.highlightedMessageId }),
                 ...(action.payload.error !== undefined && { error: action.payload.error })
             };

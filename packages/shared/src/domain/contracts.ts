@@ -94,6 +94,14 @@ export type PrivilegedAction =
     | "channel.message.read"
     | "channel.message.send"
     | "channel.voice.join";
+ 
+export interface ViewerRoleBinding {
+    role: Role;
+    hubId: string | null;
+    serverId: string | null;
+    channelId: string | null;
+    isOwnerSuspended?: boolean;
+}
 
 export interface ServerBlueprint {
     serverName: string;
@@ -535,3 +543,21 @@ export interface FollowedAnnouncement {
     createdAt: string;
 }
 
+
+export interface ChannelMemberFull {
+    productUserId: string;
+    displayName: string;
+    avatarUrl?: string;
+    isOnline: boolean;
+    lastSeenAt?: string;
+    isBridged?: boolean;
+    bridgedUserStatus?: string;
+}
+
+export interface ChannelInitResponse {
+    channel: Channel;
+    messages: ChatMessage[];
+    members: ChannelMemberFull[];
+    readState: ChannelReadState | null;
+    permissions: PrivilegedAction[];
+}

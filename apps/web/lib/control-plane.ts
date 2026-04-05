@@ -23,7 +23,10 @@ import type {
   HubInvite,
   MasqueradeParams,
   IdentityProvider,
-  Badge
+  Badge,
+  ChannelInitResponse,
+  PrivilegedAction,
+  ViewerRoleBinding
 } from "@skerry/shared";
 export type { 
   IdentityMapping, 
@@ -39,10 +42,10 @@ export type {
   MentionMarker,
   ModerationAction,
   ModerationReport,
-  Server,
-  VoiceTokenGrant,
   HubInvite,
-  Badge
+  Badge,
+  PrivilegedAction,
+  ViewerRoleBinding
 };
 
 
@@ -135,34 +138,6 @@ export interface FederationPolicySnapshot {
   recentChanges: FederationPolicyEvent[];
 }
 
-export interface ViewerRoleBinding {
-  role: Role;
-  hubId: string | null;
-  serverId: string | null;
-  channelId: string | null;
-  isOwnerSuspended?: boolean;
-}
-
-export type PrivilegedAction =
-  | "moderation.kick"
-  | "moderation.ban"
-  | "moderation.unban"
-  | "moderation.timeout"
-  | "moderation.warn"
-  | "moderation.strike"
-  | "moderation.redact"
-  | "channel.lock"
-  | "channel.unlock"
-  | "channel.slowmode"
-  | "channel.posting"
-  | "voice.token.issue"
-  | "reports.triage"
-  | "audit.read"
-  | "hub.delete"
-  | "badges.manage"
-  | "channel.message.read"
-  | "channel.message.send"
-  | "channel.voice.join";
 
 export class ControlPlaneApiError extends Error {
   readonly statusCode: number;
@@ -313,8 +288,17 @@ export async function updateUserProfile(input: {
   });
 }
 
-export async function listServers(): Promise<Server[]> {
+let serversCache: { data: Server[]; timestamp: number } | null = null;
+let rolesCache: { data: ViewerRoleBinding[]; timestamp: number } | null = null;
+const CACHE_TTL_MS = 30000; // 30 seconds
+
+export async function listServers(force = false): Promise<Server[]> {
+  const now = Date.now();
+  if (!force && serversCache && now - serversCache.timestamp < CACHE_TTL_MS) {
+    return serversCache.data;
+  }
   const json = await apiFetch<{ items: Server[] }>("/v1/servers");
+  serversCache = { data: json.items, timestamp: now };
   return json.items;
 }
 
@@ -323,9 +307,18 @@ export async function listHubs(): Promise<Hub[]> {
   return json.items;
 }
 
-export async function listViewerRoleBindings(): Promise<ViewerRoleBinding[]> {
+export async function listViewerRoleBindings(force = false): Promise<ViewerRoleBinding[]> {
+  const now = Date.now();
+  if (!force && rolesCache && now - rolesCache.timestamp < CACHE_TTL_MS) {
+    return rolesCache.data;
+  }
   const json = await apiFetch<{ items: ViewerRoleBinding[] }>("/v1/me/roles");
+  rolesCache = { data: json.items, timestamp: now };
   return json.items;
+}
+
+export async function fetchChannelInit(channelId: string): Promise<ChannelInitResponse> {
+  return apiFetch<ChannelInitResponse>(`/v1/channels/${encodeURIComponent(channelId)}/init`);
 }
 
 export async function listChannels(serverId: string): Promise<Channel[]> {

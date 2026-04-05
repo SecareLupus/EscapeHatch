@@ -14,12 +14,9 @@ import {
   listChannels,
   listCategories,
   listDiscordBridgeMappings,
-  fetchDiscordBridgeHealth,
-  listMessages,
-  listMessagesAround,
-  listChannelMembers,
   updateUserTheme,
   controlPlaneBaseUrl,
+  fetchChannelInit,
   type ChatMessage
 } from "../lib/control-plane";
 
@@ -99,43 +96,49 @@ export function useChatInitialization({
 
   const refreshChatState = useCallback(async (preferredServerId?: string, preferredChannelId?: string): Promise<void> => {
     const requestId = ++chatStateRequestIdRef.current;
+    
+    // Throttled fetch for global list of servers and roles
     const [serverItems, roleBindings] = await Promise.all([
       listServers(),
       listViewerRoleBindings()
     ]);
     if (requestId !== chatStateRequestIdRef.current) return;
 
-    dispatch({ type: "SET_SERVERS", payload: serverItems });
-    dispatch({ type: "SET_VIEWER_ROLES", payload: roleBindings });
-
+    // Determine target server
     const candidateServerId = preferredServerId ?? urlServerId ?? selectedServerId ?? serverItems[0]?.id ?? null;
     const nextServerId = candidateServerId && serverItems.some((server) => server.id === candidateServerId)
         ? candidateServerId
         : (serverItems[0]?.id ?? null);
     
-    const targetChannelId = preferredChannelId ?? urlChannelId ?? null;
-    const targetUrl = `${nextServerId}:${targetChannelId ?? "null"}:${urlMessageId ?? "null"}`;
-    if (setTargetUrl) setTargetUrl(targetUrl);
-    lastSyncedUrlRef.current = targetUrl;
-
     if (!nextServerId) {
-      dispatch({ type: "SET_SELECTED_SERVER_ID", payload: null });
-      dispatch({ type: "SET_CHANNELS", payload: [] });
-      dispatch({ type: "SET_CATEGORIES", payload: [] });
-      dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: null });
-      dispatch({ type: "SET_MESSAGES", payload: [] });
+       dispatch({
+        type: "SET_CHAT_INITIAL_DATA",
+        payload: {
+          servers: serverItems,
+          viewerRoles: roleBindings,
+          selectedServerId: null,
+          channels: [],
+          categories: [],
+          selectedChannelId: null,
+          messages: [],
+          error: null
+        }
+      });
       setUrlSelection(null, null);
+      if (setTargetUrl) setTargetUrl(null);
       return;
     }
 
+    // Determine target channel
+    let nextChannelId = preferredChannelId ?? urlChannelId ?? null;
+    
+    // Optimize: If we don't have an explicit channel, we still need to load the server's channels to pick one
     let channelItems = state.channels;
     let categoryItems = state.categories;
-
-    // Check if the current data actually belongs to the target server
     const currentDataBelongsToNextServer = channelItems.length > 0 && channelItems[0]?.serverId === nextServerId;
 
-    // Optimize: Only skip fetch if we are on the same server AND already have its data
     if (nextServerId !== state.selectedServerId || !currentDataBelongsToNextServer || categoryItems.length === 0) {
+      // If we are switching servers, we still need the room list for the sidebar
       [channelItems, categoryItems] = await Promise.all([
         listChannels(nextServerId),
         listCategories(nextServerId)
@@ -143,101 +146,77 @@ export function useChatInitialization({
       if (requestId !== chatStateRequestIdRef.current) return;
     }
 
-    // Discord info can stay async/separate as they are less critical for immediate room rendering
-    void listDiscordBridgeMappings(nextServerId)
-      .then((items) => dispatch({ type: "SET_DISCORD_MAPPINGS", payload: items }))
-      .catch(() => dispatch({ type: "SET_DISCORD_MAPPINGS", payload: [] }));
-
-    void fetchDiscordBridgeHealth(nextServerId)
-      .then((health) => dispatch({ type: "SET_DISCORD_CONNECTION", payload: health.connection }))
-      .catch(() => dispatch({ type: "SET_DISCORD_CONNECTION", payload: null }));
-
-    const textChannels = channelItems.filter((channel) => channel.type === "text" || channel.type === "announcement");
-
-    let nextChannelId = selectedChannelId;
-    let shouldFetchMessages = false;
-
-    if (preferredChannelId || urlChannelId) {
-      const explicitId = preferredChannelId ?? urlChannelId;
-      if (explicitId && channelItems.some((c) => c.id === explicitId)) {
-        nextChannelId = explicitId;
-        shouldFetchMessages = true;
-      }
-    }
-
     if (!nextChannelId) {
+      const textChannels = channelItems.filter((channel) => channel.type === "text" || channel.type === "announcement");
       nextChannelId = textChannels[0]?.id ?? channelItems[0]?.id ?? null;
-      shouldFetchMessages = true;
     }
 
-    const nextChannelObj = nextChannelId ? channelItems.find(c => c.id === nextChannelId) : null;
-
-    // Batch core state update
-    dispatch({
-      type: "SET_CHAT_INITIAL_DATA",
-      payload: {
-        servers: serverItems,
-        viewerRoles: roleBindings,
-        selectedServerId: nextServerId,
-        selectedChannelId: nextChannelId,
-        channels: channelItems,
-        categories: categoryItems,
-        activeChannelData: nextChannelObj ?? null
-      }
-    });
-
-    setUrlSelection(nextServerId, nextChannelId, urlMessageId);
-    lastSyncedUrlRef.current = `${nextServerId}:${nextChannelId ?? "null"}:${urlMessageId ?? "null"}`;
-
-    if (!nextChannelId) {
-      dispatch({ type: "SET_MESSAGES", payload: [] });
-      return;
-    }
-
-    if (shouldFetchMessages) {
-      let messageItems: ChatMessage[];
-      if (urlMessageId) {
-        messageItems = await listMessagesAround(nextChannelId, urlMessageId);
-        if (messageItems.length === 0) {
-          messageItems = await listMessages(nextChannelId, null);
-          dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: null });
-          setUrlSelection(nextServerId, nextChannelId, null);
-          lastSyncedUrlRef.current = `${nextServerId}:${nextChannelId}:null`;
-        } else {
-          dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: urlMessageId });
-        }
-      } else {
-        messageItems = await listMessages(nextChannelId, null);
-        dispatch({ type: "SET_HIGHLIGHTED_MESSAGE_ID", payload: null });
-      }
-
-      if (requestId !== chatStateRequestIdRef.current) return;
-      dispatch({ type: "SET_MESSAGES", payload: messageItems.map((message) => ({ ...message })) });
-
-      setDraftMessage(draftMessagesByChannel[nextChannelId] ?? "");
-
-      setTimeout(() => {
-        const list = messagesRef.current;
-        if (list) {
-          if (urlMessageId) return;
-          const savedPos = channelScrollPositions[nextChannelId];
-          if (savedPos !== undefined) {
-            list.scrollTop = savedPos;
-          } else {
-            list.scrollTop = list.scrollHeight;
-          }
-        }
-      }, 0);
-    }
-
+    // BOOTSTRAP: Load the entire room state in one atomic call
     if (nextChannelId) {
-      void listChannelMembers(nextChannelId)
-        .then((items) => dispatch({ type: "SET_MEMBERS", payload: items }))
-        .catch((e) => console.error("Failed to fetch members:", e));
+      try {
+        const initData = await fetchChannelInit(nextChannelId);
+        if (requestId !== chatStateRequestIdRef.current) return;
+
+        dispatch({
+          type: "SET_CHAT_INITIAL_DATA",
+          payload: {
+            servers: serverItems,
+            viewerRoles: roleBindings,
+            selectedServerId: nextServerId,
+            channels: channelItems,
+            categories: categoryItems,
+            selectedChannelId: nextChannelId,
+            activeChannelData: initData.channel,
+            messages: initData.messages.map((m: ChatMessage) => ({ ...m })),
+            members: initData.members,
+            permissions: initData.permissions,
+            highlightedMessageId: urlMessageId ?? null,
+            error: null
+          }
+        });
+
+        setUrlSelection(nextServerId, nextChannelId, urlMessageId);
+        const targetUrl = `${nextServerId}:${nextChannelId ?? "null"}:${urlMessageId ?? "null"}`;
+        lastSyncedUrlRef.current = targetUrl;
+        if (setTargetUrl) setTargetUrl(targetUrl);
+        setDraftMessage(draftMessagesByChannel[nextChannelId] ?? "");
+
+        // Optional post-load tasks
+        void markChannelAsRead(nextChannelId);
+        void listDiscordBridgeMappings(nextServerId)
+          .then((items) => dispatch({ type: "SET_DISCORD_MAPPINGS", payload: items }))
+          .catch(() => {});
+
+        setTimeout(() => {
+          const list = messagesRef.current;
+          if (list) {
+            const savedPos = channelScrollPositions[nextChannelId!];
+            list.scrollTop = savedPos !== undefined ? savedPos : list.scrollHeight;
+          }
+        }, 0);
+
+      } catch (err) {
+        console.error("Failed to bootstrap room:", err);
+        dispatch({ type: "SET_ERROR", payload: "Failed to load chat room." });
+      }
     } else {
-      dispatch({ type: "SET_MEMBERS", payload: [] });
+      // Empty server or only voice rooms (unlikely)
+      dispatch({
+        type: "SET_CHAT_INITIAL_DATA",
+        payload: {
+          servers: serverItems,
+          viewerRoles: roleBindings,
+          selectedServerId: nextServerId,
+          channels: channelItems,
+          categories: categoryItems,
+          selectedChannelId: null,
+          messages: [],
+          error: null
+        }
+      });
+      setUrlSelection(nextServerId, null);
     }
-  }, [urlServerId, urlChannelId, urlMessageId, selectedServerId, selectedChannelId, dispatch, setUrlSelection, lastSyncedUrlRef, setDraftMessage, draftMessagesByChannel, channelScrollPositions, messagesRef]);
+  }, [urlServerId, urlChannelId, urlMessageId, selectedServerId, selectedChannelId, dispatch, setUrlSelection, lastSyncedUrlRef, setDraftMessage, draftMessagesByChannel, channelScrollPositions, messagesRef, markChannelAsRead, setTargetUrl, state.channels, state.categories]);
 
   const handleServerChange = useCallback(async (serverId: string, channelId?: string): Promise<void> => {
     const targetChannelId = channelId ?? state.lastChannelByServer[serverId];
@@ -253,8 +232,6 @@ export function useChatInitialization({
   }, [state.lastChannelByServer, dispatch, refreshChatState]);
 
   const handleChannelChange = useCallback(async (channelId: string): Promise<void> => {
-    const channel = state.channels.find(c => c.id === channelId);
-
     localStorage.setItem("lastChannelId", channelId);
     setUrlSelection(selectedServerId, channelId);
     const targetUrl = `${selectedServerId}:${channelId ?? "null"}:null`;
@@ -264,14 +241,17 @@ export function useChatInitialization({
     setDraftMessage(draftMessagesByChannel[channelId] ?? "");
 
     try {
-      const next = await listMessages(channelId, null);
+      // BOOTSTRAP: Load all room details at once
+      const initData = await fetchChannelInit(channelId);
       
       dispatch({
         type: "SET_CHAT_INITIAL_DATA",
         payload: {
           selectedChannelId: channelId,
-          activeChannelData: channel ?? null,
-          messages: next.map((message) => ({ ...message })),
+          activeChannelData: initData.channel,
+          messages: initData.messages.map((m: ChatMessage) => ({ ...m })),
+          members: initData.members,
+          permissions: initData.permissions,
           error: null
         }
       });
@@ -280,27 +260,19 @@ export function useChatInitialization({
         dispatch({ type: "SET_LAST_CHANNEL_BY_SERVER", payload: { serverId: selectedServerId, channelId } });
       }
 
-      void listChannelMembers(channelId)
-        .then((items) => dispatch({ type: "SET_MEMBERS", payload: items }))
-        .catch((e) => console.error("Failed to fetch members on channel change:", e));
-
       setTimeout(() => {
         const list = messagesRef.current;
         if (list) {
           const savedPos = channelScrollPositions[channelId];
-          if (savedPos !== undefined) {
-            list.scrollTop = savedPos;
-          } else {
-            list.scrollTop = list.scrollHeight;
-          }
+          list.scrollTop = savedPos !== undefined ? savedPos : list.scrollHeight;
         }
       }, 0);
 
       void markChannelAsRead(channelId);
     } catch (cause) {
-      dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to load messages." });
+      dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to load channel." });
     }
-  }, [state.channels, selectedChannelId, selectedServerId, dispatch, setUrlSelection, lastSyncedUrlRef, setDraftMessage, draftMessagesByChannel, channelScrollPositions, messagesRef, markChannelAsRead]);
+  }, [selectedServerId, dispatch, setUrlSelection, lastSyncedUrlRef, setDraftMessage, draftMessagesByChannel, channelScrollPositions, messagesRef, markChannelAsRead, setTargetUrl]);
 
   const initialize = useCallback(async (): Promise<void> => {
     dispatch({ type: "SET_LOADING", payload: true });

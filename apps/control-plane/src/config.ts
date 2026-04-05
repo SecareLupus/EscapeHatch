@@ -17,7 +17,7 @@ export const config = {
   setupBootstrapEnabled: process.env.SETUP_BOOTSTRAP_ENABLED !== "false",
   setupBootstrapToken: process.env.SETUP_BOOTSTRAP_TOKEN ?? "",
   logFilePath: process.env.LOG_FILE_PATH ?? "",
-  rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE ?? "240"),
+  rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE ?? "600"),
   oidc: {
     keycloakIssuer: process.env.OIDC_KEYCLOAK_ISSUER ?? (baseDomain ? `https://keycloak.${baseDomain}/realms/skerry` : "http://keycloak:8080/realms/skerry"),
     keycloakClientId: process.env.OIDC_KEYCLOAK_CLIENT_ID,

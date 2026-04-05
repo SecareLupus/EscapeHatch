@@ -94,18 +94,30 @@ export async function buildApp() {
   app.setErrorHandler((error, request, reply) => {
     // Determine if it's a real Error or something else (like a string or plain object)
     const isStandardError = error instanceof Error;
-    const parsedError = isStandardError ? error : new Error(typeof error === 'string' ? error : JSON.stringify(error) || "Unknown Error");
     
-    // Add original raw error to the parsed object for logging
+    // Extract info from raw object if available
+    const rawStatusCode = (error as any)?.statusCode || (error as any)?.status;
+    const rawCode = (error as any)?.code;
+    const rawMessage = (error as any)?.message;
+
+    const parsedError = isStandardError ? error : new Error(typeof error === 'string' ? error : rawMessage || JSON.stringify(error) || "Unknown Error");
+    
+    // Propagate raw properties to the parsed error
     if (!isStandardError) {
+      if (rawStatusCode) (parsedError as any).statusCode = rawStatusCode;
+      if (rawCode) (parsedError as any).code = rawCode;
       Object.assign(parsedError, { raw: error });
     }
+
     const statusCode = (() => {
       if (parsedError instanceof ZodError) {
         return 400;
       }
-      if ("statusCode" in parsedError && typeof parsedError.statusCode === "number") {
-        return parsedError.statusCode;
+      if (rawStatusCode && typeof rawStatusCode === "number") {
+        return rawStatusCode;
+      }
+      if ("statusCode" in parsedError && typeof (parsedError as any).statusCode === "number") {
+        return (parsedError as any).statusCode;
       }
       return 500;
     })();
@@ -121,12 +133,13 @@ export async function buildApp() {
         ? "Request validation failed."
         : parsedError.message || STATUS_CODES[statusCode] || "Internal Server Error";
     
-    // Detect request cancellation/abortion
+    // Detect request cancellation/abortion OR intentional rate limiting
     const isAborted = request.raw.destroyed || reply.raw.writableEnded || 
                      parsedError.message?.includes("aborted") || 
-                     (parsedError as any).code === "ECONNRESET";
+                     (parsedError as any).code === "ECONNRESET" ||
+                     statusCode === 429;
 
-    // Log full error for 500s to allow diagnostics, but skip for aborted requests
+    // Log full error for 500s to allow diagnostics, but skip for aborted/throttled requests
     if (statusCode === 500 && !isAborted) {
       console.error(`[CONTROL-PLANE ERROR] ${request.method} ${request.url}:`, parsedError);
       if (parsedError.stack) {
