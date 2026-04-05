@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useChat } from "../context/chat-context";
+import { useChat, useChatHandlers } from "../context/chat-context";
 import { searchUsers, createDirectMessage } from "../lib/control-plane";
 import { IdentityMapping } from "../lib/control-plane";
 
 export function DMPickerModal() {
     const { state, dispatch } = useChat();
+    const { handleServerChange } = useChatHandlers();
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<IdentityMapping[]>([]);
     const [loading, setLoading] = useState(false);
@@ -45,15 +46,9 @@ export function DMPickerModal() {
             // Refresh DM list and switch to the new channel
             dispatch({ type: "SET_ACTIVE_MODAL", payload: null });
 
-            // Note: ChatClient has an effect that polls for DM channels, 
-            // but we might want to trigger a refresh or just navigate if we have the ID.
-            // For now, we'll let the next sync handle the list, and try to switch immediately.
-
             const dmServer = state.servers.find(s => s.type === 'dm');
             if (dmServer) {
-                // We don't have a direct 'handleServerChange' here, but we can set IDs
-                dispatch({ type: "SET_SELECTED_SERVER_ID", payload: dmServer.id });
-                dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: channel.id });
+                await handleServerChange(dmServer.id, channel.id);
             }
         } catch (err) {
             console.error("Failed to create DM:", err);

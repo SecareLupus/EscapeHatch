@@ -135,11 +135,39 @@ function mapCategory(row: CategoryRow): Category {
   };
 }
 
-export async function listServers(productUserId?: string): Promise<Server[]> {
+export async function listServers(productUserId?: string, hubId?: string): Promise<Server[]> {
   return withDb(async (db) => {
     // 1. Fetch servers. 
     // Logic: If Hidden, must be owner/admin or have a role binding or channel membership.
     // Or if Hidden but has at least one Public/Viewable channel.
+    let query = `select s.*, 
+              (exists (select 1 from server_members where server_id = s.id and product_user_id = $1)) as is_member
+       from servers s
+       where (s.type = 'dm'
+          or s.owner_user_id = $1
+          or exists (select 1 from role_bindings where (hub_id = s.hub_id or hub_id is null) and product_user_id = $1 and role in ('hub_owner', 'hub_admin'))
+          or (s.space_member_access != 'hidden' and exists (select 1 from server_members where server_id = s.id and product_user_id = $1))
+          or (s.hub_member_access != 'hidden' and exists (select 1 from hub_members where hub_id = s.hub_id and product_user_id = $1))
+          or (s.visitor_access != 'hidden')
+          or exists (select 1 from channels c where c.server_id = s.id and (
+              c.visitor_access != 'hidden' 
+              or (c.hub_member_access != 'hidden' and exists (select 1 from hub_members where hub_id = s.hub_id and product_user_id = $1))
+              or (c.space_member_access != 'hidden' and exists (select 1 from server_members where server_id = s.id and product_user_id = $1))
+          ))
+          or exists (
+            select 1 from space_admin_assignments saa 
+            where saa.server_id = s.id 
+              and saa.assigned_user_id = $1 
+              and saa.status = 'active' 
+              and (saa.expires_at is null or saa.expires_at > now())
+          ))`;
+          
+    const params: any[] = [productUserId];
+    if (hubId) {
+      query += ` and s.hub_id = $2`;
+      params.push(hubId);
+    }
+
     const rows = await db.query<{
       id: string;
       hub_id: string;
@@ -157,31 +185,7 @@ export async function listServers(productUserId?: string): Promise<Server[]> {
       created_at: string;
       is_member: boolean;
       join_policy: string;
-    }>(
-      `select s.*, 
-              (exists (select 1 from server_members where server_id = s.id and product_user_id = $1)) as is_member
-       from servers s
-       where s.type = 'dm'
-          or s.owner_user_id = $1
-          or exists (select 1 from role_bindings where (hub_id = s.hub_id or hub_id is null) and product_user_id = $1 and role in ('hub_owner', 'hub_admin'))
-          or (s.space_member_access != 'hidden' and exists (select 1 from server_members where server_id = s.id and product_user_id = $1))
-          or (s.hub_member_access != 'hidden' and exists (select 1 from hub_members where hub_id = s.hub_id and product_user_id = $1))
-          or (s.visitor_access != 'hidden')
-          or exists (select 1 from channels c where c.server_id = s.id and (
-              c.visitor_access != 'hidden' 
-              or (c.hub_member_access != 'hidden' and exists (select 1 from hub_members where hub_id = s.hub_id and product_user_id = $1))
-              or (c.space_member_access != 'hidden' and exists (select 1 from server_members where server_id = s.id and product_user_id = $1))
-          ))
-          or exists (
-            select 1 from space_admin_assignments saa 
-            where saa.server_id = s.id 
-              and saa.assigned_user_id = $1 
-              and saa.status = 'active' 
-              and (saa.expires_at is null or saa.expires_at > now())
-          )
-       order by s.created_at asc`,
-      [productUserId ?? null]
-    );
+    }>(query + ` order by s.created_at asc`, params);
 
     return rows.rows.map((row) => ({
       id: row.id,

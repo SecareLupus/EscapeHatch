@@ -356,6 +356,11 @@ export async function registerDomainRoutes(app: FastifyInstance): Promise<void> 
     return { items: await listServers(request.auth!.productUserId) };
   });
 
+  app.get("/v1/hubs/:hubId/servers", initializedAuthHandlers, async (request) => {
+    const { hubId } = request.params as { hubId: string };
+    return { items: await listServers(request.auth!.productUserId, hubId) };
+  });
+
   app.get("/v1/hubs", initializedAuthHandlers, async (request) => {
     return { items: await listHubsForUser(request.auth!.productUserId) };
   });

@@ -24,6 +24,12 @@ import type {
     ViewerSession
 } from "../lib/control-plane";
 
+export interface ChatHandlers {
+    handleServerChange: (serverId: string, channelId?: string) => Promise<void>;
+    handleChannelChange: (channelId: string) => Promise<void>;
+    refreshChatState: (serverId: string, preferredChannelId?: string) => Promise<void>;
+}
+
 export interface MessageItem extends ChatMessage {
     clientState?: "sending" | "failed";
 }
@@ -620,6 +626,24 @@ export function useChat() {
     const context = useContext(ChatContext);
     if (context === undefined) {
         throw new Error("useChat must be used within a ChatProvider");
+    }
+    return context;
+}
+
+const ChatHandlersContext = createContext<ChatHandlers | undefined>(undefined);
+
+export function ChatHandlersProvider({ children, value }: { children: ReactNode; value: ChatHandlers }) {
+    return (
+        <ChatHandlersContext.Provider value={value}>
+            {children}
+        </ChatHandlersContext.Provider>
+    );
+}
+
+export function useChatHandlers() {
+    const context = useContext(ChatHandlersContext);
+    if (context === undefined) {
+        throw new Error("useChatHandlers must be used within a ChatHandlersProvider");
     }
     return context;
 }

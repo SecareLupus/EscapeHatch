@@ -2,13 +2,14 @@
 
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useChat, MessageItem, ModalType } from "../context/chat-context";
+import { useChat, useChatHandlers, ChatHandlersProvider, MessageItem, ModalType } from "../context/chat-context";
 import { AuthOverlay } from "./auth-overlay";
 import { Sidebar } from "./sidebar";
 import { ChatWindow } from "./chat-window";
 import { ErrorBoundary } from "./error-boundary";
 import Link from "next/link";
 import { LandingPageView } from "./landing-page-view";
+import { ModalManager } from "./modal-manager";
 import { useToast } from "./toast-provider";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { PermissionsEditor } from "./permissions-editor";
@@ -1167,48 +1168,27 @@ export function ChatClient() {
     }
   }
 
-  async function handleServerChange(serverId: string, channelId?: string): Promise<void> {
-    const targetServer = servers.find(s => s.id === serverId);
-    const currentChannel = channels.find(c => c.id === selectedChannelId);
-
-    // If channelId is explicitly provided (e.g. from state restoration or direct link), use it.
-    let targetChannelId = channelId;
-
-    if (!targetChannelId) {
-      // EXCEPTION: If we are clicking a DM space, OR if the current channel is a DM,
-      // do not change the channel.
-      const isTargetDm = targetServer?.type === 'dm';
-      const isCurrentDm = currentChannel?.type === 'dm';
-
-      if (isTargetDm || isCurrentDm) {
-        // Keep current channel if possible, or don't set one yet if switching TO DM list
-        targetChannelId = selectedChannelId ?? undefined;
-      } else {
-        // Standard Space switch: try to find last viewed channel for this server
-        targetChannelId = state.lastChannelByServer[serverId];
-      }
-    }
+  const handleServerChange = useCallback(async (serverId: string, channelId?: string): Promise<void> => {
+    // Resolve target channel:
+    // 1. Explicitly provided (e.g. from state restoration or direct link)
+    // 2. Last viewed for this "server" (Space or DM Inbox)
+    const targetChannelId = channelId ?? state.lastChannelByServer[serverId];
 
     dispatch({ type: "SET_SELECTED_SERVER_ID", payload: serverId });
     localStorage.setItem("lastServerId", serverId);
 
-    // Only update lastChannelId in localStorage if we actually have a target channel
     if (targetChannelId) {
       localStorage.setItem("lastChannelId", targetChannelId);
     }
-
-    dispatch({ type: "SET_CHANNELS", payload: [] });
-    dispatch({ type: "SET_CATEGORIES", payload: [] });
-    dispatch({ type: "SET_ERROR", payload: null });
 
     try {
       await refreshChatState(serverId, targetChannelId);
     } catch (cause) {
       dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to load channels." });
     }
-  }
+  }, [servers, selectedChannelId, state.lastChannelByServer, dispatch, refreshChatState]);
 
-  async function handleChannelChange(channelId: string): Promise<void> {
+  const handleChannelChange = useCallback(async (channelId: string): Promise<void> => {
     const channel = channels.find(c => c.id === channelId);
     if (channel) {
       dispatch({ type: "SET_ACTIVE_CHANNEL_DATA", payload: channel });
@@ -1220,12 +1200,13 @@ export function ChatClient() {
     }
 
     dispatch({ type: "SET_SELECTED_CHANNEL_ID", payload: channelId });
-    localStorage.setItem("lastChannelId", channelId);
-
-    // Save as last viewed channel for this server, unless it's a DM
-    if (selectedServerId && channel?.type !== 'dm') {
+    if (selectedServerId) {
       dispatch({ type: "SET_LAST_CHANNEL_BY_SERVER", payload: { serverId: selectedServerId, channelId } });
     }
+    localStorage.setItem("lastChannelId", channelId);
+
+    setUrlSelection(selectedServerId, channelId);
+    lastSyncedUrlRef.current = `${selectedServerId}:${channelId}:${null}`;
 
     // Load new draft
     setDraftMessage(draftMessagesByChannel[channelId] ?? "");
@@ -1234,7 +1215,6 @@ export function ChatClient() {
     try {
       const next = await listMessages(channelId, null);
       dispatch({ type: "SET_MESSAGES", payload: next.map((message) => ({ ...message })) });
-      setUrlSelection(selectedServerId, channelId);
 
       // Refresh members immediately on channel switch
       void listChannelMembers(channelId)
@@ -1254,13 +1234,18 @@ export function ChatClient() {
         }
       }, 0);
 
-      // Auto-clear if we are (presumably) at the bottom or latest messages loaded
-      // We'll also rely on the scroll event but doing it here handles the initial load
       void markChannelAsRead(channelId);
     } catch (cause) {
       dispatch({ type: "SET_ERROR", payload: cause instanceof Error ? cause.message : "Failed to load messages." });
     }
-  }
+  }, [channels, selectedChannelId, draftMessage, dispatch, selectedServerId, setUrlSelection, draftMessagesByChannel, markChannelAsRead, channelScrollPositions]);
+
+  const handlers = useMemo(() => ({
+    handleServerChange,
+    handleChannelChange,
+    refreshChatState,
+  }), [handleServerChange, handleChannelChange, refreshChatState]);
+
 
 
 
@@ -1747,17 +1732,20 @@ export function ChatClient() {
 
   if (loading) {
     return (
-      <main className="app">
-        <section className="panel">
-          <h1>Skerry</h1>
-          <p>Loading local workspace...</p>
-        </section>
-      </main>
+      <ChatHandlersProvider value={handlers}>
+        <main className="app">
+          <section className="panel">
+            <h1>Skerry</h1>
+            <p>Loading local workspace...</p>
+          </section>
+        </main>
+      </ChatHandlersProvider>
     );
   }
 
   return (
-    <main className="app">
+    <ChatHandlersProvider value={handlers}>
+      <main className="app">
       <header className="topbar">
         <h1>Skerry Local Chat</h1>
         <div className="topbar-meta">
@@ -2821,5 +2809,7 @@ export function ChatClient() {
       )}
 
     </main >
+    <ModalManager />
+    </ChatHandlersProvider>
   );
 }

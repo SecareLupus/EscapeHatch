@@ -23,7 +23,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <AppInitializer>
               {children}
             </AppInitializer>
-            <ModalManager />
           </ChatProvider>
         </ToastProvider>
       </body>
