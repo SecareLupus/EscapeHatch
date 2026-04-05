@@ -1872,6 +1872,16 @@ export async function unpinMessage(input: { messageId: string; actorUserId: stri
   });
 }
 
+export async function listPins(channelId: string): Promise<ChatMessage[]> {
+  return withDb(async (db) => {
+    const res = await db.query<ChatMessageRow>(
+      "select * from chat_messages where channel_id = $1 and is_pinned = true and deleted_at is null order by created_at desc",
+      [channelId]
+    );
+    return res.rows.map(row => mapChatMessage(row, {}, {}));
+  });
+}
+
 
 
 export async function createHubInvite(input: {

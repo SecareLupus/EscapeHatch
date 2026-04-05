@@ -834,3 +834,45 @@ export async function canManageServer(input: {
     );
   });
 }
+
+export async function canManageDiscordBridge(input: {
+  productUserId: string;
+  serverId: string;
+}): Promise<boolean> {
+  return withDb(async (db) => {
+    const serverRow = await fetchServerScope(db, input.serverId);
+    if (!serverRow) {
+      return false;
+    }
+
+    const hubSettings = await db.query<{ allow_space_discord_bridge: boolean }>(
+      "select allow_space_discord_bridge from hubs where id = $1",
+      [serverRow.hubId]
+    );
+    const allowSpaceBridge = hubSettings.rows[0]?.allow_space_discord_bridge !== false;
+
+    const roles = await getEffectiveRoleBindings(db, {
+      productUserId: input.productUserId,
+      scope: {
+        hubId: serverRow.hubId,
+        serverId: input.serverId
+      }
+    });
+
+    const isHubManager = roles.some(
+      (binding) =>
+        HUB_MANAGER_ROLES.includes(binding.role) &&
+        bindingMatchesScope(binding, { hubId: serverRow.hubId })
+    );
+
+    if (isHubManager) {
+      return true;
+    }
+
+    if (!allowSpaceBridge) {
+      return false;
+    }
+
+    return canManageServer(input);
+  });
+}
