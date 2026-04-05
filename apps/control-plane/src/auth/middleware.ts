@@ -30,17 +30,22 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   const federatedHub = request.headers["x-skerry-federated-hub"];
 
   if (typeof federatedToken === "string" && typeof federatedHub === "string") {
-    const fedInfo = await verifyFederatedToken(federatedToken, federatedHub);
-    if (fedInfo) {
-      const fedUser = await resolveFederatedUser({ ...fedInfo, hubUrl: federatedHub });
-      request.auth = {
-        productUserId: fedUser.localProxyUserId,
-        provider: "federated",
-        oidcSubject: fedUser.federatedId,
-        isMasquerading: false,
-        readOnly: true, // Guest users from other hubs are read-only for now
-      };
-      return;
+    try {
+      const fedInfo = await verifyFederatedToken(federatedToken, federatedHub);
+      if (fedInfo) {
+        const fedUser = await resolveFederatedUser({ ...fedInfo, hubUrl: federatedHub });
+        request.auth = {
+          productUserId: fedUser.localProxyUserId,
+          provider: "federated",
+          oidcSubject: fedUser.federatedId,
+          isMasquerading: false,
+          readOnly: true, // Guest users from other hubs are read-only for now
+        };
+        return;
+      }
+    } catch (err) {
+      console.warn(`[AUTH] Federated auth check failed for hub ${federatedHub}:`, err);
+      // Fall through to standard session auth
     }
   }
 
@@ -99,9 +104,11 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   }
 
   // Background token rotation/refresh
-  void ensureIdentityTokenValid(session.productUserId).catch((err: unknown) => {
-    console.error("Delayed identity token refresh check failed:", err);
-  });
+  if (session.provider !== "federated") {
+    void ensureIdentityTokenValid(session.productUserId).catch((err: unknown) => {
+      console.warn(`[AUTH] Background identity token refresh failed for ${session.productUserId}:`, err);
+    });
+  }
 }
 
 export async function requireInitialized(request: FastifyRequest, reply: FastifyReply): Promise<void> {

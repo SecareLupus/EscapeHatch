@@ -113,6 +113,14 @@ export async function buildApp() {
       parsedError instanceof ZodError
         ? "Request validation failed."
         : parsedError.message || STATUS_CODES[statusCode] || "Internal Server Error";
+    
+    // Log full error for 500s to allow diagnostics
+    if (statusCode === 500) {
+      console.error(`[CONTROL-PLANE ERROR] ${request.method} ${request.url}:`, parsedError);
+      if (parsedError.stack) {
+        console.error(parsedError.stack);
+      }
+    }
     const errorLabel = STATUS_CODES[statusCode] ?? "Error";
 
     logEvent("error", "request_failed", {
@@ -121,7 +129,8 @@ export async function buildApp() {
       route: request.routeOptions?.url ?? request.url,
       statusCode,
       code,
-      message
+      message,
+      stack: statusCode === 500 ? parsedError.stack : undefined
     });
 
     reply.code(statusCode).send({

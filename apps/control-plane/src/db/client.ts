@@ -2,7 +2,12 @@ import { Pool } from "pg";
 import { config } from "../config.js";
 
 export const pool = config.databaseUrl
-  ? new Pool({ connectionString: config.databaseUrl })
+  ? new Pool({ 
+      connectionString: config.databaseUrl,
+      max: 30, // Increased from default 10 for better concurrency during bursts
+      connectionTimeoutMillis: 5000, // Fail fast if we can't get a connection
+      idleTimeoutMillis: 30000,
+    })
   : null;
 
 export async function withDb<T>(fn: (db: Pool) => Promise<T>): Promise<T> {
