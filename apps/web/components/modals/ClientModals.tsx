@@ -82,15 +82,18 @@ export function ClientModals(props: ClientModalsProps) {
   const { activeModal, dispatch, renameRoomType } = props;
   const { showToast } = useToast();
 
-  if (!activeModal && !props.isInviting && !props.isCreatingHubInvite) return null;
+  const isClientControlled = activeModal === "create-space" || 
+    activeModal === "rename-space" || 
+    activeModal === "create-category" || 
+    activeModal === "rename-category" || 
+    activeModal === "create-room" || 
+    activeModal === "rename-room";
 
-  // We handle the background here, but some modals (like invites) have their own backdrop 
-  // because they are styled differently in the original code.
-  // To keep it 1:1 with original logic, we maintain that structure.
+  if (!isClientControlled && !props.isInviting && !props.isCreatingHubInvite) return null;
 
   return (
     <>
-      {activeModal && (
+      {isClientControlled && activeModal && (
         <div className="modal-backdrop" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
           <div 
             className={`modal-panel ${activeModal === "rename-room" && renameRoomType === "landing" ? "wide-layout" : ""}`} 

@@ -42,7 +42,7 @@ export function ConfirmationModal() {
 
     return (
         <div className="modal-overlay" onClick={handleCancel}>
-            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-card glass-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2 className={danger ? 'danger' : ''}>{title}</h2>
                     <button className="close-button" onClick={handleCancel}>✕</button>
@@ -50,6 +50,7 @@ export function ConfirmationModal() {
                 
                 <div className="modal-body">
                     <p className="message">{message}</p>
+                    <hr className="divider" />
 
                     {requiresReason && (
                         <div className="reason-field">
@@ -86,118 +87,150 @@ export function ConfirmationModal() {
                     left: 0;
                     right: 0;
                     bottom: 0;
-                    background: rgba(0, 0, 0, 0.85);
-                    backdrop-filter: blur(4px);
+                    background: rgba(0, 0, 0, 0.5);
+                    backdrop-filter: blur(8px);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    z-index: 11000;
+                    z-index: 10000;
+                    animation: fade-in 0.2s ease-out;
                 }
                 .modal-card {
-                    background: #313338;
+                    background: var(--surface);
+                    border: 1px solid var(--border);
                     width: 100%;
                     max-width: 440px;
-                    border-radius: 8px;
-                    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+                    border-radius: 16px;
+                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
                     overflow: hidden;
-                    animation: modal-in 0.2s ease-out;
+                    animation: slide-up 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+                }
+                .glass-modal {
+                    background: rgba(var(--bg-rgb), 0.8);
+                    backdrop-filter: blur(12px) saturate(180%);
+                    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
                 }
                 .modal-header {
-                    padding: 16px;
+                    padding: 24px 24px 16px;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                 }
                 .modal-header h2 {
                     margin: 0;
-                    font-size: 20px;
+                    font-size: 1.25rem;
                     font-weight: 700;
-                    color: white;
+                    color: var(--text);
                 }
                 .modal-header h2.danger {
-                    color: #f23f43;
+                    color: var(--danger);
                 }
                 .close-button {
-                    background: none;
+                    background: var(--surface-alt);
                     border: none;
-                    color: #b5bac1;
-                    font-size: 20px;
+                    color: var(--text-muted);
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                     cursor: pointer;
-                    padding: 4px;
+                    transition: all 0.2s;
+                }
+                .close-button:hover {
+                    background: var(--border);
+                    color: var(--text);
                 }
                 .modal-body {
-                    padding: 0 16px 16px;
+                    padding: 0 24px 24px;
                 }
                 .message {
-                    color: #dbdee1;
-                    line-height: 1.5;
+                    color: var(--text-muted);
+                    font-size: 0.95rem;
+                    line-height: 1.6;
                     margin-bottom: 20px;
+                }
+                .divider {
+                    border: none;
+                    border-top: 1px solid var(--border);
+                    margin: 0 0 20px;
+                    opacity: 0.3;
                 }
                 .reason-field {
                     margin-bottom: 20px;
                 }
                 .reason-field label {
                     display: block;
-                    font-size: 12px;
+                    font-size: 0.75rem;
                     font-weight: 700;
-                    color: #b5bac1;
+                    color: var(--text-muted);
                     text-transform: uppercase;
+                    letter-spacing: 0.05em;
                     margin-bottom: 8px;
                 }
                 textarea {
-                    background: #1e1f22;
-                    border: none;
-                    color: #dbdee1;
-                    padding: 10px;
-                    border-radius: 4px;
+                    background: var(--bg-strong);
+                    border: 1px solid var(--border);
+                    color: var(--text);
+                    padding: 12px;
+                    border-radius: 8px;
                     font-family: inherit;
                     width: 100%;
                     min-height: 100px;
                     resize: none;
+                    transition: border-color 0.2s;
                 }
                 textarea:focus {
-                    outline: 2px solid #5865f2;
+                    outline: none;
+                    border-color: var(--accent);
                 }
                 .modal-actions {
                     display: flex;
                     justify-content: flex-end;
                     gap: 12px;
-                    background: #2b2d31;
-                    padding: 16px;
-                    margin: 0 -16px -16px;
+                    margin-top: 12px;
                 }
-                button {
-                    padding: 10px 24px;
-                    border-radius: 3px;
+                .action-button, .secondary-button {
+                    padding: 10px 20px;
+                    border-radius: 8px;
                     border: none;
                     font-weight: 600;
+                    font-size: 0.9rem;
                     cursor: pointer;
-                    transition: background 0.2s;
+                    transition: all 0.2s;
                 }
                 .primary-button {
-                    background: #5865f2;
+                    background: var(--accent);
                     color: white;
                 }
                 .primary-button:hover {
-                    background: #4752c4;
+                    filter: brightness(1.1);
+                    transform: translateY(-1px);
                 }
                 .danger-button {
-                    background: #da373c;
+                    background: var(--danger);
                     color: white;
                 }
                 .danger-button:hover {
-                    background: #a1282c;
+                    filter: brightness(1.1);
+                    transform: translateY(-1px);
                 }
                 .secondary-button {
                     background: transparent;
-                    color: white;
+                    color: var(--text);
+                    border: 1px solid var(--border);
                 }
                 .secondary-button:hover {
-                    text-decoration: underline;
+                    background: var(--surface-alt);
                 }
-                @keyframes modal-in {
-                    from { transform: scale(0.95); opacity: 0; }
-                    to { transform: scale(1); opacity: 1; }
+                @keyframes fade-in {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slide-up {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
                 }
             `}</style>
         </div>

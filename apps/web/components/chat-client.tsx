@@ -9,6 +9,7 @@ import { ChatWindow } from "./chat-window";
 import { ErrorBoundary } from "./error-boundary";
 import { ClientTopbar } from "./layout/ClientTopbar";
 import { ClientModals } from "./modals/ClientModals";
+import { ModalManager } from "./modal-manager";
 import type { Category, Channel, ChannelType, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
 import { getChannelName, getChannelIcon } from "../lib/channel-utils";
 import { ThreadPanel } from "./thread-panel";
@@ -937,6 +938,7 @@ export function ChatClient() {
         </section >
       )}
 
+      <ModalManager />
       <ClientModals 
         activeModal={activeModal}
         dispatch={dispatch}
