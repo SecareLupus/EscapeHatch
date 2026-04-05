@@ -44,7 +44,7 @@ interface ChatWindowProps {
     handleToggleMuteDeafen: (muted: boolean, deafened: boolean) => Promise<void>;
     handleToggleVideo: (enabled: boolean) => Promise<void>;
     handlePerformModerationAction?: (action: ModerationActionType, targetUserId?: string, targetMessageId?: string) => Promise<void>;
-    refreshChatState: (serverId?: string, channelId?: string, messageId?: string) => Promise<void>;
+    refreshChatState: (serverId?: string, channelId?: string, messageId?: string, force?: boolean) => Promise<void>;
     handleUpdateRoomTopic: (topic: string) => Promise<void>;
     handleUpdateRoomIcon: (iconUrl: string | null) => Promise<void>;
     handleToggleRoomLock: () => Promise<void>;

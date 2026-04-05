@@ -566,35 +566,9 @@ export function ChatClient() {
     void refreshChatState(urlServerId ?? undefined, urlChannelId ?? undefined);
   }, [urlServerId, urlChannelId, urlMessageId, bootstrapStatus?.initialized, refreshChatState, selectedServerId, selectedChannelId, state.highlightedMessageId]);
 
-  useEffect(() => {
-    if (!canAccessWorkspace || !selectedServerId) {
-      dispatch({ type: "SET_ALLOWED_ACTIONS", payload: [] });
-      return;
-    }
 
-    void fetchAllowedActions(selectedServerId, selectedChannelId ?? undefined)
-      .then((actions) => dispatch({ type: "SET_ALLOWED_ACTIONS", payload: actions }))
-      .catch(() => {
-        dispatch({ type: "SET_ALLOWED_ACTIONS", payload: [] });
-      });
-  }, [canAccessWorkspace, selectedServerId, selectedChannelId, dispatch]);
 
-  useEffect(() => {
-    if (!canAccessWorkspace || !selectedServerId) {
-      // Need a way to clear all read states or just ignore
-      return;
-    }
 
-    void listChannelReadStates(selectedServerId)
-      .then((items) => {
-        for (const item of items) {
-          dispatch({ type: "SET_LAST_READ", payload: { channelId: item.channelId, lastSeenId: item.lastReadAt } });
-        }
-      })
-      .catch(() => {
-        // Keep local map if read-state fetch fails.
-      });
-  }, [canAccessWorkspace, selectedServerId, dispatch]);
 
 
   // useDMs() hook at top of component already handles this

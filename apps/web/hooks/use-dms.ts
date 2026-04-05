@@ -8,15 +8,14 @@ export function useDMs() {
   const { state, dispatch } = useChat();
   const { viewer, servers, bootstrapStatus } = state;
 
+  const dmServerId = servers.find((s) => s.type === "dm")?.id;
   const canAccessWorkspace = Boolean(viewer && !viewer.needsOnboarding && bootstrapStatus?.initialized);
 
   useEffect(() => {
-    if (!canAccessWorkspace) return;
-    const dmServer = servers.find((s) => s.type === "dm");
-    if (!dmServer) return;
+    if (!canAccessWorkspace || !dmServerId) return;
 
     const refreshDmChannels = () => {
-      listChannels(dmServer.id)
+      listChannels(dmServerId)
         .then((channels) => dispatch({ type: "SET_ALL_DM_CHANNELS", payload: channels }))
         .catch(console.error);
     };
@@ -24,5 +23,5 @@ export function useDMs() {
     refreshDmChannels();
     const timer = setInterval(refreshDmChannels, 60000); // refresh every minute just in case
     return () => clearInterval(timer);
-  }, [canAccessWorkspace, servers, dispatch]);
+  }, [canAccessWorkspace, dmServerId, dispatch]);
 }
