@@ -45,6 +45,10 @@ interface ChatWindowProps {
     handleToggleVideo: (enabled: boolean) => Promise<void>;
     handlePerformModerationAction?: (action: ModerationActionType, targetUserId?: string, targetMessageId?: string) => Promise<void>;
     refreshChatState: (serverId?: string, channelId?: string, messageId?: string) => Promise<void>;
+    handleUpdateRoomTopic: (topic: string) => Promise<void>;
+    handleUpdateRoomIcon: (iconUrl: string | null) => Promise<void>;
+    handleToggleRoomLock: () => Promise<void>;
+    handleSetSlowmode: (seconds: number) => Promise<void>;
 }
 
 // LandingPageView is now imported from ./landing-page-view
@@ -149,7 +153,11 @@ export function ChatWindow({
     handleToggleMuteDeafen,
     handleToggleVideo,
     handlePerformModerationAction,
-    refreshChatState
+    refreshChatState,
+    handleUpdateRoomTopic,
+    handleUpdateRoomIcon,
+    handleToggleRoomLock,
+    handleSetSlowmode
 }: ChatWindowProps) {
     const { state, dispatch } = useChat();
     const {
@@ -344,18 +352,9 @@ export function ChatWindow({
     };
 
     const handleSaveTopic = async () => {
-        if (!selectedChannelId || !activeServer?.id) return;
-        try {
-            await updateChannel(selectedChannelId, {
-                serverId: activeServer.id,
-                topic: newTopic.trim() || null
-            });
-            await refreshChatState(activeServer.id, selectedChannelId);
-            setIsEditingTopic(false);
-        } catch (error) {
-            console.error("Topic update failed", error);
-            alert("Failed to update topic.");
-        }
+        if (!newTopic.trim()) return;
+        await handleUpdateRoomTopic(newTopic.trim());
+        setIsEditingTopic(false);
     };
 
     useEffect(() => {

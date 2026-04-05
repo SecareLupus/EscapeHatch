@@ -25,7 +25,25 @@ import type {
   IdentityProvider,
   Badge
 } from "@skerry/shared";
-export type { IdentityMapping, VoicePresenceMember };
+export type { 
+  IdentityMapping, 
+  VoicePresenceMember,
+  ChatMessage,
+  Category,
+  Channel,
+  ChannelReadState,
+  ChannelType,
+  DiscordBridgeChannelMapping,
+  DiscordBridgeConnection,
+  Hub,
+  MentionMarker,
+  ModerationAction,
+  ModerationReport,
+  Server,
+  VoiceTokenGrant,
+  HubInvite,
+  Badge
+};
 
 
 const publicBaseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "localhost";

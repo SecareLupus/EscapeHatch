@@ -13,8 +13,8 @@ const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Bool
 interface SidebarProps {
     handleServerChange: (serverId: string, channelId?: string) => Promise<void>;
     handleChannelChange: (channelId: string) => Promise<void>;
-    handleServerKeyboardNavigation: (event: React.KeyboardEvent, serverId: string) => void;
-    handleChannelKeyboardNavigation: (event: React.KeyboardEvent, channelId: string) => void;
+    handleServerKeyboardNavigation: (event: React.KeyboardEvent, serverId: string, onServerChange: (id: string) => void | Promise<void>) => void;
+    handleChannelKeyboardNavigation: (event: React.KeyboardEvent, channelId: string, onChannelChange: (id: string) => void | Promise<void>) => void;
     performDeleteSpace: (serverId: string) => Promise<void>;
     performDeleteRoom: (serverId: string, channelId: string) => Promise<void>;
 }
@@ -226,7 +226,7 @@ export function Sidebar({
                                             setView("channels");
                                         }}
                                         onKeyDown={(event) => {
-                                            handleServerKeyboardNavigation(event, server.id);
+                                            handleServerKeyboardNavigation(event, server.id, handleServerChange);
                                         }}
                                         onContextMenu={(e) => handleServerContextMenu(e, server)}
                                     >
@@ -448,7 +448,7 @@ export function Sidebar({
                                                         void handleChannelChange(channel.id);
                                                     }}
                                                     onKeyDown={(event) => {
-                                                        handleChannelKeyboardNavigation(event, channel.id);
+                                                        handleChannelKeyboardNavigation(event, channel.id, handleChannelChange);
                                                     }}
                                                     onContextMenu={(e) => handleChannelContextMenu(e, channel)}
                                                 >
