@@ -643,11 +643,15 @@ export function ChatClient() {
       return;
     }
 
-    if (isNearBottom && !isBootstrappingRef.current) {
-      list.scrollTo({
-        top: list.scrollHeight,
-        behavior: "smooth"
-      });
+    if (isNearBottom) {
+      if (isBootstrappingRef.current) {
+        list.scrollTop = list.scrollHeight;
+      } else {
+        list.scrollTo({
+          top: list.scrollHeight,
+          behavior: "smooth"
+        });
+      }
       dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: 0 });
       dispatch({ type: "SET_LAST_SEEN_MESSAGE_ID", payload: newest.id });
       return;
