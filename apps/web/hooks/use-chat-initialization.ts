@@ -215,13 +215,15 @@ export function useChatInitialization({
             .catch(() => {});
         }
 
+        // Use a small delay to ensure the DOM has rendered the reversed messages 
+        // and calculated the new scrollHeight before we apply the saved position.
         setTimeout(() => {
           const list = messagesRef.current;
           if (list) {
             const savedPos = channelScrollPositions[nextChannelId!];
             list.scrollTop = savedPos !== undefined ? savedPos : 0;
           }
-        }, 0);
+        }, 50);
 
       } catch (err) {
         console.error("Failed to bootstrap room:", err);

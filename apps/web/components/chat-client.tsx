@@ -211,9 +211,13 @@ export function ChatClient() {
   }, [baseSetSlowmode, state.selectedChannelId]);
 
   const handleMessageListScroll = (event: React.UIEvent<HTMLOListElement>) => {
+    // During bootstrapping, ignore scroll events for state-persistence to avoid overwriting 
+    // valid saved positions with "0" (bottom) as the component mounts/swaps.
+    if (isBootstrappingRef.current) return;
+
     const { scrollTop } = event.currentTarget;
-    // With column-reverse, 0 is the bottom.
-    const nearBottom = scrollTop < 100;
+    // With column-reverse, 0 is the bottom. Math.abs handles diverse browser models.
+    const nearBottom = Math.abs(scrollTop) < 100;
     
     dispatch({ type: "SET_NEAR_BOTTOM", payload: nearBottom });
     
