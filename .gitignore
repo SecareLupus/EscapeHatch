@@ -29,3 +29,7 @@ docker/synapse/skerry-appservice.yaml
  .env.test.local
  .env.production.local
 
+apps/control-plane/npm-dev.log
+apps/control-plane/test_output.log
+apps/web/build_output.log
+apps/web/tsconfig.tsbuildinfo
