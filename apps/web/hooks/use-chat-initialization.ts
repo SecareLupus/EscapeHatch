@@ -131,10 +131,17 @@ export function useChatInitialization({
       return;
     }
 
+    // Optimize: Check if we already have the correct data for this server and channel
+    const currentDataBelongsToTargetServer = state.channels.length > 0 && state.channels[0]?.serverId === nextServerId;
+
     // EXTREME OPTIMIZATION: If we are already on this server and channel,
-    // and we have messages, don't do a full refresh unless forced.
-    // Note: We also don't skip if preferredMessageId is provided, as that implies a jump.
-    if (!force && !preferredMessageId && nextServerId === state.selectedServerId && nextChannelId === state.selectedChannelId && state.messages.length > 0) {
+    // and we have messages, and the data actually belongs to this server, 
+    // don't do a full refresh unless forced.
+    if (!force && !preferredMessageId && 
+        nextServerId === state.selectedServerId && 
+        nextChannelId === state.selectedChannelId && 
+        state.messages.length > 0 &&
+        currentDataBelongsToTargetServer) {
        // Just update metadata if needed
         if (requestId === chatStateRequestIdRef.current) {
            dispatch({ type: "SET_SWITCHING_SERVER", payload: false });
@@ -146,9 +153,8 @@ export function useChatInitialization({
     // Optimize: If we don't have an explicit channel, we still need to load the server's channels to pick one
     let channelItems = state.channels;
     let categoryItems = state.categories;
-    const currentDataBelongsToNextServer = channelItems.length > 0 && channelItems[0]?.serverId === nextServerId;
 
-    if (force || nextServerId !== state.selectedServerId || !currentDataBelongsToNextServer || categoryItems.length === 0) {
+    if (force || nextServerId !== state.selectedServerId || !currentDataBelongsToTargetServer || categoryItems.length === 0) {
       // If we are switching servers, we still need the room list for the sidebar
       [channelItems, categoryItems] = await Promise.all([
         listChannels(nextServerId),
