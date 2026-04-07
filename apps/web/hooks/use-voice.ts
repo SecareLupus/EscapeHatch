@@ -21,6 +21,7 @@ export function useVoice() {
     voiceMuted,
     voiceDeafened,
     voiceVideoEnabled,
+    voiceScreenShareEnabled,
     voiceVideoQuality,
     voiceGrant,
     voiceMembers
@@ -35,6 +36,7 @@ export function useVoice() {
       dispatch({ type: "SET_VOICE_CONNECTED", payload: false });
       dispatch({ type: "SET_VOICE_MUTED", payload: false });
       dispatch({ type: "SET_VOICE_DEAFENED", payload: false });
+      dispatch({ type: "SET_VOICE_SCREEN_SHARE_ENABLED", payload: false });
       dispatch({ type: "SET_VOICE_GRANT", payload: null });
       dispatch({ type: "SET_VOICE_MEMBERS", payload: [] });
       previousServerIdRef.current = selectedServerId;
@@ -170,6 +172,10 @@ export function useVoice() {
     }
   };
 
+  const handleToggleScreenShare = async (nextEnabled: boolean) => {
+    dispatch({ type: "SET_VOICE_SCREEN_SHARE_ENABLED", payload: nextEnabled });
+  };
+
   const handleSetVoiceChannelVideoDefaults = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedServerId || !selectedChannelId || activeChannelData?.type !== "voice") {
@@ -193,11 +199,13 @@ export function useVoice() {
     handleLeaveVoice,
     handleToggleMuteDeafen,
     handleToggleVideo,
+    handleToggleScreenShare,
     handleSetVoiceChannelVideoDefaults,
     voiceConnected,
     voiceMuted,
     voiceDeafened,
     voiceVideoEnabled,
+    voiceScreenShareEnabled,
     voiceGrant,
     voiceMembers,
     voiceVideoQuality

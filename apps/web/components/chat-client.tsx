@@ -440,6 +440,7 @@ export function ChatClient() {
     voiceMuted,
     voiceDeafened,
     voiceVideoEnabled,
+    voiceScreenShareEnabled,
     voiceGrant,
     voiceMembers,
     voiceVideoQuality,
@@ -447,6 +448,7 @@ export function ChatClient() {
     handleLeaveVoice,
     handleToggleMuteDeafen,
     handleToggleVideo,
+    handleToggleScreenShare,
     handleSetVoiceChannelVideoDefaults
   } = useVoice();
 
@@ -713,6 +715,7 @@ export function ChatClient() {
               handleLeaveVoice={handleLeaveVoice}
               handleToggleMuteDeafen={handleToggleMuteDeafen}
               handleToggleVideo={handleToggleVideo}
+              handleToggleScreenShare={handleToggleScreenShare}
               handleUpdateRoomTopic={handleUpdateRoomTopic}
               handleUpdateRoomIcon={handleUpdateRoomIcon}
               handleToggleRoomLock={handleToggleRoomLock}
@@ -725,6 +728,7 @@ export function ChatClient() {
               voiceMuted={voiceMuted}
               voiceDeafened={voiceDeafened}
               voiceVideoEnabled={voiceVideoEnabled}
+              voiceScreenShareEnabled={voiceScreenShareEnabled}
               voiceGrant={voiceGrant}
               mentions={mentions}
               messagesRef={messagesRef}

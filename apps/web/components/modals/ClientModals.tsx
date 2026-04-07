@@ -5,6 +5,7 @@ import { SpaceModals } from "./SpaceModals";
 import { RoomModals } from "./RoomModals";
 import { CategoryModals } from "./CategoryModals";
 import { InviteModals } from "./InviteModals";
+import { VoiceSettingsModal } from "./VoiceSettingsModal";
 import { useToast } from "../toast-provider";
 import type { Server, Channel, Category, Hub, ChannelType } from "@skerry/shared";
 
@@ -205,6 +206,11 @@ export function ClientModals(props: ClientModalsProps) {
         lastInviteUrl={props.lastInviteUrl}
         setLastInviteUrl={props.setLastInviteUrl}
         showToast={showToast}
+      />
+
+      <VoiceSettingsModal 
+        activeModal={activeModal}
+        onClose={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}
       />
     </>
   );

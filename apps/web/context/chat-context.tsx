@@ -125,6 +125,7 @@ export interface ChatState {
     voiceMuted: boolean;
     voiceDeafened: boolean;
     voiceVideoEnabled: boolean;
+    voiceScreenShareEnabled: boolean;
     voiceVideoQuality: "low" | "medium" | "high";
     voiceGrant: VoiceTokenGrant | null;
     voiceMembers: VoicePresenceMember[];
@@ -209,6 +210,7 @@ type ChatAction =
     | { type: "SET_VOICE_MUTED"; payload: boolean }
     | { type: "SET_VOICE_DEAFENED"; payload: boolean }
     | { type: "SET_VOICE_VIDEO_ENABLED"; payload: boolean }
+    | { type: "SET_VOICE_SCREEN_SHARE_ENABLED"; payload: boolean }
     | { type: "SET_VOICE_VIDEO_QUALITY"; payload: "low" | "medium" | "high" }
     | { type: "SET_VOICE_GRANT"; payload: VoiceTokenGrant | null }
     | { type: "SET_VOICE_MEMBERS"; payload: VoicePresenceMember[] }
@@ -315,6 +317,7 @@ const initialState: ChatState = {
     voiceMuted: false,
     voiceDeafened: false,
     voiceVideoEnabled: false,
+    voiceScreenShareEnabled: false,
     voiceVideoQuality: "medium",
     voiceGrant: null,
     voiceMembers: [],
@@ -490,6 +493,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return { ...state, voiceDeafened: action.payload };
         case "SET_VOICE_VIDEO_ENABLED":
             return { ...state, voiceVideoEnabled: action.payload };
+        case "SET_VOICE_SCREEN_SHARE_ENABLED":
+            return { ...state, voiceScreenShareEnabled: action.payload };
         case "SET_VOICE_VIDEO_QUALITY":
             return { ...state, voiceVideoQuality: action.payload };
         case "SET_VOICE_GRANT":

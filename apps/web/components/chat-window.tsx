@@ -3,7 +3,7 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { useChat, MessageItem } from "../context/chat-context";
-import type { ChatMessage, ModerationActionType } from "@skerry/shared";
+import { Category, Channel, ChatMessage, MentionMarker, ModerationAction, ModerationActionType, Server, VoiceTokenGrant } from "@skerry/shared";
 import { getChannelName } from "../lib/channel-utils";
 import { ContextMenu, ContextMenuItem } from "./context-menu";
 import { useToast } from "./toast-provider";
@@ -18,7 +18,7 @@ import { EmbedCard } from "./embed-card";
 import DOMPurify from "dompurify";
 import { LandingJoinButton } from "./landing-join-button";
 import { LandingPageView } from "./landing-page-view";
-import type { Channel } from "@skerry/shared";
+
 
 
 interface ChatWindowProps {
@@ -39,10 +39,12 @@ interface ChatWindowProps {
     voiceMuted: boolean;
     voiceDeafened: boolean;
     voiceVideoEnabled: boolean;
-    voiceGrant: any;
+    voiceScreenShareEnabled: boolean;
+    voiceGrant: VoiceTokenGrant | null;
     mentions: any[];
     handleToggleMuteDeafen: (muted: boolean, deafened: boolean) => Promise<void>;
     handleToggleVideo: (enabled: boolean) => Promise<void>;
+    handleToggleScreenShare: (enabled: boolean) => Promise<void>;
     handlePerformModerationAction?: (action: ModerationActionType, targetUserId?: string, targetMessageId?: string) => Promise<void>;
     refreshChatState: (serverId?: string, channelId?: string, messageId?: string, force?: boolean) => Promise<void>;
     handleUpdateRoomTopic: (topic: string) => Promise<void>;
@@ -148,10 +150,12 @@ export function ChatWindow({
     voiceMuted,
     voiceDeafened,
     voiceVideoEnabled,
+    voiceScreenShareEnabled,
     voiceGrant,
     mentions,
     handleToggleMuteDeafen,
     handleToggleVideo,
+    handleToggleScreenShare,
     handlePerformModerationAction,
     refreshChatState,
     handleUpdateRoomTopic,
@@ -791,6 +795,22 @@ export function ChatWindow({
                             </button>
                             <button
                                 type="button"
+                                className={`icon-button ${voiceScreenShareEnabled ? "active-toggle" : ""}`}
+                                onClick={() => handleToggleScreenShare(!voiceScreenShareEnabled)}
+                                title={voiceScreenShareEnabled ? "Stop Sharing" : "Share Screen"}
+                            >
+                                📺
+                            </button>
+                            <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: "voice-settings" as any })}
+                                title="Voice Settings"
+                            >
+                                ⚙️
+                            </button>
+                            <button
+                                type="button"
                                 className="icon-button danger"
                                 onClick={() => handleLeaveVoice()}
                                 title="Leave Voice"
@@ -827,6 +847,7 @@ export function ChatWindow({
                             muted={voiceMuted}
                             deafened={voiceDeafened}
                             videoEnabled={voiceVideoEnabled}
+                            screenShareEnabled={voiceScreenShareEnabled}
                             onDisconnect={handleLeaveVoice}
                         />
                     )}
