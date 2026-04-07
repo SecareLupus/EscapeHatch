@@ -219,7 +219,7 @@ export function useChatInitialization({
           const list = messagesRef.current;
           if (list) {
             const savedPos = channelScrollPositions[nextChannelId!];
-            list.scrollTop = savedPos !== undefined ? savedPos : list.scrollHeight;
+            list.scrollTop = savedPos !== undefined ? savedPos : 0;
           }
         }, 0);
 

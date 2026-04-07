@@ -857,9 +857,8 @@ export function ChatWindow({
 
 
                     <ol className="messages" ref={messagesRef} onScroll={handleMessageListScroll}>
-                        {renderedMessages.map(({ message, showHeader, showDateDivider }, index) => {
+                        {[...renderedMessages].reverse().map(({ message, showHeader, showDateDivider }, index) => {
                             const mediaUrls = extractMediaUrls(message.content);
-                            const isNearBottomIndex = index >= renderedMessages.length - 2;
 
                             return (
                                 <li key={message.id} id={`message-${message.id}`} className={state.highlightedMessageId === message.id ? "highlighted-message" : ""}>

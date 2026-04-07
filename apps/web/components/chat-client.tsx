@@ -211,9 +211,22 @@ export function ChatClient() {
   }, [baseSetSlowmode, state.selectedChannelId]);
 
   const handleMessageListScroll = (event: React.UIEvent<HTMLOListElement>) => {
-    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
-    const nearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    const { scrollTop } = event.currentTarget;
+    // With column-reverse, 0 is the bottom.
+    const nearBottom = scrollTop < 100;
+    
     dispatch({ type: "SET_NEAR_BOTTOM", payload: nearBottom });
+    
+    if (state.selectedChannelId) {
+      dispatch({ 
+        type: "SET_CHANNEL_SCROLL_POSITION", 
+        payload: { 
+          channelId: state.selectedChannelId, 
+          position: scrollTop 
+        } 
+      });
+    }
+
     if (nearBottom) {
       dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: 0 });
     }
@@ -222,14 +235,8 @@ export function ChatClient() {
   const jumpToLatest = () => {
     const list = messagesRef.current;
     if (list) {
-      // First, do an instant jump to catch the current height
-      list.scrollTop = list.scrollHeight;
-      
-      // Then, do a smooth scroll in case content expanded slightly or to ensure sync
-      list.scrollTo({
-        top: list.scrollHeight,
-        behavior: "smooth"
-      });
+      // With column-reverse, snapping to 0 is snapping to bottom.
+      list.scrollTop = 0;
     }
     dispatch({ type: "SET_PENDING_NEW_MESSAGE_COUNT", payload: 0 });
   };
@@ -645,10 +652,10 @@ export function ChatClient() {
 
     if (isNearBottom) {
       if (isBootstrappingRef.current) {
-        list.scrollTop = list.scrollHeight;
+        list.scrollTop = 0;
       } else {
         list.scrollTo({
-          top: list.scrollHeight,
+          top: 0,
           behavior: "smooth"
         });
       }
