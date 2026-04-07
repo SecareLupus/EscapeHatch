@@ -124,6 +124,7 @@ export function useChatInitialization({
             error: null
           }
         });
+        dispatch({ type: "SET_SWITCHING_SERVER", payload: false });
         setUrlSelection(null, null);
         if (setTargetUrl) setTargetUrl(null);
       }
@@ -135,9 +136,10 @@ export function useChatInitialization({
     // Note: We also don't skip if preferredMessageId is provided, as that implies a jump.
     if (!force && !preferredMessageId && nextServerId === state.selectedServerId && nextChannelId === state.selectedChannelId && state.messages.length > 0) {
        // Just update metadata if needed
-       if (requestId === chatStateRequestIdRef.current) {
-          void markChannelAsRead(nextChannelId!); 
-       }
+        if (requestId === chatStateRequestIdRef.current) {
+           dispatch({ type: "SET_SWITCHING_SERVER", payload: false });
+           void markChannelAsRead(nextChannelId!); 
+        }
        return;
     }
 
@@ -217,6 +219,7 @@ export function useChatInitialization({
 
       } catch (err) {
         console.error("Failed to bootstrap room:", err);
+        dispatch({ type: "SET_SWITCHING_SERVER", payload: false });
         dispatch({ type: "SET_ERROR", payload: "Failed to load chat room." });
       }
     } else {
