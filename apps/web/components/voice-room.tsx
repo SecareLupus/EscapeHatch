@@ -59,9 +59,19 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, onDisconnect }
             setParticipants((prev) => [...prev]);
         };
 
+        const handleLocalTrackPublished = (
+            publication: LocalTrackPublication,
+            participant: LocalParticipant
+        ) => {
+             // Re-render tracks to pick up local camera
+             setParticipants((prev) => [...prev]);
+        };
+
         r.on(RoomEvent.ParticipantConnected, handleParticipantConnected)
             .on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected)
             .on(RoomEvent.TrackSubscribed, handleTrackSubscribed)
+            .on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished)
+            .on(RoomEvent.LocalTrackUnpublished, () => setParticipants((prev) => [...prev]))
             .on(RoomEvent.Disconnected, () => {
                 if (isAborted) {
                     console.log("[VoiceRoom] Disconnected event received during unmount/abort. Skipping onDisconnect call.");
@@ -144,23 +154,36 @@ function ParticipantView({ participant }: { participant: Participant }) {
 
         participant.on(ParticipantEvent.IsSpeakingChanged, handleIsSpeakingChanged)
                    .on(ParticipantEvent.TrackSubscribed, triggerUpdate)
-                   .on(ParticipantEvent.TrackUnsubscribed, triggerUpdate);
+                   .on(ParticipantEvent.TrackUnsubscribed, triggerUpdate)
+                   .on(ParticipantEvent.TrackPublished, triggerUpdate)
+                   .on(ParticipantEvent.TrackUnpublished, triggerUpdate)
+                   .on(ParticipantEvent.LocalTrackPublished, triggerUpdate)
+                   .on(ParticipantEvent.LocalTrackUnpublished, triggerUpdate)
+                   .on(ParticipantEvent.TrackMuted, triggerUpdate)
+                   .on(ParticipantEvent.TrackUnmuted, triggerUpdate);
 
         return () => {
             participant.off(ParticipantEvent.IsSpeakingChanged, handleIsSpeakingChanged)
                        .off(ParticipantEvent.TrackSubscribed, triggerUpdate)
-                       .off(ParticipantEvent.TrackUnsubscribed, triggerUpdate);
+                       .off(ParticipantEvent.TrackUnsubscribed, triggerUpdate)
+                       .off(ParticipantEvent.TrackPublished, triggerUpdate)
+                       .off(ParticipantEvent.TrackUnpublished, triggerUpdate)
+                       .off(ParticipantEvent.LocalTrackPublished, triggerUpdate)
+                       .off(ParticipantEvent.LocalTrackUnpublished, triggerUpdate)
+                       .off(ParticipantEvent.TrackMuted, triggerUpdate)
+                       .off(ParticipantEvent.TrackUnmuted, triggerUpdate);
         };
     }, [participant]);
 
     // Hook up tracks
     useEffect(() => {
-        const tracks = Array.from(participant.trackPublications.values());
+        const publications = Array.from(participant.trackPublications.values());
 
-        tracks.forEach((pub) => {
-            if (pub.track && pub.isSubscribed) {
+        publications.forEach((pub) => {
+            if (pub.track) {
                 if (pub.kind === Track.Kind.Video && videoRef.current) {
                     pub.track.attach(videoRef.current);
+                    console.log(`[ParticipantView] Attached video track for ${participant.identity} (subscribed: ${pub.isSubscribed})`);
                 } else if (pub.kind === Track.Kind.Audio && audioRef.current && participant instanceof RemoteParticipant) {
                     pub.track.attach(audioRef.current);
                 }
@@ -168,9 +191,13 @@ function ParticipantView({ participant }: { participant: Participant }) {
         });
 
         return () => {
-            tracks.forEach((pub) => {
+            publications.forEach((pub) => {
                 if (pub.track) {
-                    pub.track.detach();
+                    if (pub.kind === Track.Kind.Video && videoRef.current) {
+                        pub.track.detach(videoRef.current);
+                    } else if (pub.kind === Track.Kind.Audio && audioRef.current) {
+                        pub.track.detach(audioRef.current);
+                    }
                 }
             });
         };
@@ -179,6 +206,8 @@ function ParticipantView({ participant }: { participant: Participant }) {
     const videoPub = Array.from(participant.trackPublications.values()).find(
         (p) => p.kind === Track.Kind.Video
     );
+    const cameraPublished = videoPub && (videoPub instanceof LocalTrackPublication || videoPub.isSubscribed);
+    const cameraMuted = videoPub?.isMuted;
 
     const displayLabel = participant.name || participant.identity;
     let avatarUrl: string | null = null;
@@ -195,8 +224,8 @@ function ParticipantView({ participant }: { participant: Participant }) {
 
     return (
         <div className={`participant-card ${isSpeaking ? "speaking" : ""}`}>
-            {videoPub?.isSubscribed && videoPub.track ? (
-                <video ref={videoRef} autoPlay playsInline />
+            {cameraPublished && videoPub.track && !cameraMuted ? (
+                <video ref={videoRef} autoPlay playsInline muted={participant instanceof LocalParticipant} />
             ) : (
                 <div className="avatar-placeholder">
                     {avatarUrl ? (
