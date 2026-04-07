@@ -17,3 +17,14 @@ docker/synapse/skerry-appservice.yaml
 # Synapse Config
 !docker/synapse/homeserver.yaml
 !docker/synapse/*.log.config
+ 
+ # TypeScript & Build
+ *.tsbuildinfo
+ build_output.log
+ .turbo
+ 
+ # Environment
+ .env.local
+ .env.development.local
+ .env.test.local
+ .env.production.local
