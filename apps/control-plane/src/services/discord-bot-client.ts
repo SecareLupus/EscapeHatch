@@ -70,7 +70,7 @@ export async function startDiscordBot() {
                             }
 
                             return url ? { url, sourceUrl: e.url || url } : null;
-                        }).filter(Boolean) as Array<{ url: string; sourceUrl: string }>
+                        }).filter(Boolean) as Array<{ url: string; sourceUrl: string; filename?: string; isSticker?: boolean }>
                     ];
 
                     await relayDiscordMessageToMappedChannel({

@@ -2046,6 +2046,23 @@ textarea:focus-visible,
   cursor: zoom-in;
 }
 
+.attachment.sticker {
+  max-width: 160px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.attachment.sticker:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.attachment.sticker img {
+  cursor: default;
+  max-height: 160px;
+}
+
 .attachment-link {
   display: flex;
   align-items: center;

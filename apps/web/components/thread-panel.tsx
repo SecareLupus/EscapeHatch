@@ -544,11 +544,11 @@ export function ThreadPanel() {
                                 </div>
                             )}
                             {parentMessage.attachments?.map(att => (
-                                <div key={att.id} className="attachment" style={{ marginTop: "0.5rem" }}>
+                                <div key={att.id} className={`attachment ${att.isSticker ? 'sticker' : ''}`} style={{ marginTop: "0.5rem" }}>
                                     {att.contentType.startsWith("video/") ? (
                                         <video src={att.url} controls style={{ maxWidth: "100%", borderRadius: "8px" }} />
                                     ) : (
-                                        <img src={att.url} alt={att.filename} style={{ maxWidth: "100%", borderRadius: "8px" }} />
+                                        <img src={att.url} alt={att.filename} style={att.isSticker ? { maxWidth: "100%" } : { maxWidth: "100%", borderRadius: "8px" }} />
                                     )}
                                 </div>
                             ))}
@@ -614,11 +614,11 @@ export function ThreadPanel() {
                                         </div>
                                     )}
                                     {reply.attachments?.map(att => (
-                                        <div key={att.id} className="attachment" style={{ marginTop: "0.5rem" }}>
+                                        <div key={att.id} className={`attachment ${att.isSticker ? 'sticker' : ''}`} style={{ marginTop: "0.5rem" }}>
                                             {att.contentType.startsWith("video/") ? (
                                                 <video src={att.url} controls style={{ maxWidth: "100%", borderRadius: "8px" }} />
                                             ) : (
-                                                <img src={att.url} alt={att.filename} style={{ maxWidth: "100%", borderRadius: "8px" }} />
+                                                <img src={att.url} alt={att.filename} style={att.isSticker ? { maxWidth: "100%" } : { maxWidth: "100%", borderRadius: "8px" }} />
                                             )}
                                         </div>
                                     ))}

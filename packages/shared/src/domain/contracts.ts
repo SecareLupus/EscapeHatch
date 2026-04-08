@@ -390,6 +390,7 @@ export interface Attachment {
     filename: string;
     size?: number;
     sourceUrl?: string;
+    isSticker?: boolean;
 }
 
 export interface Reaction {

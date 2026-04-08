@@ -1053,7 +1053,7 @@ export function ChatWindow({
                                     {message.attachments && message.attachments.length > 0 && (
                                         <div className="message-attachments-container">
                                             {message.attachments.map((att) => (
-                                                <div key={att.id} className="attachment">
+                                                <div key={att.id} className={`attachment ${att.isSticker ? 'sticker' : ''}`}>
                                                     <div style={{ display: "block", textDecoration: "none" }}>
                                                         {att.contentType.startsWith("image/") ? (
                                                             <img 
@@ -1061,6 +1061,7 @@ export function ChatWindow({
                                                                 alt={att.filename} 
                                                                 loading="lazy" 
                                                                 onClick={(e) => {
+                                                                    if (att.isSticker) return;
                                                                     e.preventDefault();
                                                                     setLightboxUrl(att.url);
                                                                 }}

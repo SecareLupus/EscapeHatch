@@ -647,7 +647,7 @@ export async function relayDiscordMessageToMappedChannel(input: {
   authorAvatarUrl?: string;
   content: string;
   messageId?: string; // Add this
-  media?: Array<{ url: string; sourceUrl: string }>;
+  media?: Array<{ url: string; sourceUrl: string; filename?: string; isSticker?: boolean }>;
   parentId?: string;
   replyToId?: string;
   externalThreadId?: string;
@@ -707,7 +707,7 @@ export async function relayDiscordMessageToMappedChannel(input: {
 
   const attachments = (input.media ?? []).map((item) => {
     const url = item.url;
-    const filename = url.split("/").pop()?.split("?")[0] || "image.png";
+    const filename = item.filename || url.split("/").pop()?.split("?")[0] || "image.png";
     const isGif = url.toLowerCase().includes(".gif");
     const isMp4 = url.toLowerCase().includes(".mp4");
     const isWebm = url.toLowerCase().includes(".webm");
@@ -725,7 +725,8 @@ export async function relayDiscordMessageToMappedChannel(input: {
       url,
       sourceUrl: item.sourceUrl,
       contentType: isGif ? "image/gif" : isMp4 ? "video/mp4" : isWebm ? "video/webm" : "image/any",
-      filename
+      filename,
+      isSticker: item.isSticker
     };
   });
 
