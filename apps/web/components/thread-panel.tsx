@@ -283,15 +283,34 @@ export function ThreadPanel() {
                                 const channelId = contextMenu.message?.channelId;
                                 if (!messageId || !channelId) return;
 
+                                // Optimistically hide the message and decrement parent count
+                                dispatch({ type: "SET_PENDING_ACTION_ID", payload: { id: messageId, active: true } });
+                                if (threadParentId) {
+                                    dispatch({
+                                        type: "UPDATE_MESSAGES",
+                                        payload: (current) => current.map(m => m.id === threadParentId ? { ...m, repliesCount: Math.max(0, (m.repliesCount || 0) - 1) } : m)
+                                    });
+                                }
+
                                 const timeoutId = setTimeout(async () => {
                                     try {
                                         await deleteMessage(channelId, messageId);
+                                        // Once server confirms, we can clean up the pending state
+                                        dispatch({ type: "SET_PENDING_ACTION_ID", payload: { id: messageId, active: false } });
                                         setReplies(current => current.filter((m) => m.id !== messageId));
                                         if (parentMessage?.id === messageId) {
                                             setParentMessage(null);
                                         }
                                     } catch (err) {
                                         showToast("Failed to delete message", "error");
+                                        // Restore on error
+                                        dispatch({ type: "SET_PENDING_ACTION_ID", payload: { id: messageId, active: false } });
+                                        if (threadParentId) {
+                                            dispatch({
+                                                type: "UPDATE_MESSAGES",
+                                                payload: (current) => current.map(m => m.id === threadParentId ? { ...m, repliesCount: (m.repliesCount || 0) + 1 } : m)
+                                            });
+                                        }
                                     }
                                 }, 5000);
 
@@ -299,6 +318,14 @@ export function ThreadPanel() {
                                     label: "Undo",
                                     onClick: () => {
                                         clearTimeout(timeoutId);
+                                        // Restore state on undo
+                                        dispatch({ type: "SET_PENDING_ACTION_ID", payload: { id: messageId, active: false } });
+                                        if (threadParentId) {
+                                            dispatch({
+                                                type: "UPDATE_MESSAGES",
+                                                payload: (current) => current.map(m => m.id === threadParentId ? { ...m, repliesCount: (m.repliesCount || 0) + 1 } : m)
+                                            });
+                                        }
                                         showToast("Deletion cancelled", "success");
                                     }
                                 }, 5500);
