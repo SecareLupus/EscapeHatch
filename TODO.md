@@ -186,8 +186,8 @@ Current focus is **Phase 20** (Moderation Hardening) and **Phase 23** (Extension
 ### 🏗️ Tier 3: Medium Features & Polish
 - [ ] **Discord Content Bridging (#18, #26)** — Fix block quote rendering and implement sticker/emoji support.
 - [ ] **Discord Bridge OAuth Flow (#22)** — Refactor connection UX to prevent losing place in menus.
-- [ ] **Twitch Integration UI (#6)** — Fix "ITS F#CKED" alignment/asset issue with Twitch logo on login.
-- [ ] **Storage Audit (#20)** — Monitor Docker storage (Note: manual prune `docker builder prune` recommended).
+- [x] **Twitch Integration UI (#6)** — Fixed alignment and asset issues with Twitch logo on login.
+- [x] **Storage Audit (#20)** — Implemented automated `pnpm run cleanup` (builder/image prune) in build cycle.
 - [x] **Rebranding Completion (#28)** — Finalize any remaining code references to EscapeHatch.
 
 ---

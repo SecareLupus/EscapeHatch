@@ -109,11 +109,20 @@ Skerry Hubs can trust each other to allow cross-hub browsing and interaction wit
 3. **Identity Resolution**: Remote users are assigned a local `fed_` proxy ID and can view public spaces as authenticated guests.
 
 
-## Validation Commands
-
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm build
 pnpm test
 ```
+
+## Storage Maintenance (Issue #20)
+
+To prevent Docker storage and build cache from consuming excessive disk space over time, a maintenance script is provided.
+
+- **Run Manual Cleanup**: `pnpm run cleanup`
+- **Automatic Cleanup**: This script runs automatically before every `pnpm run build` to ensure orphaned builds and dangling images are pruned.
+
+The script runs the following commands:
+- `docker builder prune -f` (Cleans build cache)
+- `docker image prune -f` (Removes dangling images)

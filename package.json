@@ -5,6 +5,8 @@
   "description": "Skerry Collective platform monorepo",
   "packageManager": "pnpm@9.12.2",
   "scripts": {
+    "cleanup": "bash scripts/cleanup.sh",
+    "prebuild": "pnpm run cleanup",
     "build": "pnpm -r build",
     "dev": "pnpm --parallel --filter @skerry/control-plane --filter @skerry/web dev",
     "lint": "pnpm -r lint",

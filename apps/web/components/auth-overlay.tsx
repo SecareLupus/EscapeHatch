@@ -115,7 +115,7 @@ export function AuthOverlay() {
                                         )}
                                         {provider.provider === "twitch" && (
                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h2.998L24 9.428V0H6zM2.571 4.286h18.857v5.143L21.428 9.43v10.286H11.999l-3 3v-3H6.857V4.286H2.57z" />
+                                                <path d="M11.571 4.714h1.714v5.143h-1.714V4.714zm4.715 0H18v5.143h-1.714V4.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h2.998L24 9.428V0H6zm1.714 16.286H11l2 2V16h2.857V4.286H2.571v12h4.286v2H11l2 2V16.286Z" />
                                             </svg>
                                         )}
                                         Continue with {provider.displayName}
