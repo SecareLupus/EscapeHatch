@@ -69,9 +69,11 @@ export async function startDiscordBot() {
                         ...message.embeds.map((e: any) => {
                             let url = e.video?.url || e.image?.url || e.thumbnail?.url;
 
-                            // If it's a Giphy gifv, try to ensure we have the .gif version if possible
-                            if (e.data.type === 'gifv' && url && url.includes('giphy.com') && url.endsWith('.mp4')) {
-                                url = url.replace('.mp4', '.gif');
+                            // If it's a gifv (Giphy/Tenor), try to ensure we have the .gif version for browser compatibility
+                            if (e.data.type === 'gifv' && url && url.endsWith('.mp4')) {
+                                if (url.includes('giphy.com') || url.includes('tenor.com')) {
+                                    url = url.replace('.mp4', '.gif');
+                                }
                             }
 
                             return url ? { url, sourceUrl: e.url || url } : null;

@@ -708,9 +708,17 @@ export async function relayDiscordMessageToMappedChannel(input: {
   const attachments = (input.media ?? []).map((item) => {
     const url = item.url;
     const filename = item.filename || url.split("/").pop()?.split("?")[0] || "image.png";
-    const isGif = url.toLowerCase().includes(".gif");
-    const isMp4 = url.toLowerCase().includes(".mp4");
-    const isWebm = url.toLowerCase().includes(".webm");
+    const lowerUrl = url.toLowerCase();
+    const isGif = lowerUrl.includes(".gif");
+    const isMp4 = lowerUrl.includes(".mp4") || lowerUrl.includes(".mov") || lowerUrl.includes(".m4v") || lowerUrl.includes(".avi") || lowerUrl.includes(".mkv");
+    const isWebm = lowerUrl.includes(".webm");
+    const isHeic = lowerUrl.includes(".heic") || lowerUrl.includes(".heif");
+
+    let finalUrl = url;
+    if (isHeic && url.includes("cdn.discordapp.com")) {
+      // Force HEIC to WebP via Discord media proxy for browser compatibility
+      finalUrl = url.replace("cdn.discordapp.com", "media.discordapp.net") + (url.includes("?") ? "&" : "?") + "format=webp";
+    }
 
     // Clean up content: if the message content contains the media or source URL, strip it
     if (item.sourceUrl && finalContent.includes(item.sourceUrl)) {
@@ -722,7 +730,7 @@ export async function relayDiscordMessageToMappedChannel(input: {
 
     return {
       id: `att_${crypto.randomUUID().replaceAll("-", "")}`,
-      url,
+      url: finalUrl,
       sourceUrl: item.sourceUrl,
       contentType: isGif ? "image/gif" : isMp4 ? "video/mp4" : isWebm ? "video/webm" : "image/any",
       filename,
