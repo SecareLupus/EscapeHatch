@@ -172,11 +172,22 @@ export function useChatRealtime() {
     });
 
     source.addEventListener("message.deleted", (event: any) => {
-      const { id, channelId } = JSON.parse(event.data) as { id: string; channelId: string };
+      const { id, channelId, parentId } = JSON.parse(event.data) as { id: string; channelId: string; parentId?: string | null };
       if (channelId === selectedChannelId) {
         dispatch({
           type: "UPDATE_MESSAGES",
-          payload: (current: MessageItem[]) => current.filter((m) => m.id !== id)
+          payload: (current: MessageItem[]) => {
+            const filtered = current.filter((m) => m.id !== id);
+            if (parentId) {
+              return filtered.map(item => {
+                if (item.id === parentId) {
+                  return { ...item, repliesCount: Math.max(0, (item.repliesCount || 0) - 1) };
+                }
+                return item;
+              });
+            }
+            return filtered;
+          }
         });
         // Clear any optimistic pending-action hide as well, since the message is now gone
         dispatch({ type: "SET_PENDING_ACTION_ID", payload: { id, active: false } });

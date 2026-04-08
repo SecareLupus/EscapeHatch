@@ -241,13 +241,17 @@ export async function registerMessageRoutes(app: FastifyInstance): Promise<void>
       }
     });
 
-    await deleteMessage({
+    const { parentId } = await deleteMessage({
       messageId: params.messageId,
       actorUserId: request.auth!.productUserId,
       isModerator: allowed
     });
 
-    publishChannelMessage({ id: params.messageId, channelId: params.channelId } as any, "message.deleted");
+    publishChannelMessage({ 
+      id: params.messageId, 
+      channelId: params.channelId, 
+      parentId 
+    } as any, "message.deleted");
     reply.code(204).send();
   });
 

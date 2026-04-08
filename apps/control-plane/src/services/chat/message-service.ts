@@ -416,8 +416,13 @@ export async function deleteMessage(input: {
   messageId: string;
   actorUserId: string;
   isModerator?: boolean;
-}): Promise<void> {
+}): Promise<{ parentId: string | null }> {
   return withDb(async (db) => {
+    // 1. Fetch parentId before deletion
+    const fetchRes = await db.query("select parent_id from chat_messages where id = $1", [input.messageId]);
+    const parentId = fetchRes.rows[0]?.parent_id || null;
+
+    // 2. Perform deletion
     let query = "update chat_messages set deleted_at = now() where id = $1";
     const params = [input.messageId];
     if (!input.isModerator) {
@@ -426,6 +431,8 @@ export async function deleteMessage(input: {
     }
     const result = await db.query(query, params);
     if (result.rowCount === 0) throw new Error("Message not found or permission denied.");
+
+    return { parentId };
   });
 }
 
