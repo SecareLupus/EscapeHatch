@@ -180,8 +180,8 @@ Current focus is **Phase 20** (Moderation Hardening) and **Phase 23** (Extension
 ### 🔧 Tier 2: Core UX Bugs
 - [x] **Threaded Conversations (#27)** — Fix missing moderation/context menus for threaded replies.
 - [ ] **Invite Link Generation (#23)** — Current generated links need a functional contract defining what they do and are for.
-- [ ] **Settings Theme Sync (#21)** — Fix state desync where settings page drops dark/light preference.
-- [ ] **OAuth Mapping (#9)** — Fix "Guest" issue when linking Twitch after Discord.
+- [x] **Settings Theme Sync (#21)** — Fix state desync where settings page drops dark/light preference.
+- [x] **OAuth Mapping (#9)** — Fix "Guest" issue when linking Twitch after Discord.
 
 ### 🏗️ Tier 3: Medium Features & Polish
 - [ ] **Discord Content Bridging (#18, #26)** — Fix block quote rendering and implement sticker/emoji support.

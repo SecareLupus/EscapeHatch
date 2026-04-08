@@ -98,6 +98,7 @@ import { usePresence } from "../hooks/use-presence";
 import { useMembers } from "../hooks/use-members";
 import { useChatRealtime } from "../hooks/use-chat-realtime";
 import { useChatNavigation } from "../hooks/use-chat-navigation";
+import { useTheme } from "../hooks/use-theme";
 import { useChatInitialization } from "../hooks/use-chat-initialization";
 import { useChatMutations } from "../hooks/use-chat-mutations";
 import { useChatSettings } from "../hooks/use-chat-settings";
@@ -488,25 +489,7 @@ export function ChatClient() {
     userContextMenuItems
   } = useModeration(setUrlSelection, refreshChatState);
 
-  useEffect(() => {
-    const savedTheme = (viewer?.identity?.theme || localStorage.getItem("theme")) as "light" | "dark" | null;
-    if (savedTheme) {
-      dispatch({ type: "SET_THEME", payload: savedTheme });
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      dispatch({ type: "SET_THEME", payload: "dark" });
-    }
-  }, [viewer?.identity, dispatch]);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => {
-    const next = theme === "light" ? "dark" : "light";
-    dispatch({ type: "SET_THEME", payload: next });
-    void updateUserTheme(next);
-  }, [theme, dispatch]);
+  const { toggleTheme } = useTheme();
 
   useEffect(() => {
     void initialize();

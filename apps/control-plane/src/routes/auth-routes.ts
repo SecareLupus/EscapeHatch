@@ -339,8 +339,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       isOnboardingComplete(auth.productUserId)
     ]);
 
+    // fallbackIdentity is ordered by (preferred_username is not null) desc in identity-service
     const fallbackIdentity = await getIdentityByProductUserId(auth.productUserId);
-    const resolvedIdentity = activeIdentity ?? fallbackIdentity;
+    
+    // We prefer the fallback (best) identity for profile data, but keep the active active 
+    // for provider-specific logic if needed. 
+    const resolvedIdentity = fallbackIdentity ?? activeIdentity;
 
     if (!resolvedIdentity) {
       // If we have a session but NO identity exists in the DB, the DB was likely reset.

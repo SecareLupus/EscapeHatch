@@ -89,10 +89,36 @@ export async function upsertIdentityMapping(input: {
   const matrixUserId = `@${productUserId}:${config.synapse.serverName}`;
 
   const identity = await withDb(async (db) => {
+    let finalPreferredUsername = input.preferredUsername;
+    let displayName = null;
+    let bio = null;
+    let customStatus = null;
+    let theme = "dark"; // Default to dark if not found
+
+    if (input.productUserId) {
+      const existing = await db.query<IdentityRow>(
+        `select preferred_username, display_name, bio, custom_status, theme
+         from identity_mappings
+         where product_user_id = $1
+         order by (preferred_username is not null) desc, updated_at desc
+         limit 1`,
+        [input.productUserId]
+      );
+      if (existing.rows[0]) {
+        const row = existing.rows[0];
+        // Inherit existing values if they are more "complete" than what the new provider gives
+        finalPreferredUsername = row.preferred_username || input.preferredUsername;
+        displayName = row.display_name;
+        bio = row.bio;
+        customStatus = row.custom_status;
+        theme = row.theme || "dark";
+      }
+    }
+
     const row = await db.query<IdentityRow>(
       `insert into identity_mappings
-       (id, provider, oidc_subject, email, preferred_username, avatar_url, matrix_user_id, product_user_id, access_token, refresh_token, token_expires_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       (id, provider, oidc_subject, email, preferred_username, avatar_url, matrix_user_id, product_user_id, access_token, refresh_token, token_expires_at, display_name, bio, custom_status, theme)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        on conflict (provider, oidc_subject)
        do update set
          email = excluded.email,
@@ -101,6 +127,10 @@ export async function upsertIdentityMapping(input: {
          access_token = excluded.access_token,
          refresh_token = excluded.refresh_token,
          token_expires_at = excluded.token_expires_at,
+         display_name = coalesce(identity_mappings.display_name, excluded.display_name),
+         bio = coalesce(identity_mappings.bio, excluded.bio),
+         custom_status = coalesce(identity_mappings.custom_status, excluded.custom_status),
+         theme = coalesce(identity_mappings.theme, excluded.theme),
          updated_at = now()
        returning *`,
       [
@@ -108,13 +138,17 @@ export async function upsertIdentityMapping(input: {
         input.provider,
         input.oidcSubject,
         input.email,
-        input.preferredUsername,
+        finalPreferredUsername,
         input.avatarUrl,
         matrixUserId,
         productUserId,
         input.accessToken ?? null,
         input.refreshToken ?? null,
-        input.tokenExpiresAt ?? null
+        input.tokenExpiresAt ?? null,
+        displayName,
+        bio,
+        customStatus,
+        theme
       ]
     );
 

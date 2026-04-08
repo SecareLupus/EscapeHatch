@@ -2,6 +2,7 @@
 
 import React, { useEffect, useCallback, useRef } from "react";
 import { useChat } from "../context/chat-context";
+import { useTheme } from "../hooks/use-theme";
 import {
     fetchAuthProviders,
     fetchViewerSession,
@@ -14,6 +15,9 @@ import {
 export function AppInitializer({ children }: { children: React.ReactNode }) {
     const { dispatch } = useChat();
     const initializedRef = useRef(false);
+    
+    // Initialize global theme management
+    useTheme();
 
     const refreshGlobalState = useCallback(async (): Promise<void> => {
         try {
