@@ -971,7 +971,8 @@ export async function relayMatrixReactionToDiscord(input: {
             const reaction = message.reactions.cache.find((r: MessageReaction) => 
                 r.emoji.name === input.emoji || 
                 r.emoji.id === input.emoji || 
-                r.emoji.toString() === input.emoji
+                r.emoji.toString() === input.emoji ||
+                (input.emoji.includes(":") && input.emoji.split(":").pop()?.replace(">", "") === r.emoji.id)
             );
 
             if (reaction) {

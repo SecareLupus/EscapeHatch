@@ -152,7 +152,7 @@ export interface ChatState {
     lastChannelByServer: Record<string, string>;
     threadParentId: string | null;
     quotingMessage: MessageItem | null;
-    typingUsersByChannel: Record<string, Record<string, string>>;
+    typingUsersByChannel: Record<string, Record<string, { displayName: string; timestamp: number }>>;
     searchQuery: string;
     searchResults: ChatMessage[];
     isSearching: boolean;
@@ -241,6 +241,7 @@ type ChatAction =
     | { type: "SET_THREAD_PARENT_ID", payload: string | null }
     | { type: "SET_QUOTING_MESSAGE", payload: MessageItem | null }
     | { type: "SET_TYPING_USER", payload: { channelId: string; userId: string; displayName: string; isTyping: boolean } }
+    | { type: "PRUNE_TYPING_USERS" }
     | { type: "SET_SEARCH_QUERY", payload: string }
     | { type: "SET_SEARCH_RESULTS", payload: ChatMessage[] }
     | { type: "SET_IS_SEARCHING", payload: boolean }
@@ -583,7 +584,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             const { channelId, userId, displayName, isTyping } = action.payload;
             const channelTyping = { ...(state.typingUsersByChannel[channelId] || {}) };
             if (isTyping) {
-                channelTyping[userId] = displayName;
+                channelTyping[userId] = { displayName, timestamp: Date.now() };
             } else {
                 delete channelTyping[userId];
             }
@@ -594,6 +595,32 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                     [channelId]: channelTyping
                 }
             };
+        }
+        case "PRUNE_TYPING_USERS": {
+            const now = Date.now();
+            const newTypingByChannel: Record<string, Record<string, { displayName: string; timestamp: number }>> = {};
+            let changed = false;
+
+            Object.entries(state.typingUsersByChannel).forEach(([channelId, users]) => {
+                const newUsers: Record<string, { displayName: string; timestamp: number }> = {};
+                let channelChanged = false;
+                Object.entries(users).forEach(([userId, data]) => {
+                    if (now - data.timestamp < 10000) {
+                        newUsers[userId] = data;
+                    } else {
+                        channelChanged = true;
+                        changed = true;
+                    }
+                });
+                if (Object.keys(newUsers).length > 0) {
+                    newTypingByChannel[channelId] = newUsers;
+                } else if (channelChanged) {
+                    changed = true;
+                }
+            });
+
+            if (!changed) return state;
+            return { ...state, typingUsersByChannel: newTypingByChannel };
         }
         case "SET_SEARCH_QUERY":
             return { ...state, searchQuery: action.payload };
@@ -658,6 +685,13 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(chatReducer, initialState);
+
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            dispatch({ type: "PRUNE_TYPING_USERS" });
+        }, 5000);
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <ChatContext.Provider value={{ state, dispatch }}>

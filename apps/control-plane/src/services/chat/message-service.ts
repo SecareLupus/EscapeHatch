@@ -69,10 +69,10 @@ export async function listMessages(input: {
       const reactionsResult = await db.query<ReactionRow>(
         `select mr.message_id, mr.emoji, mr.user_id, 
            coalesce(
-             (select preferred_username 
+             (select coalesce(display_name, preferred_username) 
               from identity_mappings 
               where product_user_id = mr.user_id 
-              order by (preferred_username is not null) desc, updated_at desc, created_at asc 
+              order by (display_name is not null or preferred_username is not null) desc, updated_at desc, created_at asc 
               limit 1),
              'user-' || substr(mr.user_id, 1, 8)
            ) as display_name

@@ -84,7 +84,10 @@ function MessageContent({ message }: { message: MessageItem }) {
 function TypingIndicator({ channelId }: { channelId: string }) {
     const { state } = useChat();
     const typingUsers = state.typingUsersByChannel[channelId] || {};
-    const userNames = Object.values(typingUsers);
+    const viewerId = state.viewer?.userId;
+    const userNames = Object.entries(typingUsers)
+        .filter(([userId]) => userId !== viewerId)
+        .map(([, data]) => data.displayName);
 
     if (userNames.length === 0) return null;
 
