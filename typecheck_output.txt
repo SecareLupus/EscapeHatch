@@ -1,0 +1,13 @@
+
+> skerry@0.1.0 typecheck /home/desmond/Documents/EscapeHatch/EscapeHatch
+> pnpm -r typecheck "--filter" "@skerry/control-plane"
+
+Scope: 3 of 4 workspace projects
+packages/shared typecheck$ tsc --project tsconfig.json --noEmit "--filter" "@skerry/control-plane"
+packages/shared typecheck: error TS5023: Unknown compiler option '--filter'.
+packages/shared typecheck: error TS5083: Cannot read file 'skerry/control-plane'.
+packages/shared typecheck: Failed
+/home/desmond/Documents/EscapeHatch/EscapeHatch/packages/shared:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @skerry/shared@0.1.0 typecheck: `tsc --project tsconfig.json --noEmit "--filter" "@skerry/control-plane"`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.

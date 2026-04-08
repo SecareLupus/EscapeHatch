@@ -35,9 +35,10 @@ export async function startDiscordBot() {
                 GatewayIntentBits.MessageContent,
                 GatewayIntentBits.GuildPresences,
                 GatewayIntentBits.GuildMembers,
-                GatewayIntentBits.GuildMessageTyping
+                GatewayIntentBits.GuildMessageTyping,
+                GatewayIntentBits.GuildMessageReactions
             ],
-            partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User]
+            partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User, Partials.Reaction]
         });
 
         client.on(Events.MessageCreate, async (message: Message) => {
@@ -227,11 +228,20 @@ export async function startDiscordBot() {
                     });
 
                     if (skerryMessageId) {
+                        const { upsertIdentityMapping } = await import("./identity-service.js");
+                        const identity = await upsertIdentityMapping({
+                            provider: "discord",
+                            oidcSubject: user.id,
+                            email: null,
+                            preferredUsername: user.username,
+                            avatarUrl: user.displayAvatarURL(),
+                        });
+
                         await addReaction({
                             messageId: skerryMessageId,
-                            userId: "discord_bridged_user", // Placeholder or map to a virtual user
+                            userId: identity.productUserId,
                             emoji: emoji,
-                            isRelay: true // Need to add this to service
+                            isRelay: true
                         } as any);
                     }
                 } catch (error) {
@@ -276,9 +286,18 @@ export async function startDiscordBot() {
                     });
 
                     if (skerryMessageId) {
+                        const { upsertIdentityMapping } = await import("./identity-service.js");
+                        const identity = await upsertIdentityMapping({
+                            provider: "discord",
+                            oidcSubject: user.id,
+                            email: null,
+                            preferredUsername: user.username,
+                            avatarUrl: user.displayAvatarURL(),
+                        });
+
                         await removeReaction({
                             messageId: skerryMessageId,
-                            userId: "discord_bridged_user",
+                            userId: identity.productUserId,
                             emoji: emoji,
                             isRelay: true
                         } as any);
@@ -325,7 +344,7 @@ export async function startDiscordBot() {
                        publishHubEvent(hubId, "typing.start", { 
                            channelId: matrixChannelId, 
                            userId: `discord_${typing.user.id}`,
-                           username: typing.member?.displayName ?? typing.user.username
+                           displayName: typing.member?.displayName ?? typing.user.username
                        });
                     }
                 }

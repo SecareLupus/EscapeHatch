@@ -330,12 +330,9 @@ export async function registerMessageRoutes(app: FastifyInstance): Promise<void>
     if (!identity) return;
 
     await publishChannelMessage({
-      id: "typing-" + request.auth!.productUserId,
       channelId: params.channelId,
-      authorUserId: request.auth!.productUserId,
-      authorDisplayName: identity.displayName,
-      content: "",
-      createdAt: new Date().toISOString()
+      userId: request.auth!.productUserId,
+      displayName: identity.displayName
     } as any, payload.isTyping ? "typing.start" : "typing.stop");
 
     // Mirror typing to Discord if it's a start event

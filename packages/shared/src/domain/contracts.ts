@@ -397,6 +397,7 @@ export interface Reaction {
     count: number;
     me: boolean;
     userIds: string[];
+    displayNames: string[];
 }
 
 export interface LinkEmbed {

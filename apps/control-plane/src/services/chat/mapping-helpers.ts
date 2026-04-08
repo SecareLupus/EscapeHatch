@@ -164,12 +164,14 @@ export function mapChatMessage(
         emoji: r.emoji,
         count: 0,
         me: false,
-        userIds: []
+        userIds: [],
+        displayNames: []
       };
       reactionsByEmoji[r.emoji] = reaction;
     }
     reaction.count++;
     reaction.userIds.push(r.user_id);
+    reaction.displayNames.push(r.display_name);
     if (viewerUserId && r.user_id === viewerUserId) {
       reaction.me = true;
     }
