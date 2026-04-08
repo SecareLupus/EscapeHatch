@@ -2114,17 +2114,22 @@ textarea:focus-visible,
   background: rgba(255, 255, 255, 0.05);
 }
 
-.markdown-content img[src*="cdn.discordapp.com/emojis"] {
+.markdown-content img[src*="cdn.discordapp.com/emojis"],
+.emoji-inline {
   display: inline-block;
-  vertical-align: middle;
-  height: 1.375em;
+  vertical-align: bottom;
+  height: 22px; /* Slightly larger for better detail */
   width: auto;
-  margin: 0 0.05em 0.125em 0.05em;
-  cursor: default;
+  margin: 0 0.1rem 0 0.1rem;
   background: transparent;
   border: none;
   border-radius: 0;
   padding: 0;
+  transition: transform 0.1s ease;
+}
+
+.emoji-inline:hover {
+  transform: scale(1.1);
 }
 
 .embed-video-container iframe {

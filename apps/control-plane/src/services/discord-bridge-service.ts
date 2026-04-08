@@ -709,7 +709,7 @@ export async function relayDiscordMessageToMappedChannel(input: {
 
       // Transform to Markdown image for Skerry frontend
       // We use the '![emoji](url)' format which our frontend can identify as a small inline image
-      finalContent = finalContent.replace(fullMatch, `![${name}](${emojiUrl})`);
+      finalContent = finalContent.replace(fullMatch, `![:${name}:](${emojiUrl})`);
     }
   }
 

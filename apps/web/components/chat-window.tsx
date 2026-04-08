@@ -56,9 +56,69 @@ interface ChatWindowProps {
 // LandingPageView is now imported from ./landing-page-view
 
 function MessageContent({ message }: { message: MessageItem }) {
+    const { state } = useChat();
     const content = message.content;
     const quoteRegex = /^> @([^:]+):\s*([\s\S]*?)(?:\n\n|\n?$)/m;
     const match = content.match(quoteRegex);
+
+    // Helper to render markdown with emoji support
+    const renderMarkdown = (text: string) => {
+        // Pre-process raw shortcodes to markdown images
+        let processedText = text;
+
+        // 1. Handle Discord-style tags: <:name:id> or <a:name:id>
+        processedText = processedText.replace(/<(a?):([a-zA-Z0-9_-]+):(\d+)>/g, (match, animated, name, id) => {
+            const ext = animated ? "gif" : "webp";
+            return `![:${name}:](https://cdn.discordapp.com/emojis/${id}.${ext}?size=160&quality=lossless)`;
+        });
+
+        // 2. Handle common standard shortcodes (minimal set for demo, or could use a library)
+        const commonShortcodes: Record<string, string> = {
+            ":smile:": "🙂",
+            ":smiley:": "😃",
+            ":grinning:": "😀",
+            ":blush:": "😊",
+            ":wink:": "😉",
+            ":heart:": "❤️",
+            ":thumbsup:": "👍",
+            ":ok_hand:": "👌",
+            ":fire:": "🔥",
+            ":rocket:": "🚀"
+        };
+        
+        // We only convert these to Unicode if they are standalone
+        Object.entries(commonShortcodes).forEach(([code, unicode]) => {
+            const escapedCode = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            processedText = processedText.replace(new RegExp(escapedCode, 'g'), unicode);
+        });
+
+        return (
+            <ReactMarkdown
+                components={{
+                    img: ({ src, alt, ...props }) => {
+                        const isEmoji = alt?.startsWith(":") && alt?.endsWith(":");
+                        return (
+                            <img
+                                src={src}
+                                alt={alt}
+                                className={isEmoji ? "emoji-inline" : ""}
+                                style={isEmoji ? { 
+                                    height: "1.375em", 
+                                    width: "auto",
+                                    verticalAlign: "bottom", 
+                                    margin: "0 0.05em 0 0.1em",
+                                    display: "inline-block"
+                                } : {}}
+                                {...props}
+                            />
+                        );
+                    }
+                }}
+            >
+                {processedText}
+            </ReactMarkdown>
+        );
+    };
 
     return (
         <div className="message-text">
@@ -69,12 +129,12 @@ function MessageContent({ message }: { message: MessageItem }) {
                         <p>{match[2]}</p>
                     </blockquote>
                     <div className="markdown-content">
-                        <ReactMarkdown>{content.replace(quoteRegex, "").trim()}</ReactMarkdown>
+                        {renderMarkdown(content.replace(quoteRegex, "").trim())}
                     </div>
                 </>
             ) : (
                 <div className="markdown-content">
-                    <ReactMarkdown>{content}</ReactMarkdown>
+                    {renderMarkdown(content)}
                 </div>
             )}
         </div>
@@ -417,7 +477,10 @@ export function ChatWindow({
                 label: "Copy Text",
                 icon: "📋",
                 onClick: () => {
-                    void navigator.clipboard.writeText(contextMenu.message?.content || "");
+                    const rawContent = contextMenu.message?.content || "";
+                    // Transform ![:name:](url) -> :name: for clipboard
+                    const clipboardContent = rawContent.replace(/!\[(:.+?:)\]\(https?:\/\/[^\)]+\)/g, "$1");
+                    void navigator.clipboard.writeText(clipboardContent);
                 }
             }
         ];

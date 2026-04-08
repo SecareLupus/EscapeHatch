@@ -590,17 +590,37 @@ export async function relayMatrixMessageToDiscord(input: {
                 }
             }
 
-            // 2. Handle External Discord Emojis (Markdown images ![name](url))
-            // Pattern: ![name](https://cdn.discordapp.com/emojis/id.ext?...)
-            const externalEmojiMatches = Array.from(content.matchAll(/!\[(.+?)\]\(https:\/\/cdn\.discordapp\.com\/emojis\/(\d+)\.(webp|gif|png).*?\)/g));
+            // 2. Handle External Discord Emojis (Markdown images ![...](url))
+            // Pattern: ![:name:](https://cdn.discordapp.com/emojis/id.ext?...)
+            // We now support the new :name: format with colons in alt-text
+            const externalEmojiMatches = Array.from(content.matchAll(/!\[(?:|:)(.+?)(?:|:)\]\(https:\/\/cdn\.discordapp\.com\/emojis\/(\d+)\.(webp|gif|png).*?\)/g));
             if (externalEmojiMatches.length > 0) {
                 for (const match of externalEmojiMatches) {
                     const [fullMatch, name, id] = match;
                     if (typeof name !== "string" || typeof id !== "string") continue;
-                    const discordEmojiFound = await getOrMirrorExternalEmoji(input.serverId, guild.id, id, name);
+                    // Strip colons if they were captured in the name group
+                    const cleanName = name.replace(/^:/, "").replace(/:$/, "");
+                    const discordEmojiFound = await getOrMirrorExternalEmoji(input.serverId, guild.id, id, cleanName);
                     if (discordEmojiFound) {
                         const prefix = discordEmojiFound.isAnimated ? "a" : "";
                         content = content.replace(fullMatch, `<${prefix}:${discordEmojiFound.name}:${discordEmojiFound.id}>`);
+                    }
+                }
+            }
+
+            // 3. Handle Raw Shortcodes (:name:)
+            // We look for :name: and try to resolve it from our seen emojis or mirrored emojis
+            const shortcodeMatches = content.match(/:[a-zA-Z0-9_-]+:/g);
+            if (shortcodeMatches) {
+                for (const match of shortcodeMatches) {
+                    // Skip if it was already handled by skerryEmojiMatches (which use :emo_...)
+                    if (match.startsWith(":emo_")) continue;
+                    
+                    const name = match.slice(1, -1);
+                    const discordEmojiFound = await findDiscordEmojiByName(input.serverId, name, guild.id);
+                    if (discordEmojiFound) {
+                        const prefix = discordEmojiFound.isAnimated ? "a" : "";
+                        content = content.replace(match, `<${prefix}:${discordEmojiFound.name}:${discordEmojiFound.id}>`);
                     }
                 }
             }
@@ -1242,5 +1262,49 @@ export async function relayMatrixPinToDiscord(input: {
         logEvent("error", "discord_pin_mirror_failed", { error: String(error) });
     }
 }
+async function findDiscordEmojiByName(serverId: string, name: string, guildId: string): Promise<{ id: string, name: string, isAnimated: boolean } | null> {
+    return withDb(async (db) => {
+        // 1. Check if it's a mirrored external emoji by name in this server
+        const externalMirror = await db.query<{ discord_emoji_id: string, discord_emoji_name: string, is_animated: boolean }>(
+            `select m.discord_emoji_id, m.discord_emoji_name, e.is_animated 
+             from discord_external_emoji_mirrors m
+             join discord_seen_emojis e on e.id = m.external_emoji_id
+             where m.server_id = $1 and m.discord_emoji_name = $2
+             limit 1`,
+            [serverId, name]
+        );
+        if (externalMirror.rows[0]) {
+            return {
+                id: externalMirror.rows[0].discord_emoji_id,
+                name: externalMirror.rows[0].discord_emoji_name,
+                isAnimated: externalMirror.rows[0].is_animated
+            };
+        }
 
+        // 2. Check if it's a mirrored Skerry emoji by name in this server
+        const skerryMirror = await db.query<{ discord_emoji_id: string, discord_emoji_name: string }>(
+            `select discord_emoji_id, discord_emoji_name from discord_emoji_mappings where server_id = $1 and discord_emoji_name = $2 limit 1`,
+            [serverId, name]
+        );
+        if (skerryMirror.rows[0]) {
+            return {
+                id: skerryMirror.rows[0].discord_emoji_id,
+                name: skerryMirror.rows[0].discord_emoji_name,
+                isAnimated: false // Skerry internal emojis currently non-animated
+            };
+        }
 
+        // 3. Check if we've seen an emoji with this name anywhere on Discord
+        const seenEmoji = await db.query<{ id: string, name: string, is_animated: boolean }>(
+            `select id, name, is_animated from discord_seen_emojis where name = $1 order by last_seen_at desc limit 1`,
+            [name]
+        );
+        if (seenEmoji.rows[0]) {
+            const row = seenEmoji.rows[0];
+            // If found, we can try to mirror it to the current guild!
+            return await getOrMirrorExternalEmoji(serverId, guildId, row.id, row.name);
+        }
+
+        return null;
+    });
+}
