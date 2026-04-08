@@ -122,7 +122,10 @@ export function ThreadPanel() {
         setSending(true);
         try {
             const sent = await sendMessage(selectedChannelId, draft, attachments, threadParentId);
-            setReplies(prev => [...prev, sent]);
+            setReplies(prev => {
+                if (prev.some(r => r.id === sent.id)) return prev;
+                return [...prev, sent];
+            });
             setDraft("");
             setAttachments([]);
         } catch (err) {
