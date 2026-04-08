@@ -85,6 +85,33 @@ export async function startDiscordBot() {
                         replyToId: !message.channel.isThread() ? (message.reference?.messageId ?? undefined) : undefined,
                         externalThreadId: message.channel.isThread() ? message.channelId : undefined
                     });
+
+                    // Explicitly stop typing when a message is received
+                    const matrixChannelId = await withDb(async (db) => {
+                        const row = await db.query<{ matrix_channel_id: string }>(
+                            "select matrix_channel_id from discord_bridge_channel_mappings where server_id = $1 and discord_channel_id = $2",
+                            [serverId, discordChannelIdForMapping]
+                        );
+                        return row.rows[0]?.matrix_channel_id;
+                    });
+
+                    if (matrixChannelId) {
+                        const { publishHubEvent } = await import("./chat-realtime.js");
+                        const hubId = await withDb(async (db) => {
+                            const row = await db.query<{ hub_id: string }>(
+                                "select hub_id from hubs h join servers s on s.hub_id = h.id where s.id = $1",
+                                [serverId]
+                            );
+                            return row.rows[0]?.hub_id;
+                        });
+                        if (hubId) {
+                            publishHubEvent(hubId, "typing.stop", {
+                                channelId: matrixChannelId,
+                                userId: `discord_${message.author.id}`,
+                                displayName: message.member?.displayName ?? message.author.displayName ?? message.author.username
+                            });
+                        }
+                    }
                 } catch (error) {
                     logEvent("error", "discord_relay_failed", { serverId, messageId: message.id, error: String(error) });
                 }

@@ -383,6 +383,13 @@ export async function createMessage(input: {
 
     await publishChannelMessage(message);
 
+    // Automatically stop typing when message is sent/received
+    await publishChannelMessage({
+      channelId: message.channelId,
+      userId: message.authorUserId,
+      displayName: message.authorDisplayName
+    } as any, "typing.stop");
+
     return message;
   });
 }
