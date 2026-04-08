@@ -60,7 +60,12 @@ export async function startDiscordBot() {
                 try {
                     const media = [
                         ...message.attachments.map(a => ({ url: a.url, sourceUrl: a.url })),
-                        ...message.stickers.map(s => ({ url: s.url, sourceUrl: s.url, filename: s.name, isSticker: true })),
+                        ...message.stickers.map(s => ({ 
+                            url: `https://media.discordapp.net/stickers/${s.id}.gif?size=240`, 
+                            sourceUrl: s.url, 
+                            filename: `${s.name}.gif`,
+                            isSticker: true 
+                        })),
                         ...message.embeds.map((e: any) => {
                             let url = e.video?.url || e.image?.url || e.thumbnail?.url;
 
