@@ -1589,10 +1589,10 @@ export function ChatWindow({
                                         if (existingIdx > -1) {
                                             const react = reactions[existingIdx];
                                             if (react && !react.me) {
-                                                reactions[existingIdx] = { ...react, count: react.count + 1, me: true, userIds: react.userIds || [] };
+                                                reactions[existingIdx] = { ...react, count: react.count + 1, me: true, userIds: react.userIds || [], displayNames: react.displayNames || [] };
                                             }
                                         } else {
-                                            reactions.push({ emoji, count: 1, me: true, userIds: [] });
+                                            reactions.push({ emoji, count: 1, me: true, userIds: [], displayNames: [] });
                                         }
                                         return { ...m, reactions };
                                     })
