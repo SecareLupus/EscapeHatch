@@ -13,6 +13,8 @@ import { ModalManager } from "./modal-manager";
 import type { Category, Channel, ChannelType, ChatMessage, MentionMarker, ModerationAction, ModerationReport, Server, VoicePresenceMember, VoiceTokenGrant } from "@skerry/shared";
 import { getChannelName, getChannelIcon } from "../lib/channel-utils";
 import { ThreadPanel } from "./thread-panel";
+import { ContextMenu } from "./context-menu";
+
 import {
   bootstrapAdmin,
   createReport,
@@ -996,6 +998,16 @@ export function ChatClient() {
         performDeleteRoom={performDeleteRoom}
         refreshChatState={refreshChatState}
       />
+
+      {userContextMenu && (
+        <ContextMenu
+          x={userContextMenu.x}
+          y={userContextMenu.y}
+          items={userContextMenuItems}
+          onClose={() => setUserContextMenu(null)}
+        />
+      )}
+
 </main>
 
     </>
