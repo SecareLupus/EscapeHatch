@@ -104,11 +104,12 @@ export function useChatInitialization({
   const refreshChatState = useCallback(async (preferredServerId?: string, preferredChannelId?: string, preferredMessageId?: string, force = false): Promise<void> => {
     const requestId = ++chatStateRequestIdRef.current;
     
-    // Throttled fetch for global list of servers and roles
-    // Reuse servers and roles from state if available, otherwise fetch
-    const [serverItems, roleBindings] = await Promise.all([
+    // Throttled fetch for global list of servers, roles, and hubs
+    // Reuse state if available and not forced, otherwise fetch fresh metadata
+    const [serverItems, roleBindings, hubItems] = await Promise.all([
       (state.servers.length > 0 && !force) ? Promise.resolve(state.servers) : listServers(force),
-      (state.viewerRoles.length > 0 && !force) ? Promise.resolve(state.viewerRoles) : listViewerRoleBindings(force)
+      (state.viewerRoles.length > 0 && !force) ? Promise.resolve(state.viewerRoles) : listViewerRoleBindings(force),
+      (state.hubs.length > 0 && !force) ? Promise.resolve(state.hubs) : listHubs()
     ]);
     if (requestId !== chatStateRequestIdRef.current) return;
 
@@ -123,6 +124,7 @@ export function useChatInitialization({
           payload: {
             servers: serverItems,
             viewerRoles: roleBindings,
+            hubs: hubItems,
             selectedServerId: null,
             channels: [],
             categories: [],
@@ -210,6 +212,7 @@ export function useChatInitialization({
           payload: {
             servers: serverItems,
             viewerRoles: roleBindings,
+            hubs: hubItems,
             selectedServerId: nextServerId,
             channels: channelItems,
             categories: categoryItems,
@@ -282,6 +285,7 @@ export function useChatInitialization({
         payload: {
           servers: serverItems,
           viewerRoles: roleBindings,
+          hubs: hubItems,
           selectedServerId: nextServerId,
           channels: channelItems,
           categories: categoryItems,

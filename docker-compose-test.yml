@@ -16,6 +16,12 @@ services:
       timeout: 5s
       retries: 5
 
+  synapse-init:
+    image: alpine:latest
+    volumes:
+      - synapse_data_test:/var/lib/synapse
+    command: chown -R 991:991 /var/lib/synapse
+
   synapse:
     image: matrixdotorg/synapse:latest
     env_file:
@@ -23,11 +29,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      synapse-init:
+        condition: service_completed_successfully
     environment:
       SYNAPSE_SERVER_NAME: hub-localhost
       SYNAPSE_REPORT_STATS: "no"
     volumes:
-      - ./docker/synapse-test:/data
+      - ./docker/synapse-test:/data:ro
+      - synapse_data_test:/var/lib/synapse
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8008/_matrix/client/versions\").read()'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     deploy:
       resources:
         limits:
@@ -56,7 +70,7 @@ services:
       postgres:
         condition: service_healthy
       synapse:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./docker/synapse-test:/app/docker/synapse # Mount test config dir for updates
     healthcheck:
@@ -98,3 +112,4 @@ volumes:
   pg_data_test:
   caddy_data_test:
   caddy_config_test:
+  synapse_data_test:

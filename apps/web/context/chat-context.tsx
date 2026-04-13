@@ -267,6 +267,7 @@ type ChatAction =
             permissions?: PrivilegedAction[];
             highlightedMessageId?: string | null;
             error?: string | null;
+            hubs?: Hub[];
         } 
       };
 
@@ -669,7 +670,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 ...(action.payload.members !== undefined && { members: action.payload.members }),
                 ...(action.payload.permissions !== undefined && { permissions: action.payload.permissions }),
                 ...(action.payload.highlightedMessageId !== undefined && { highlightedMessageId: action.payload.highlightedMessageId }),
-                ...(action.payload.error !== undefined && { error: action.payload.error })
+                ...(action.payload.error !== undefined && { error: action.payload.error }),
+                ...(action.payload.hubs !== undefined && { hubs: action.payload.hubs })
             };
         default:
             return state;
