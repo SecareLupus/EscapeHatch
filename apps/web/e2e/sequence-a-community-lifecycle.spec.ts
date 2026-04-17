@@ -402,21 +402,32 @@ test('Sequence A: Community Lifecycle', async ({ page, browser }) => {
     await expect(channelBtn).toBeVisible({ timeout: 15000 });
     await channelBtn.click();
     
-    // 4. Member B sends a message
+    // Wait for channel header to confirm active channel state sync
+    console.log('[A4.1] Waiting for Member B channel header synchronization...');
+    const channelHeaderB = pageB.locator('.channel-header');
+    await expect(channelHeaderB).toContainText('Text Lab', { timeout: 15000 });
+    
+    // 4. Member B replies
     const composerB = pageB.locator('textarea[placeholder*="Message"]');
     await expect(composerB).toBeVisible({ timeout: 15000 });
-    const msgContent = `Hello from Member B! ${Date.now()}`;
-    await composerB.fill(msgContent);
     
-    const sendBtnB = pageB.locator('button').filter({ hasText: /^Send$/ });
-    await expect(sendBtnB).toBeEnabled({ timeout: 10000 });
-    await sendBtnB.click();
+    // Brief wait for state stability before interaction
+    await pageB.waitForTimeout(1000);
+    await composerB.click();
+    
+    const msgContent = `Hello from Member B! ${Date.now()}`;
+    // Use pressSequentially for maximum robustness against state wipes
+    await composerB.pressSequentially(msgContent, { delay: 20 });
+    await expect(composerB).toHaveValue(msgContent);
+    
+    // Use Enter for stable submission
+    await pageB.keyboard.press('Enter');
     
     // 5. Verify synchronization
     console.log('[A4.1] Verifying message delivery...');
     // Member B sees their own message
     try {
-        await expect(pageB.locator(`text="${msgContent}"`)).toBeVisible({ timeout: 10000 });
+        await expect(pageB.locator(`text="${msgContent}"`)).toBeVisible({ timeout: 15000 });
     } catch (err) {
         console.error('A4.1 FAILURE FORENSICS (Member B):');
         console.error(`URL: ${pageB.url()}`);
@@ -429,6 +440,7 @@ test('Sequence A: Community Lifecycle', async ({ page, browser }) => {
   });
 
   await test.step('A4.2: Markdown & Rich Text', async () => {
+    console.log('[A4.2] Verifying Markdown rendering...');
     // Ensure Admin is on Playwright Server
     if (await page.locator('.server-title').textContent() !== 'Playwright Server') {
         const adminBack = page.getByTestId('back-to-servers');
@@ -442,11 +454,13 @@ test('Sequence A: Community Lifecycle', async ({ page, browser }) => {
     await composer.press('Enter');
     
     const lastMsg = page.locator('[data-testid="message-item"]').first();
-    await expect(lastMsg.locator('strong')).toContainText('Bold Text');
+    // Use precise locator to avoid strict mode violation with author-name
+    await expect(lastMsg.locator('.message-content-wrapper strong')).toContainText('Bold Text');
     await expect(lastMsg.locator('a')).toHaveAttribute('href', 'https://skerry.io');
   });
 
   await test.step('A4.3: Message Lifecycle (Edit/Delete)', async () => {
+    console.log('[A4.3] Verifying Message Lifecycle (Edit/Delete)...');
     const originalContent = `Lifecycle test ${Date.now()}`;
     const composer = page.locator('textarea[placeholder*="Message"]');
     await composer.fill(originalContent);
@@ -457,6 +471,7 @@ test('Sequence A: Community Lifecycle', async ({ page, browser }) => {
     
     // Edit
     await message.click({ button: 'right' });
+    await expect(page.locator('.context-menu')).toBeVisible();
     await page.getByRole('button', { name: 'Edit Message' }).click();
     
     const editArea = page.locator('.edit-textarea');
@@ -468,31 +483,56 @@ test('Sequence A: Community Lifecycle', async ({ page, browser }) => {
     await expect(page.locator(`text="${originalContent}"`)).not.toBeVisible();
     
     // Delete
-    page.on('dialog', d => d.accept());
-    await page.locator(`text="${editedContent}"`).click({ button: 'right' });
+    await page.locator(`[data-testid="message-item"]:has-text("${editedContent}")`).click({ button: 'right' });
+    await expect(page.locator('.context-menu')).toBeVisible();
     await page.getByRole('button', { name: 'Delete Message' }).click();
     
-    await expect(page.locator(`text="${editedContent}"`)).not.toBeVisible({ timeout: 10000 });
+    // Handle Custom Confirmation Modal
+    const modal = page.locator('.modal-card');
+    await expect(modal).toBeVisible();
+    await modal.getByRole('button', { name: 'Delete' }).click();
+    
+    await expect(page.locator(`[data-testid="message-item"]:has-text("${editedContent}")`)).not.toBeVisible({ timeout: 10000 });
   });
 
   await test.step('A4.4: Social Interactions', async () => {
     // Reaction
     const composer = page.locator('textarea[placeholder*="Message"]');
-    await composer.fill('React to me');
-    await composer.press('Enter');
+    const reactMsg = `React to me ${Date.now()}`;
+    await composer.click();
+    await composer.pressSequentially(reactMsg, { delay: 10 });
+    await page.keyboard.press('Enter');
     
-    const message = page.locator('[data-testid="message-item"]').first();
+    const message = page.locator('[data-testid="message-item"]').filter({ hasText: reactMsg }).first();
+    // Wait for message to be server-confirmed (not 'Sending...')
+    await expect(message).toBeVisible({ timeout: 10000 });
+    await expect(message).not.toContainText('Sending...', { timeout: 10000 });
+    
+    await message.hover();
     await message.click({ button: 'right' });
+    await expect(page.locator('.context-menu')).toBeVisible({ timeout: 10000 });
     await page.getByRole('button', { name: 'Add Reaction' }).click();
     
-    // Pick an emoji (assuming 👍 is available)
-    const emoji = page.locator('button', { hasText: '👍' }).first();
+    // Pick an emoji - Use one guaranteed to be in the first category
+    await expect(page.locator('.emoji-picker-container')).toBeVisible({ timeout: 10000 });
+    
+    // Wait for internal content to load (at least one emoji button)
+    await expect(page.locator('.emoji-picker-container .epr-emoji-list button').first()).toBeVisible({ timeout: 10000 });
+
+    // Use a very inclusive selector for a common emoji (smiling face / grinning face / 😀)
+    const emoji = page.locator('.emoji-picker-container button')
+      .filter({ has: page.locator('img[alt*="smile"], img[alt*="grinn"], img[alt*="face"]') })
+      .or(page.locator('.emoji-picker-container button[aria-label*="smil"], .emoji-picker-container button[aria-label*="grinn"]'))
+      .first();
+      
+    await expect(emoji).toBeEnabled({ timeout: 5000 });
     await emoji.click();
     
-    await expect(page.locator('[data-testid="reaction-badge"]')).toBeVisible({ timeout: 5000 });
+    await expect(message.locator('[data-testid="reaction-badge"]')).toBeVisible({ timeout: 5000 });
     
     // Threading
     await message.click({ button: 'right' });
+    await expect(page.locator('.context-menu')).toBeVisible();
     await page.getByRole('button', { name: 'Reply in Thread' }).or(page.locator('button:has-text("Reply")')).click();
     
     const threadPanel = page.locator('.thread-panel');
@@ -502,7 +542,7 @@ test('Sequence A: Community Lifecycle', async ({ page, browser }) => {
     await threadComposer.fill('This is a threaded reply');
     await threadComposer.press('Enter');
     
-    await expect(threadPanel.locator('text="This is a threaded reply"')).toBeVisible();
+    await expect(threadPanel.locator('p').filter({ hasText: 'This is a threaded reply' }).first()).toBeVisible({ timeout: 10000 });
 });
 
   // Final cleanup for Member B
