@@ -98,7 +98,7 @@ export function ClientModals(props: ClientModalsProps) {
   return (
     <>
       {isClientControlled && activeModal && (
-        <div className="modal-backdrop" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
+        <div className="modal-backdrop" data-testid="modal-backdrop" onClick={() => dispatch({ type: "SET_ACTIVE_MODAL", payload: null })}>
           <div 
             className={`modal-panel ${activeModal === "rename-room" && renameRoomType === "landing" ? "wide-layout" : ""}`} 
             onClick={(e) => e.stopPropagation()}

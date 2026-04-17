@@ -714,7 +714,7 @@ export function ChatClient() {
           className={`chat-shell ${isDetailsOpen ? "" : "details-collapsed"} ${state.isSidebarOpen ? "sidebar-open" : ""} ${state.threadParentId ? "thread-open" : ""}`}
           aria-label="Chat workspace"
         >
-          <div className="sidebar-drawer-container">
+          <div className="sidebar-drawer-container" data-testid="sidebar-container">
             <ErrorBoundary>
               <Sidebar
                 handleServerChange={handleServerChange}

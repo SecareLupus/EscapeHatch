@@ -107,7 +107,9 @@ export function useChatInitialization({
     // Throttled fetch for global list of servers, roles, and hubs
     // Reuse state if available and not forced, otherwise fetch fresh metadata
     const [serverItems, roleBindings, hubItems] = await Promise.all([
-      (state.servers.length > 0 && !force) ? Promise.resolve(state.servers) : listServers(force),
+      // Always fetch servers if the current list is empty or if forced.
+      // In E2E tests, this ensures we pick up newly joined servers after a redirect.
+      (state.servers.length === 0 || force) ? listServers(force) : Promise.resolve(state.servers),
       (state.viewerRoles.length > 0 && !force) ? Promise.resolve(state.viewerRoles) : listViewerRoleBindings(force),
       (state.hubs.length > 0 && !force) ? Promise.resolve(state.hubs) : listHubs()
     ]);

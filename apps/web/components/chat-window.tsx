@@ -859,7 +859,24 @@ export function ChatWindow({
                             </button>
                         </div>
                     )}
-                    <span className="channel-badge">{activeChannel?.type ?? "none"}</span>
+                    {activeChannel?.type === "voice" && !voiceConnected && (
+                        <button
+                            type="button"
+                            data-testid="join-voice-btn"
+                            className="primary join-voice-btn"
+                            style={{ padding: "0.3rem 0.8rem", fontSize: "0.85rem", height: "32px", marginLeft: "0.5rem" }}
+                            onClick={() => handleJoinVoice()}
+                        >
+                            Join Voice Room
+                        </button>
+                    )}
+                    <div 
+                        data-testid="debug-voice-state" 
+                        data-type={activeChannel?.type} 
+                        data-voice-connected={String(voiceConnected)} 
+                        data-error={state.error || 'none'}
+                        style={{ opacity: 0, position: 'absolute', pointerEvents: 'none' }} 
+                    />
 
                     {activeChannel?.type === "voice" && voiceConnected && (
                         <div className="voice-controls inline-buttons">

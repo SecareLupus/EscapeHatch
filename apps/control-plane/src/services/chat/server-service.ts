@@ -3,6 +3,7 @@ import type { Server, HubInvite } from "@skerry/shared";
 import { withDb } from "../../db/client.js";
 import { ServerRow } from "./mapping-helpers.js";
 import type { ScopedAuthContext } from "../../auth/middleware.js";
+import { joinHub } from "../membership-service.js";
 
 export async function listServers(
   productUserId?: string, 
@@ -297,7 +298,10 @@ export async function useHubInvite(input: { inviteId: string; productUserId: str
     );
 
     await db.query("update hub_invites set uses_count = uses_count + 1 where id = $1", [input.inviteId]);
-
+    
+    // Ensure full membership state is created (hub_members, server_members)
+    await joinHub(invite.hubId, input.productUserId);
+    
     return { hubId: invite.hubId };
   });
 }

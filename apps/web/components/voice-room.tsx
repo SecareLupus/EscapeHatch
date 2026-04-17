@@ -163,7 +163,7 @@ export function VoiceRoom({ grant, muted, deafened, videoEnabled, screenShareEna
     };
 
     if (error) {
-        return <div className="voice-error">{error}</div>;
+        return <div className="voice-error" data-testid="voice-error">{error}</div>;
     }
 
     return (

@@ -33,8 +33,10 @@ export default function InvitePage() {
         try {
             await joinHubByInvite(inviteId);
             showToast("Joined successfully!", "success");
-            // Redirect to home (which should reload and show the new hub)
-            router.push("/");
+            // Wait a moment for the toast to be seen and for state to stabilize
+            setTimeout(() => {
+                window.location.href = "/";
+            }, 500);
         } catch (err: any) {
             showToast(err.message || "Failed to join", "error");
             setJoining(false);

@@ -32,7 +32,7 @@ export function InviteModals({
 }: InviteModalsProps) {
   if (isInviting) {
     return (
-      <div className="modal-backdrop" onClick={() => setIsInviting(false)}>
+      <div className="modal-backdrop" data-testid="modal-backdrop" onClick={() => setIsInviting(false)}>
         <div className="modal-panel" onClick={(e) => e.stopPropagation()} style={{ width: "400px" }}>
           <header className="modal-header">
             <h2>Invite to DM</h2>
@@ -81,7 +81,7 @@ export function InviteModals({
 
   if (isCreatingHubInvite) {
     return (
-      <div className="modal-backdrop" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }}>
+      <div className="modal-backdrop" data-testid="modal-backdrop" onClick={() => { setIsCreatingHubInvite(false); setLastInviteUrl(null); }}>
         <div className="modal-panel" onClick={(e) => e.stopPropagation()} style={{ width: "400px" }}>
           <header className="modal-header">
             <h2>Invite to {activeServer?.name}</h2>

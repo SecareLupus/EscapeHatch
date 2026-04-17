@@ -216,6 +216,7 @@ export function Sidebar({
                                 <div className="list-item-container">
                                     <button
                                         type="button"
+                                        data-testid="server-nav-item"
                                         className={cn(
                                             "list-item server-entry",
                                             selectedServerId === server.id && "active",
@@ -349,6 +350,7 @@ export function Sidebar({
                             <button
                                 type="button"
                                 className="back-button"
+                                data-testid="back-to-servers"
                                 onClick={() => setView("servers")}
                                 title="Back to Servers"
                             >
@@ -364,12 +366,13 @@ export function Sidebar({
                                     type="button"
                                     className="icon-button"
                                     title="Add..."
+                                    data-testid="add-channel-menu-trigger"
                                     onClick={() => dispatch({ type: "SET_ADD_MENU_OPEN", payload: !isAddMenuOpen })}
                                 >
                                     +
                                 </button>
                                 {isAddMenuOpen && (
-                                    <div className="add-menu-dropdown">
+                                    <div className="add-menu-dropdown" data-testid="add-menu-dropdown">
                                         <button type="button" onClick={() => {
                                             dispatch({ type: "SET_SELECTED_CATEGORY_FOR_CREATE", payload: "" });
                                             dispatch({ type: "SET_ACTIVE_MODAL", payload: "create-room" });
@@ -446,6 +449,7 @@ export function Sidebar({
                                             <li key={channel.id}>
                                                 <button
                                                     type="button"
+                                                    data-testid="channel-nav-item"
                                                     className={cn(
                                                         "list-item",
                                                         selectedChannelId === channel.id && "active",
