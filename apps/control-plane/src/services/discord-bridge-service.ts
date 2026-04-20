@@ -639,6 +639,52 @@ export async function deleteRelayedDiscordMessage(input: {
   }
 }
 
+export function mapDiscordMediaToSkerryAttachments(media: Array<{ url: string; sourceUrl: string; filename?: string; isSticker?: boolean }>): Array<{ id: string; url: string; sourceUrl: string; contentType: string; filename: string; isSticker?: boolean }> {
+  return (media ?? []).map((item) => {
+    const url = item.url;
+    const filename = item.filename || url.split("/").pop()?.split("?")[0] || "image.png";
+    const lowerUrl = url.toLowerCase();
+    const lowerFilename = filename.toLowerCase();
+
+    const isGif = lowerUrl.includes(".gif") || lowerFilename.endsWith(".gif");
+    const isPng = lowerUrl.includes(".png") || lowerFilename.endsWith(".png");
+    const isJpg = lowerUrl.includes(".jpg") || lowerUrl.includes(".jpeg") || lowerFilename.endsWith(".jpg") || lowerFilename.endsWith(".jpeg");
+    const isWebp = lowerUrl.includes(".webp") || lowerFilename.endsWith(".webp");
+    
+    const isMp4 = lowerUrl.includes(".mp4") || lowerUrl.includes(".mov") || lowerUrl.includes(".m4v") || lowerUrl.includes(".avi") || lowerUrl.includes(".mkv");
+    const isWebm = lowerUrl.includes(".webm");
+    const isHeic = lowerUrl.includes(".heic") || lowerUrl.includes(".heif");
+
+    let finalUrl = url;
+    // Normalize Discord CDN to Media Proxy for better reliability and browser compatibility
+    if (url.includes("cdn.discordapp.com")) {
+      finalUrl = url.replace("cdn.discordapp.com", "media.discordapp.net");
+      
+      if (isHeic) {
+        finalUrl += (finalUrl.includes("?") ? "&" : "?") + "format=webp";
+      }
+    }
+
+    let contentType = "image/png"; // Default to a standard image type
+    if (isGif) contentType = "image/gif";
+    else if (isPng) contentType = "image/png";
+    else if (isJpg) contentType = "image/jpeg";
+    else if (isWebp) contentType = "image/webp";
+    else if (isMp4) contentType = "video/mp4";
+    else if (isWebm) contentType = "video/webm";
+    else if (isHeic) contentType = "image/webp"; // We proxied it as webp
+
+    return {
+      id: `att_${crypto.randomUUID().replaceAll("-", "")}`,
+      url: finalUrl,
+      sourceUrl: item.sourceUrl,
+      contentType,
+      filename,
+      isSticker: item.isSticker
+    };
+  });
+}
+
 export async function relayDiscordMessageToMappedChannel(input: {
   serverId: string;
   discordChannelId: string;
@@ -737,38 +783,17 @@ export async function relayDiscordMessageToMappedChannel(input: {
     }
   }
 
-  const attachments = (input.media ?? []).map((item) => {
-    const url = item.url;
-    const filename = item.filename || url.split("/").pop()?.split("?")[0] || "image.png";
-    const lowerUrl = url.toLowerCase();
-    const isGif = lowerUrl.includes(".gif");
-    const isMp4 = lowerUrl.includes(".mp4") || lowerUrl.includes(".mov") || lowerUrl.includes(".m4v") || lowerUrl.includes(".avi") || lowerUrl.includes(".mkv");
-    const isWebm = lowerUrl.includes(".webm");
-    const isHeic = lowerUrl.includes(".heic") || lowerUrl.includes(".heif");
+  const attachments = mapDiscordMediaToSkerryAttachments(input.media ?? []);
 
-    let finalUrl = url;
-    if (isHeic && url.includes("cdn.discordapp.com")) {
-      // Force HEIC to WebP via Discord media proxy for browser compatibility
-      finalUrl = url.replace("cdn.discordapp.com", "media.discordapp.net") + (url.includes("?") ? "&" : "?") + "format=webp";
-    }
-
-    // Clean up content: if the message content contains the media or source URL, strip it
+  // Clean up content: if the message content contains the media or source URL, strip it
+  for (const item of (input.media ?? [])) {
     if (item.sourceUrl && finalContent.includes(item.sourceUrl)) {
       finalContent = finalContent.replace(item.sourceUrl, "").trim();
     }
-    if (url && finalContent.includes(url)) {
-      finalContent = finalContent.replace(url, "").trim();
+    if (item.url && finalContent.includes(item.url)) {
+      finalContent = finalContent.replace(item.url, "").trim();
     }
-
-    return {
-      id: `att_${crypto.randomUUID().replaceAll("-", "")}`,
-      url: finalUrl,
-      sourceUrl: item.sourceUrl,
-      contentType: isGif ? "image/gif" : isMp4 ? "video/mp4" : isWebm ? "video/webm" : "image/any",
-      filename,
-      isSticker: item.isSticker
-    };
-  });
+  }
 
   const message = await createMessage({
     channelId: mapping.matrixChannelId,

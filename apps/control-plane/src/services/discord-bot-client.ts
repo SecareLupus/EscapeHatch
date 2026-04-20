@@ -61,12 +61,24 @@ export async function startDiscordBot() {
                 try {
                     const media = [
                         ...message.attachments.map(a => ({ url: a.url, sourceUrl: a.url })),
-                        ...message.stickers.map(s => ({ 
-                            url: `https://media.discordapp.net/stickers/${s.id}.gif?size=240`, 
-                            sourceUrl: s.url, 
-                            filename: `${s.name}.gif`,
-                            isSticker: true 
-                        })),
+                        ...message.stickers.map(s => {
+                            const isGif = s.format === 4;
+                            const isLottie = s.format === 3;
+                            const isApng = s.format === 2;
+                            const ext = isGif ? "gif" : isLottie ? "json" : "png";
+                            
+                            // If it's a Lottie sticker, we'll try to use the PNG fallback from Discord's proxy
+                            // but if the user wants it to "render as gif", they might be expecting animation.
+                            // For now, PNG is the safest fallback for Lottie if we want to show *something*.
+                            const proxyExt = isLottie ? "png" : ext;
+
+                            return { 
+                                url: `https://media.discordapp.net/stickers/${s.id}.${proxyExt}?size=240`, 
+                                sourceUrl: s.url, 
+                                filename: `${s.name}.${ext}`,
+                                isSticker: true 
+                            };
+                        }),
                         ...message.embeds.map((e: any) => {
                             let url = e.video?.url || e.image?.url || e.thumbnail?.url;
 
