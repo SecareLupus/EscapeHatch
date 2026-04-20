@@ -1,4 +1,4 @@
-![Skerry Full Width Logo](Skerry_FullWidth.png)
+![Skerry Full Width Logo](assets/Skerry_FullWidth.png)
 
 # Skerry (`SecareLupus/Skerry`)
 
@@ -12,25 +12,27 @@ The platform provides a complete community experience with high-level abstractio
 - **Identity & Auth**: Multi-provider OIDC (Discord, Google, Twitch) or Developer Login.
 - **Hub Architecture**: Multi-server (space) organization with categories and channels.
 - **Rich Messaging**: Persistent chat, reactions, file uploads, and mention markers.
-- **Voice & Video**: Ultra-low latency conferencing powered by LiveKit.
-- **Discord Bridge**: Bi-directional message relay between Matrix channels and Discord guilds.
-- **Advanced Moderation**: Reporting system, audit logs, and policy-driven access control.
+- **Voice & Video**: Ultra-low latency conferencing powered by LiveKit with Stage Layout, PiP, and device management.
+- **Discord Bridge**: Bi-directional message relay with dynamic ID mapping for seamless edits and deletions.
+- **Creator Suite**: Hierarchical CSS theming, live-preview code editor, and variable interpolation for custom landing pages.
+- **Advanced Moderation**: Reporting system, audit logs, strike system, and policy-driven access control.
 - **Full Dockerization**: Simple, one-command deployment for the entire stack.
 
 ## Repository Layout
 
 ```text
 .
-├── apps/
+├── apps/                 # Monorepo applications
 │   ├── control-plane/      # Fastify policy gate, auth, and provisioning API
 │   └── web/                # Next.js web client
-├── packages/
+├── packages/             # Shared logic
 │   └── shared/             # Shared types, constants, and domain contracts
-├── docker/
-│   ├── Caddyfile           # Reverse proxy / routing configuration
-│   └── synapse/            # Matrix homeserver configuration
-├── docker-compose.yml      # Full stack: Postgres, Synapse, LiveKit, Control Plane, Web, Caddy
-└── AGENTS.md               # AI collaborator instructions and project scope
+├── docs/                 # Documentation hub (spec, reports, planning)
+├── scripts/              # Utility scripts (bootstrap, backup, cleanup)
+├── assets/               # Static brand assets and media
+├── docker/               # Service-specific configurations (Caddy, Synapse)
+├── docker-compose.yml    # Full stack orchestration
+└── AGENTS.md             # AI collaborator instructions and project scope
 ```
 
 ## Internal Network Architecture
@@ -65,8 +67,8 @@ docker compose up -d
 For a production-ready deployment on a fresh Linux instance:
 
 ```bash
-chmod +x bootstrap-hub.sh
-./bootstrap-hub.sh
+chmod +x scripts/bootstrap-hub.sh
+./scripts/bootstrap-hub.sh
 ```
 
 This script generates unique secrets, pulls images, runs migrations, and starts the entire stack.
@@ -109,12 +111,11 @@ Skerry Hubs can trust each other to allow cross-hub browsing and interaction wit
 3. **Identity Resolution**: Remote users are assigned a local `fed_` proxy ID and can view public spaces as authenticated guests.
 
 
-```bash
-pnpm lint
-pnpm typecheck
-pnpm build
-pnpm test
-```
+The project maintains a rigorous testing suite to ensure stability across the "Golden Path" of community interactions.
+
+- **Unit & Integration**: `pnpm test`
+- **End-to-End (Playwright)**: `pnpm run test:e2e`
+- **Full Community Lifecycle**: `pnpm run test:e2e:run` (Resets environment and executes Sequence A)
 
 ## Storage Maintenance (Issue #20)
 
