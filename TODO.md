@@ -92,6 +92,7 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 - [x] Strike system — configurable warn → mute → kick → ban escalation
 - [x] Moderation action UI improvements — confirmation dialogs, undo window for redact
 - [x] Rate-limit reporting endpoint to prevent report spam
+- [ ] **Report Triage UI** — Interface for admins to view, manage, and resolve user reports
 
 ---
 
@@ -179,7 +180,7 @@ Current focus is **Phase 20** (Moderation Hardening) and **Phase 23** (Extension
 
 ### 🔧 Tier 2: Core UX Bugs
 - [x] **Threaded Conversations (#27)** — Fix missing moderation/context menus for threaded replies.
-- [ ] **Invite Link Generation (#23)** — Current generated links need a functional contract defining what they do and are for.
+- [x] **Invite Link Generation (#23)** — Current generated links need a functional contract defining what they do and are for.
 - [x] **Settings Theme Sync (#21)** — Fix state desync where settings page drops dark/light preference.
 - [x] **OAuth Mapping (#9)** — Fix "Guest" issue when linking Twitch after Discord.
 

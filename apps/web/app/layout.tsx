@@ -1,10 +1,28 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Skerry Chat",
-  description: "Skerry Collective Matrix hub"
+  description: "Skerry Collective Matrix hub",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Skerry Chat",
+  },
+  icons: {
+    apple: "/icons/icon-192x192.png",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2d3748",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 import { ToastProvider } from "../components/toast-provider";
