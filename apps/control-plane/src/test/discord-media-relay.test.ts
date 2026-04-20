@@ -30,19 +30,23 @@ test("mapDiscordMediaToSkerryAttachments maps various media types correctly", ()
     assert.strictEqual(results.length, 4);
     
     // GIF check
-    assert.strictEqual(results[0].contentType, "image/gif");
-    assert.ok(results[0].url.includes("media.discordapp.net"), "URL should be normalized to media proxy");
+    const r0 = results[0]!;
+    assert.strictEqual(r0.contentType, "image/gif");
+    assert.ok(r0.url.includes("media.discordapp.net"), "URL should be normalized to media proxy");
     
     // JPG check
-    assert.strictEqual(results[1].contentType, "image/jpeg");
-    assert.ok(results[1].url.includes("media.discordapp.net"), "URL should be normalized to media proxy");
+    const r1 = results[1]!;
+    assert.strictEqual(r1.contentType, "image/jpeg");
+    assert.ok(r1.url.includes("media.discordapp.net"), "URL should be normalized to media proxy");
     
     // Sticker check
-    assert.strictEqual(results[2].contentType, "image/png");
-    assert.ok(results[2].isSticker, "Should be marked as sticker");
+    const r2 = results[2]!;
+    assert.strictEqual(r2.contentType, "image/png");
+    assert.ok(r2.isSticker, "Should be marked as sticker");
     
     // Video check
-    assert.strictEqual(results[3].contentType, "video/mp4");
+    const r3 = results[3]!;
+    assert.strictEqual(r3.contentType, "video/mp4");
 });
 
 test("mapDiscordMediaToSkerryAttachments handles HEIC correctly", () => {
@@ -54,6 +58,7 @@ test("mapDiscordMediaToSkerryAttachments handles HEIC correctly", () => {
     ];
 
     const results = mapDiscordMediaToSkerryAttachments(input);
-    assert.strictEqual(results[0].contentType, "image/webp");
-    assert.ok(results[0].url.includes("format=webp"), "HEIC should be proxied as webp");
+    const r0 = results[0]!;
+    assert.strictEqual(r0.contentType, "image/webp");
+    assert.ok(r0.url.includes("format=webp"), "HEIC should be proxied as webp");
 });
