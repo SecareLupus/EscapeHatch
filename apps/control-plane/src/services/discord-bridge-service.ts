@@ -654,6 +654,7 @@ export function mapDiscordMediaToSkerryAttachments(media: Array<{ url: string; s
     const isMp4 = lowerUrl.includes(".mp4") || lowerUrl.includes(".mov") || lowerUrl.includes(".m4v") || lowerUrl.includes(".avi") || lowerUrl.includes(".mkv");
     const isWebm = lowerUrl.includes(".webm");
     const isHeic = lowerUrl.includes(".heic") || lowerUrl.includes(".heif");
+    const isApng = lowerUrl.includes(".apng") || lowerFilename.endsWith(".apng");
 
     let finalUrl = url;
     // Normalize Discord CDN to Media Proxy for better reliability and browser compatibility
