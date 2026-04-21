@@ -55,7 +55,7 @@ interface ChatWindowProps {
 
 // LandingPageView is now imported from ./landing-page-view
 
-const Lottie = dynamic(() => import("lottie-react"), { ssr: false });
+const Lottie = dynamic(() => import("lottie-react").then(mod => mod.default), { ssr: false }) as any;
 
 const LottieSticker = ({ url, filename }: { url: string; filename?: string }) => {
     const [animationData, setAnimationData] = useState<any>(null);
