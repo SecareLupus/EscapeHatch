@@ -657,22 +657,25 @@ export function mapDiscordMediaToSkerryAttachments(media: Array<{ url: string; s
 
     let finalUrl = url;
     // Normalize Discord CDN to Media Proxy for better reliability and browser compatibility
-    if (url.includes("cdn.discordapp.com")) {
+    if (url.includes("cdn.discordapp.com") || url.includes("media.discordapp.net")) {
       finalUrl = url.replace("cdn.discordapp.com", "media.discordapp.net");
       
-      if (isHeic) {
-        finalUrl += (finalUrl.includes("?") ? "&" : "?") + "format=webp";
+      // Prefer WebP for better performance and compatibility with animated images
+      if (isHeic || isGif || isApng) {
+        if (!finalUrl.includes("format=")) {
+          finalUrl += (finalUrl.includes("?") ? "&" : "?") + "format=webp";
+        }
       }
     }
 
     let contentType = "image/png"; // Default to a standard image type
-    if (isGif) contentType = "image/gif";
+    if (finalUrl.includes("format=webp") || isWebp || isHeic) contentType = "image/webp";
+    else if (isGif) contentType = "image/gif";
     else if (isPng) contentType = "image/png";
     else if (isJpg) contentType = "image/jpeg";
-    else if (isWebp) contentType = "image/webp";
     else if (isMp4) contentType = "video/mp4";
     else if (isWebm) contentType = "video/webm";
-    else if (isHeic) contentType = "image/webp"; // We proxied it as webp
+    else if (lowerFilename.endsWith(".json") && item.isSticker) contentType = "application/json";
 
     return {
       id: `att_${crypto.randomUUID().replaceAll("-", "")}`,

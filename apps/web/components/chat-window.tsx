@@ -55,6 +55,47 @@ interface ChatWindowProps {
 
 // LandingPageView is now imported from ./landing-page-view
 
+const Lottie = dynamic(() => import("lottie-react"), { ssr: false });
+
+const LottieSticker = ({ url, filename }: { url: string; filename?: string }) => {
+    const [animationData, setAnimationData] = useState<any>(null);
+    const [error, setError] = useState(false);
+
+    useEffect(() => {
+        fetch(url)
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return res.json();
+            })
+            .then(data => setAnimationData(data))
+            .catch(err => {
+                console.error("Failed to load Lottie sticker:", err);
+                setError(true);
+            });
+    }, [url]);
+
+    if (error) {
+        return (
+            <div className="sticker-error" style={{ width: 160, height: 160, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.05)", borderRadius: 8 }}>
+                <span style={{ fontSize: "0.75rem", opacity: 0.5 }}>Failed to load sticker</span>
+            </div>
+        );
+    }
+
+    if (!animationData) {
+        return <div style={{ width: 160, height: 160, background: "rgba(255,255,255,0.05)", borderRadius: 8 }} />;
+    }
+
+    return (
+        <Lottie 
+            animationData={animationData} 
+            loop={true} 
+            style={{ width: 160, height: 160 }} 
+            rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
+        />
+    );
+};
+
 function MessageContent({ message }: { message: MessageItem }) {
     const { state } = useChat();
     const content = message.content;
@@ -440,7 +481,7 @@ export function ChatWindow({
 
     const isMediaUrl = (url: string) => {
         return (
-            /\.(jpeg|jpg|gif|png|webp|svg)$/i.test(url) ||
+            /\.(jpeg|jpg|gif|png|webp|svg)(\?.*)?$/i.test(url) ||
             url.includes("/_matrix/media/v3/download/") ||
             /media\.giphy\.com|tenor\.com\/view/i.test(url)
         );
@@ -1143,7 +1184,9 @@ export function ChatWindow({
                                             {message.attachments.map((att) => (
                                                 <div key={att.id} className={`attachment ${att.isSticker ? 'sticker' : ''}`}>
                                                     <div style={{ display: "block", textDecoration: "none" }}>
-                                                        {att.contentType.startsWith("image/") ? (
+                                                        {att.contentType === "application/json" && att.isSticker ? (
+                                                            <LottieSticker url={att.url} filename={att.filename} />
+                                                        ) : att.contentType.startsWith("image/") ? (
                                                             <img 
                                                                 src={att.url} 
                                                                 alt={att.filename} 
@@ -1177,13 +1220,42 @@ export function ChatWindow({
                                     )}
 
                                     {/* Legacy media urls (from content) */}
-                                    {(!message.attachments || message.attachments.length === 0) && mediaUrls.length > 0 && (
+                                    {mediaUrls.length > 0 && (
                                         <div className="message-attachments-container" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
-                                            {mediaUrls.map((url, i) => (
-                                                <div key={i} className="attachment" style={{ maxWidth: "300px" }}>
-                                                    <img src={url} alt="Attached media" loading="lazy" style={{ maxWidth: "100%", borderRadius: "4px" }} />
-                                                </div>
-                                            ))}
+                                            {mediaUrls.map((url, i) => {
+                                                const isTenorView = url.includes("tenor.com/view");
+                                                const isGiphyView = url.includes("giphy.com/gifs");
+                                                
+                                                if (isTenorView || isGiphyView) {
+                                                    const embedUrl = isTenorView 
+                                                        ? url.replace("tenor.com/view", "tenor.com/embed")
+                                                        : url.replace("giphy.com/gifs", "giphy.com/embed");
+                                                    return (
+                                                        <div key={i} className="attachment legacy-media" style={{ width: "100%", maxWidth: "400px" }}>
+                                                            <iframe
+                                                                src={embedUrl}
+                                                                width="100%"
+                                                                height="250"
+                                                                frameBorder="0"
+                                                                allowFullScreen
+                                                                style={{ borderRadius: "8px" }}
+                                                            />
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <div key={i} className="attachment legacy-media" style={{ maxWidth: "300px" }}>
+                                                        <img 
+                                                            src={url} 
+                                                            alt="Attached media" 
+                                                            loading="lazy" 
+                                                            style={{ maxWidth: "100%", borderRadius: "4px", cursor: 'pointer' }} 
+                                                            onClick={() => setLightboxUrl(url)}
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     )}
 

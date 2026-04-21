@@ -62,34 +62,36 @@ export async function startDiscordBot() {
                     const media = [
                         ...message.attachments.map(a => ({ url: a.url, sourceUrl: a.url })),
                         ...message.stickers.map(s => {
-                            const isGif = s.format === 4;
-                            const isLottie = s.format === 3;
+                            const isPng = s.format === 1;
                             const isApng = s.format === 2;
-                            const ext = isGif ? "gif" : isLottie ? "json" : "png";
+                            const isLottie = s.format === 3;
+                            const isGif = s.format === 4;
                             
-                            // If it's a Lottie sticker, we'll try to use the PNG fallback from Discord's proxy
-                            // but if the user wants it to "render as gif", they might be expecting animation.
-                            // For now, PNG is the safest fallback for Lottie if we want to show *something*.
-                            const proxyExt = isLottie ? "png" : ext;
-
+                            // As per Discord docs, stickers are available in their native formats:
+                            // PNG/APNG -> .png, GIF -> .gif, Lottie -> .json
+                            // Size parameter is ignored for stickers.
+                            const ext = isLottie ? "json" : isGif ? "gif" : "png";
+                            
                             return { 
-                                url: `https://media.discordapp.net/stickers/${s.id}.${proxyExt}?size=240`, 
+                                url: `https://cdn.discordapp.com/stickers/${s.id}.${ext}`, 
                                 sourceUrl: s.url, 
                                 filename: `${s.name}.${ext}`,
                                 isSticker: true 
                             };
                         }),
                         ...message.embeds.map((e: any) => {
-                            let url = e.video?.url || e.image?.url || e.thumbnail?.url;
+                            let url = e.data.video?.proxy_url || e.data.image?.proxy_url || e.data.thumbnail?.proxy_url || 
+                                      e.data.video?.url || e.data.image?.url || e.data.thumbnail?.url;
 
-                            // If it's a gifv (Giphy/Tenor), try to ensure we have the .gif version for browser compatibility
-                            if (e.data.type === 'gifv' && url && url.endsWith('.mp4')) {
+                            // If it's a gifv (Giphy/Tenor), ensure we have a format that can be rendered as an image
+                            if (e.data?.type === 'gifv' && url) {
                                 if (url.includes('giphy.com') || url.includes('tenor.com')) {
-                                    url = url.replace('.mp4', '.gif');
+                                    // Use .gif as the base; the bridge service will then prefer .webp if it's a Discord proxy URL
+                                    url = url.replace('.mp4', '.gif').replace('.webm', '.gif');
                                 }
                             }
 
-                            return url ? { url, sourceUrl: e.url || url } : null;
+                            return url ? { url, sourceUrl: e.data.url || url } : null;
                         }).filter(Boolean) as Array<{ url: string; sourceUrl: string; filename?: string; isSticker?: boolean }>
                     ];
 
