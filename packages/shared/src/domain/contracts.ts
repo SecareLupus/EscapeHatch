@@ -410,7 +410,7 @@ export interface LinkEmbed {
     imageWidth?: number;
     imageHeight?: number;
     videoUrl?: string; // For things like YouTube/Vimeo embeds
-    type?: "link" | "image" | "video" | "gifv";
+    type?: "link" | "image" | "video" | "gif" | "gifv";
 }
 
 export interface ChatMessage {

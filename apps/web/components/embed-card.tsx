@@ -89,7 +89,7 @@ export const EmbedCard: React.FC<EmbedCardProps> = ({ embed }) => {
 
   const gifEmbedUrl = getGifEmbedUrl(embed.url);
   const videoEmbedUrl = getVideoEmbedUrl();
-  const showVideo = (isPlaying || embed.type === "gif") && (videoEmbedUrl || gifEmbedUrl);
+  const showVideo = (isPlaying || embed.type === "gif" || embed.type === "gifv") && (videoEmbedUrl || gifEmbedUrl);
 
   return (
     <div className="embed-card-container">
