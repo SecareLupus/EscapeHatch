@@ -68,6 +68,8 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const contentType = response.headers.get("content-type");
+      console.log(`[Media Proxy] Fetching ${url} -> Status: ${response.status}, Content-Type: ${contentType}`);
+      
       if (contentType) reply.header("Content-Type", contentType);
       
       // Cache for 1 day

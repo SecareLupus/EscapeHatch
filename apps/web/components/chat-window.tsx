@@ -18,6 +18,7 @@ import { EmbedCard } from "./embed-card";
 import DOMPurify from "dompurify";
 import { LandingJoinButton } from "./landing-join-button";
 import { LandingPageView } from "./landing-page-view";
+import { GifPlayer } from "./gif-player";
 
 
 
@@ -211,9 +212,10 @@ function MessageContent({ message, hiddenUrls = [] }: { message: MessageItem; hi
                 components={{
                     img: ({ src, alt, ...props }) => {
                         const isEmoji = alt?.startsWith(":") && alt?.endsWith(":");
+                        const proxiedSrc = src ? getProxiedUrl(src) : src;
                         return (
                             <img
-                                src={src}
+                                src={proxiedSrc}
                                 alt={alt}
                                 className={isEmoji ? "emoji-inline" : ""}
                                 style={isEmoji ? { 
@@ -1276,14 +1278,12 @@ export function ChatWindow({
                                                                         {normalizedUrl.endsWith(".json") ? (
                                                                             <LottieSticker url={normalizedUrl} />
                                                                         ) : (
-                                                                            <img 
+                                                                            <GifPlayer 
                                                                                 src={finalUrl} 
                                                                                 alt={att.filename} 
+                                                                                className="sticker-image"
                                                                                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
                                                                                 onClick={() => setLightboxUrl(finalUrl)}
-                                                                                onError={(e) => {
-                                                                                    e.currentTarget.style.display = "none";
-                                                                                }}
                                                                             />
                                                                         )}
                                                                     </div>
@@ -1292,7 +1292,12 @@ export function ChatWindow({
                                                                         {att.contentType?.startsWith("video") ? (
                                                                             <video src={finalUrl} controls style={{ maxWidth: "300px", maxHeight: "300px" }} />
                                                                         ) : (
-                                                                            <img src={finalUrl} alt={att.filename} style={{ maxWidth: "300px", maxHeight: "300px" }} onError={(e) => e.currentTarget.style.display="none"} />
+                                                                            <GifPlayer 
+                                                                                src={finalUrl} 
+                                                                                alt={att.filename} 
+                                                                                style={{ maxWidth: "300px", maxHeight: "300px" }} 
+                                                                                onClick={() => setLightboxUrl(finalUrl)}
+                                                                            />
                                                                         )}
                                                                         <div className="attachment-overlay">
                                                                             <span>{att.filename}</span>
@@ -1342,14 +1347,11 @@ export function ChatWindow({
                                                         const finalUrl = getProxiedUrl(normalized);
                                                         return (
                                                             <div key={i} className="attachment legacy-media" style={{ maxWidth: "300px" }}>
-                                                                <img 
+                                                                <GifPlayer 
                                                                     src={finalUrl} 
                                                                     alt="Attachment" 
                                                                     style={{ maxWidth: "100%", maxHeight: "300px", borderRadius: "8px", cursor: "pointer" }} 
                                                                     onClick={() => setLightboxUrl(finalUrl)}
-                                                                    onError={(e) => {
-                                                                        e.currentTarget.style.display = "none";
-                                                                    }}
                                                                 />
                                                             </div>
                                                         );

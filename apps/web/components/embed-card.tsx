@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { LinkEmbed } from "@skerry/shared";
+import { GifPlayer } from "./gif-player";
 const getYouTubeEmbedUrl = (url: string) => {
     if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -22,8 +23,13 @@ const getProxiedUrl = (url: string) => {
     if (!url) return url;
     const controlPlaneUrl = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "";
     
-    // Proxy Discord assets if they are likely to be blocked by CORS
-    if (url.includes("discordapp.net") || url.includes("discordapp.com")) {
+    // Proxy Discord, Tenor, and Giphy assets as they often have strict hotlinking/CORS policies
+    if (
+        url.includes("discordapp.net") || 
+        url.includes("discordapp.com") ||
+        url.includes("tenor.com") ||
+        url.includes("giphy.com")
+    ) {
         return `${controlPlaneUrl}/v1/media/proxy?url=${encodeURIComponent(url)}`;
     }
     
@@ -152,16 +158,10 @@ export const EmbedCard: React.FC<EmbedCardProps> = ({ embed }) => {
           <div className="embed-grid">
             {embed.imageUrl && (
               <div className="embed-image-container">
-                <img 
+                <GifPlayer 
                   src={getProxiedUrl(embed.imageUrl)} 
                   alt={embed.title || "Preview"} 
-                  className="embed-image"
-                  loading="lazy"
-                  onError={(e) => {
-                    // Hide the broken image container
-                    const container = e.currentTarget.parentElement;
-                    if (container) container.style.display = "none";
-                  }}
+                  style={{ maxWidth: "100%", maxHeight: "400px", borderRadius: "8px" }}
                 />
                 {embed.type === "video" && videoEmbedUrl && (
                   <div className="embed-video-overlay" onClick={handlePlay}>
