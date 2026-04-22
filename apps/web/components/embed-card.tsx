@@ -1,6 +1,22 @@
 import React, { useState } from "react";
 import { LinkEmbed } from "@skerry/shared";
-import { getYouTubeEmbedUrl, getTwitchEmbedUrl } from "../lib/channel-utils";
+const getYouTubeEmbedUrl = (url: string) => {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2] && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+};
+
+const getTwitchEmbedUrl = (url: string) => {
+    if (!url) return null;
+    const twitchMatch = url.match(/twitch\.tv\/([a-zA-Z0-9_]+)/);
+    if (twitchMatch) {
+        const channel = twitchMatch[1];
+        const domain = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+        return `https://player.twitch.tv/?channel=${channel}&parent=${domain}&autoplay=false`;
+    }
+    return null;
+};
 
 const getProxiedUrl = (url: string) => {
     if (!url) return url;
@@ -61,15 +77,24 @@ export const EmbedCard: React.FC<EmbedCardProps> = ({ embed }) => {
   };
 
   const getGifEmbedUrl = (url: string) => {
-    if (url.includes("tenor.com/view") || url.includes("giphy.com/gifs")) {
+    if (url.includes("tenor.com") || url.includes("giphy.com")) {
+        // Handle view pages and direct links
         const urlParts = url.split("/");
         const lastPart = urlParts[urlParts.length - 1] || "";
         const lastPartWithoutExt = lastPart.replace(/\.[^.]+$/, "");
-        const idMatch = lastPartWithoutExt.match(/-([a-zA-Z0-9]+)$|([a-zA-Z0-9]+)$/);
-        const id = idMatch ? (idMatch[1] || idMatch[2]) : lastPartWithoutExt;
-        return url.includes("tenor.com") 
-            ? `https://tenor.com/embed/${id}`
-            : `https://giphy.com/embed/${id}`;
+        
+        // Extract ID (usually the last part or after the last dash)
+        let id = lastPartWithoutExt;
+        if (url.includes("tenor.com")) {
+            const idMatch = lastPartWithoutExt.match(/-([a-zA-Z0-9]+)$|([a-zA-Z0-9]+)$/);
+            id = (idMatch ? (idMatch[1] || idMatch[2]) : lastPartWithoutExt) || lastPartWithoutExt;
+            return `https://tenor.com/embed/${id}`;
+        } else {
+            // Giphy IDs are often the last part of /gifs/SLUG-ID or just ID
+            const giphyIdMatch = url.match(/giphy\.com\/gifs\/.*-([a-zA-Z0-9]+)$|giphy\.com\/gifs\/([a-zA-Z0-9]+)$|media\.giphy\.com\/media\/([a-zA-Z0-9]+)\//);
+            id = (giphyIdMatch ? (giphyIdMatch[1] || giphyIdMatch[2] || giphyIdMatch[3]) : lastPartWithoutExt) || lastPartWithoutExt;
+            return `https://giphy.com/embed/${id}`;
+        }
     }
     return null;
   };

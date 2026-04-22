@@ -58,15 +58,24 @@ interface ChatWindowProps {
 const Lottie = dynamic(() => import("lottie-react").then(mod => mod.default), { ssr: false }) as any;
 
 const normalizeMediaUrl = (url: string) => {
+    if (!url) return url;
     // Handle Discord external proxy: https://images-ext-1.discordapp.net/external/.../https/media.tenor.com/...
     if (url.includes("images-ext-") && url.includes("/https/")) {
         const parts = url.split("/https/");
         if (parts.length > 1) return "https://" + parts[1];
     }
+    
+    // Convert media.discordapp.net to cdn.discordapp.com for stickers/emojis
+    // media subdomains are often more restricted or intended for dynamic resizing
+    if (url.includes("media.discordapp.net") && (url.includes("/stickers/") || url.includes("/emojis/"))) {
+        return url.replace("media.discordapp.net", "cdn.discordapp.com");
+    }
+
     return url;
 };
 
 const getProxiedUrl = (url: string) => {
+    if (!url) return url;
     const normalized = normalizeMediaUrl(url);
     const controlPlaneUrl = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "";
     
@@ -75,8 +84,13 @@ const getProxiedUrl = (url: string) => {
         return `${controlPlaneUrl}/v1/media/proxy?url=${encodeURIComponent(normalized)}`;
     }
     
-    // Proxy Discord assets if they are likely to be blocked by CORS
-    if (normalized.includes("discordapp.net") || normalized.includes("discordapp.com")) {
+    // Proxy Discord, Tenor, Giphy assets as they often have strict hotlinking/CORS policies
+    if (
+        normalized.includes("discordapp.net") || 
+        normalized.includes("discordapp.com") ||
+        normalized.includes("tenor.com") ||
+        normalized.includes("giphy.com")
+    ) {
         return `${controlPlaneUrl}/v1/media/proxy?url=${encodeURIComponent(normalized)}`;
     }
     
@@ -89,7 +103,7 @@ function LottieSticker({ url }: { url: string }) {
 
     useEffect(() => {
         const tryFetch = (fetchUrl: string, isFallback: boolean = false) => {
-            fetch(fetchUrl, { mode: 'cors', cache: 'no-cache' })
+            fetch(fetchUrl, { mode: 'cors', cache: 'default' })
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                     return res.text();
@@ -104,9 +118,8 @@ function LottieSticker({ url }: { url: string }) {
                     }
                 })
                 .catch(err => {
-                    console.warn(`Failed to load Lottie sticker from ${isFallback ? 'proxy fallback' : 'primary CDN'}:`, err);
+                    console.warn(`LottieSticker: Failed to load from ${isFallback ? 'proxy' : 'direct'}: ${fetchUrl}`, err);
                     if (!isFallback) {
-                        // If direct CDN failed, try proxy
                         const proxiedUrl = getProxiedUrl(url);
                         if (proxiedUrl !== url) {
                             tryFetch(proxiedUrl, true);
@@ -119,6 +132,8 @@ function LottieSticker({ url }: { url: string }) {
                 });
         };
 
+        // If it's a discord sticker, try cdn.discordapp.com directly first (might work if CORS is open on their CDN)
+        // If it fails (due to CORS or 403), the fallback will use the proxy.
         tryFetch(url);
     }, [url]);
 
@@ -1245,99 +1260,103 @@ export function ChatWindow({
                                                         ))
                                                     }
                                                 </div>
-                                         {/* Attachments rendering */}
-                                    {message.attachments && message.attachments.length > 0 && (
-                                        <div className="message-attachments-container">
-                                            {message.attachments.map((att) => {
-                                                const normalizedUrl = normalizeMediaUrl(att.url);
-                                                const finalUrl = getProxiedUrl(normalizedUrl);
-                                                
-                                                return (
-                                                    <div key={att.id} className={`attachment ${att.isSticker ? 'sticker' : ''}`}>
-                                                        {att.isSticker ? (
-                                                            <div className="sticker-container" style={{ width: "160px", height: "160px" }}>
-                                                                {normalizedUrl.endsWith(".json") ? (
-                                                                    <LottieSticker url={finalUrl} />
-                                                                ) : (
-                                                                    <img 
-                                                                        src={finalUrl} 
-                                                                        alt={att.filename} 
-                                                                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                                                                        onClick={() => setLightboxUrl(finalUrl)}
-                                                                        onError={(e) => {
-                                                                            e.currentTarget.style.display = "none";
-                                                                        }}
-                                                                    />
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="attachment-preview" style={{ cursor: "pointer" }} onClick={() => setLightboxUrl(finalUrl)}>
-                                                                {att.contentType?.startsWith("video") ? (
-                                                                    <video src={finalUrl} controls style={{ maxWidth: "300px", maxHeight: "300px" }} />
-                                                                ) : (
-                                                                    <img src={finalUrl} alt={att.filename} style={{ maxWidth: "300px", maxHeight: "300px" }} onError={(e) => e.currentTarget.style.display="none"} />
-                                                                )}
-                                                                <div className="attachment-overlay">
-                                                                    <span>{att.filename}</span>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
+                                            )}
 
-                                    {/* Legacy media urls (from content) */}
-                                    {mediaUrls.length > 0 && (
-                                        <div className="message-attachments-container" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
-                                            {mediaUrls.map((url, i) => {
-                                                const normalized = normalizeMediaUrl(url);
-                                                const isTenorView = normalized.includes("tenor.com/view");
-                                                const isGiphyView = normalized.includes("giphy.com/gifs");
-                                                
-                                                if (isTenorView || isGiphyView) {
-                                                    const urlParts = normalized.split("/");
-                                                    const lastPart = urlParts[urlParts.length - 1] || "";
-                                                    const lastPartWithoutExt = lastPart.replace(/\.[^.]+$/, "");
-                                                    const idMatch = lastPartWithoutExt.match(/-([a-zA-Z0-9]+)$|([a-zA-Z0-9]+)$/);
-                                                    const id = idMatch ? (idMatch[1] || idMatch[2]) : lastPartWithoutExt;
-                                                    
-                                                    const embedUrl = isTenorView 
-                                                        ? `https://tenor.com/embed/${id}`
-                                                        : `https://giphy.com/embed/${id}`;
-                                                    return (
-                                                        <div key={i} className="attachment legacy-media" style={{ width: "100%", maxWidth: "400px" }}>
-                                                            <div className="embed-video-container" style={{ borderRadius: "8px", overflow: "hidden" }}>
-                                                                <iframe
-                                                                    src={embedUrl}
-                                                                    frameBorder="0"
-                                                                    width="100%"
-                                                                    height="300"
-                                                                    allow="autoplay; encrypted-media"
-                                                                    allowFullScreen
+                                            {/* Attachments rendering */}
+                                            {message.attachments && message.attachments.length > 0 && (
+                                                <div className="message-attachments-container">
+                                                    {message.attachments.map((att) => {
+                                                        const normalizedUrl = normalizeMediaUrl(att.url);
+                                                        const finalUrl = getProxiedUrl(normalizedUrl);
+                                                        
+                                                        return (
+                                                            <div key={att.id} className={`attachment ${att.isSticker ? 'sticker' : ''}`}>
+                                                                {att.isSticker ? (
+                                                                    <div className="sticker-container" style={{ width: "160px", height: "160px" }}>
+                                                                        {normalizedUrl.endsWith(".json") ? (
+                                                                            <LottieSticker url={normalizedUrl} />
+                                                                        ) : (
+                                                                            <img 
+                                                                                src={finalUrl} 
+                                                                                alt={att.filename} 
+                                                                                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                                                                                onClick={() => setLightboxUrl(finalUrl)}
+                                                                                onError={(e) => {
+                                                                                    e.currentTarget.style.display = "none";
+                                                                                }}
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="attachment-preview" style={{ cursor: "pointer" }} onClick={() => setLightboxUrl(finalUrl)}>
+                                                                        {att.contentType?.startsWith("video") ? (
+                                                                            <video src={finalUrl} controls style={{ maxWidth: "300px", maxHeight: "300px" }} />
+                                                                        ) : (
+                                                                            <img src={finalUrl} alt={att.filename} style={{ maxWidth: "300px", maxHeight: "300px" }} onError={(e) => e.currentTarget.style.display="none"} />
+                                                                        )}
+                                                                        <div className="attachment-overlay">
+                                                                            <span>{att.filename}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+
+                                            {/* Legacy media urls (from content) */}
+                                            {mediaUrls.length > 0 && (
+                                                <div className="message-attachments-container" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+                                                    {mediaUrls.map((url, i) => {
+                                                        const normalized = normalizeMediaUrl(url);
+                                                        const isTenorView = normalized.includes("tenor.com/view");
+                                                        const isGiphyView = normalized.includes("giphy.com/gifs");
+                                                        
+                                                        if (isTenorView || isGiphyView) {
+                                                            const urlParts = normalized.split("/");
+                                                            const lastPart = urlParts[urlParts.length - 1] || "";
+                                                            const lastPartWithoutExt = lastPart.replace(/\.[^.]+$/, "");
+                                                            const idMatch = lastPartWithoutExt.match(/-([a-zA-Z0-9]+)$|([a-zA-Z0-9]+)$/);
+                                                            const id = idMatch ? (idMatch[1] || idMatch[2]) : lastPartWithoutExt;
+                                                            
+                                                            const embedUrl = isTenorView 
+                                                                ? `https://tenor.com/embed/${id}`
+                                                                : `https://giphy.com/embed/${id}`;
+                                                            return (
+                                                                <div key={i} className="attachment legacy-media" style={{ width: "100%", maxWidth: "400px" }}>
+                                                                    <div className="embed-video-container" style={{ borderRadius: "8px", overflow: "hidden" }}>
+                                                                        <iframe
+                                                                            src={embedUrl}
+                                                                            frameBorder="0"
+                                                                            width="100%"
+                                                                            height="300"
+                                                                            allow="autoplay; encrypted-media"
+                                                                            allowFullScreen
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        const finalUrl = getProxiedUrl(normalized);
+                                                        return (
+                                                            <div key={i} className="attachment legacy-media" style={{ maxWidth: "300px" }}>
+                                                                <img 
+                                                                    src={finalUrl} 
+                                                                    alt="Attachment" 
+                                                                    style={{ maxWidth: "100%", maxHeight: "300px", borderRadius: "8px", cursor: "pointer" }} 
+                                                                    onClick={() => setLightboxUrl(finalUrl)}
+                                                                    onError={(e) => {
+                                                                        e.currentTarget.style.display = "none";
+                                                                    }}
                                                                 />
                                                             </div>
-                                                        </div>
-                                                    );
-                                                }
-
-                                                const finalUrl = getProxiedUrl(normalized);
-                                                return (
-                                                    <div key={i} className="attachment legacy-media" style={{ maxWidth: "300px" }}>
-                                                        <img 
-                                                            src={finalUrl} 
-                                                            alt="Attachment" 
-                                                            style={{ maxWidth: "100%", maxHeight: "300px", borderRadius: "8px", cursor: "pointer" }} 
-                                                            onClick={() => setLightboxUrl(finalUrl)}
-                                                            onError={(e) => {
-                                                                e.currentTarget.style.display = "none";
-                                                            }}
-                                                        />
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </>
                                     )}
 
 

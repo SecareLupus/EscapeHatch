@@ -48,17 +48,18 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     const { url } = z.object({ url: z.string().url() }).parse(request.query);
     
     // Only allow proxying specific domains to avoid SSRF
-    const allowedDomains = ["discordapp.net", "discordapp.com", "tenor.com", "giphy.com", "twimg.com"];
+    const allowedDomains = ["discordapp.net", "discordapp.com", "tenor.com", "giphy.com", "twimg.com", "media.giphy.com", "media.tenor.com"];
     const parsedUrl = new URL(url);
-    if (!allowedDomains.some(d => parsedUrl.hostname.endsWith(d))) {
+    if (!allowedDomains.some(d => parsedUrl.hostname === d || parsedUrl.hostname.endsWith("." + d))) {
       return reply.code(403).send({ error: "Forbidden: Domain not allowed for proxy" });
     }
 
     try {
       const response = await fetch(url, {
           headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-              "Accept": "*/*"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+              "Accept": "image/*,video/*,application/json,*/*",
+              "Referer": "https://discord.com/" // Often required for Discord assets
           }
       });
 
