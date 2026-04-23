@@ -101,8 +101,8 @@ const getProxiedUrl = (url: string) => {
 function LottieSticker({ url }: { url: string }) {
     console.log("[LottieSticker] Rendering with URL:", url);
     const controlPlaneUrl = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "";
-    const stickerUrl = `${controlPlaneUrl}/v1/media/sticker.webp?url=${encodeURIComponent(url)}`;
-    console.log("[LottieSticker] Target stickerUrl:", stickerUrl);
+    const stickerUrl = `${controlPlaneUrl}/v1/media/sticker?url=${encodeURIComponent(url)}`;
+    console.log("[LottieSticker] Target stickerUrl (extension-less):", stickerUrl);
 
     return (
         <div style={{ width: 160, height: 160, borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.05)", position: "relative", zIndex: 10 }}>

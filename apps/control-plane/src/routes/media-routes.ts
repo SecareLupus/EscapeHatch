@@ -105,7 +105,7 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
   }
 
   app.get("/v1/media/proxy", async (request, reply) => {
-    console.log(`[Media] GET /v1/media/proxy - URL: ${request.query && (request.query as any).url}`);
+    console.log(`[Media] ENTRY proxy - URL: ${request.query && (request.query as any).url}`);
     const { url } = z.object({ url: z.string().url() }).parse(request.query);
     
     // Only allow proxying specific domains to avoid SSRF
