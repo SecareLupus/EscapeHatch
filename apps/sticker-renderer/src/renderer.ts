@@ -28,21 +28,7 @@ export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer
     const lottieString = typeof lottieJson === 'string' ? lottieJson : JSON.stringify(lottieJson);
     const tempOutputFile = `/tmp/sticker-${Date.now()}.gif`;
 
-    // 2. Start FFmpeg to receive raw BGRA frames
-    const ffmpeg = spawn('ffmpeg', [
-        '-y', // Overwrite
-        '-f', 'rawvideo',
-        '-pixel_format', 'bgra',
-        '-video_size', '160x160',
-        '-r', '30', // Assume 30fps for the input pipe
-        '-i', 'pipe:0',
-        '-lavfi', 'split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
-        '-loop', '0',
-        tempOutputFile
-    ]);
-
-    // 3. Start the Native rlottie-python bridge
-    // We look for render.py in the same directory as the source, or one level up from dist
+    // 3. Find bridge path
     const bridgePath = path.join(__dirname, 'render.py');
     const bridgePathFallback = path.join(__dirname, '..', 'src', 'render.py');
     const bridgePathFallback2 = '/app/apps/sticker-renderer/src/render.py';
@@ -58,13 +44,62 @@ export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer
 
     console.log(`[Sticker Renderer] Using bridge path: ${finalBridgePath} (exists: ${fs.existsSync(finalBridgePath)})`);
     
+    // 3.1 Fetch Metadata first
+    const getMetadata = async (): Promise<{ total_frames: number, framerate: number }> => {
+        return new Promise((resolve, reject) => {
+            const metaProcess = spawn('python3', [finalBridgePath, '--metadata']);
+            let output = '';
+            let error = '';
+            metaProcess.stdout.on('data', (data) => output += data.toString());
+            metaProcess.stderr.on('data', (data) => error += data.toString());
+            metaProcess.on('close', (code) => {
+                if (code !== 0) return reject(new Error(`Metadata failed: ${error}`));
+                try {
+                    resolve(JSON.parse(output.trim()));
+                } catch (err) {
+                    reject(new Error(`Failed to parse metadata: ${output}`));
+                }
+            });
+            metaProcess.stdin.write(lottieString);
+            metaProcess.stdin.end();
+        });
+    };
+
+    const metadata = await getMetadata().catch(err => {
+        console.warn(`[Sticker Renderer] Metadata fetch failed, defaulting to 30fps: ${err.message}`);
+        return { total_frames: 60, framerate: 30 };
+    });
+
+    console.log(`[Sticker Renderer] Metadata: ${metadata.total_frames} frames @ ${metadata.framerate}fps`);
+
+    // 3.2 Start FFmpeg with dynamic framerate
+    const ffmpeg = spawn('ffmpeg', [
+        '-y', // Overwrite
+        '-f', 'rawvideo',
+        '-pixel_format', 'bgra',
+        '-video_size', '160x160',
+        '-r', metadata.framerate.toString(),
+        '-i', 'pipe:0',
+        '-lavfi', 'split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
+        '-loop', '0',
+        tempOutputFile
+    ]);
+
+    // 4. Start the Native rlottie-python bridge for actual rendering
     const pythonBridge = spawn('python3', [finalBridgePath]);
 
     // Pipe Python output (raw frames) into FFmpeg input
     pythonBridge.stdout.pipe(ffmpeg.stdin);
 
     // Handle errors
-    pythonBridge.stderr.on('data', (data) => console.error(`[rlottie Error] ${data}`));
+    pythonBridge.stderr.on('data', (data) => {
+        const msg = data.toString();
+        if (msg.includes('Rendering')) {
+            console.log(`[Sticker Renderer] Bridge: ${msg.trim()}`);
+        } else {
+            console.error(`[rlottie Error] ${msg.trim()}`);
+        }
+    });
     
     // Log FFmpeg progress
     ffmpeg.stderr.on('data', (data) => {
@@ -81,7 +116,9 @@ export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer
     return new Promise((resolve, reject) => {
         let pythonError = '';
         pythonBridge.stderr.on('data', (data) => {
-            pythonError += data.toString();
+            if (!data.toString().includes('Rendering')) {
+                pythonError += data.toString();
+            }
         });
 
         pythonBridge.on('close', (code) => {
@@ -114,6 +151,6 @@ export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer
             ffmpeg.kill();
             fs.promises.unlink(tempOutputFile).catch(() => {});
             reject(new Error('Render timed out'));
-        }, 15000);
+        }, 30000);
     });
 }

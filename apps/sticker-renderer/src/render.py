@@ -15,19 +15,29 @@ def render():
         sys.stderr.write(f"Error loading Lottie: {str(e)}\n")
         sys.exit(1)
 
+    if "--metadata" in sys.argv:
+        meta = {
+            "total_frames": anim.lottie_animation_get_totalframe(),
+            "framerate": anim.lottie_animation_get_framerate(),
+            "duration": anim.lottie_animation_get_duration()
+        }
+        print(json.dumps(meta))
+        return
+
     width, height = 160, 160
     total_frames = anim.lottie_animation_get_totalframe()
-    render_frames = min(total_frames, 60)
+    # Increase frame cap to 300 (approx 5-10 seconds depending on FPS)
+    render_frames = min(total_frames, 300)
     
     # Pre-calculate sizes for speed and stability
     buffer_size = width * height * 4
     bytes_per_line = width * 4
     
-    sys.stderr.write(f"Rendering {render_frames} frames at {width}x{height} (buffer={buffer_size}, stride={bytes_per_line})\n")
+    # Optional: allow overriding FPS via stderr for confirmation
+    fps = anim.lottie_animation_get_framerate()
+    sys.stderr.write(f"Rendering {render_frames} frames at {width}x{height} (FPS: {fps})\n")
     
     for i in range(render_frames):
-        # Call with explicit positional arguments for EVERYTHING
-        # frame_num, buffer_size, width, height, bytes_per_line
         try:
             buffer = anim.lottie_animation_render(i, buffer_size, width, height, bytes_per_line)
             if buffer:
