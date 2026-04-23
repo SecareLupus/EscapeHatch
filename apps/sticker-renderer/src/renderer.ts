@@ -29,18 +29,18 @@ export async function renderLottieToWebP(url: string): Promise<Buffer> {
     // 2. Start FFmpeg to receive raw BGRA frames
     const ffmpeg = spawn('ffmpeg', [
         '-f', 'rawvideo',
-        '-vcodec', 'rawvideo',
-        '-s', '160x160',
-        '-pix_fmt', 'bgra',
-        '-r', '30',
-        '-i', '-',
-        '-vcodec', 'libwebp',
-        '-lossless', '1',
+        '-pixel_format', 'bgra',
+        '-video_size', '160x160',
+        '-r', '30', // Assume 30fps for the input pipe
+        '-i', 'pipe:0',
+        '-c:v', 'libwebp',
+        '-lossless', '0',
+        '-compression_level', '4',
+        '-q:v', '75',
         '-loop', '0',
         '-an',
         '-f', 'webp',
-        '-y',
-        '-'
+        'pipe:1'
     ]);
 
     // 3. Start the Native rlottie-python bridge
@@ -71,8 +71,10 @@ export async function renderLottieToWebP(url: string): Promise<Buffer> {
 
     // Handle errors
     pythonBridge.stderr.on('data', (data) => console.error(`[rlottie Error] ${data}`));
+    
+    // Log FFmpeg errors
     ffmpeg.stderr.on('data', (data) => {
-        if (data.toString().includes('Error')) console.error(`[FFmpeg Error] ${data}`);
+        console.error(`[Sticker Renderer] FFmpeg: ${data.toString()}`);
     });
 
     // Send the Lottie JSON to the bridge
