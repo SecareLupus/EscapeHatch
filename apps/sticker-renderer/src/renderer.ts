@@ -26,22 +26,19 @@ export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer
         }
     });
     const lottieString = typeof lottieJson === 'string' ? lottieJson : JSON.stringify(lottieJson);
+    const tempOutputFile = `/tmp/sticker-${Date.now()}.gif`;
 
     // 2. Start FFmpeg to receive raw BGRA frames
     const ffmpeg = spawn('ffmpeg', [
+        '-y', // Overwrite
         '-f', 'rawvideo',
         '-pixel_format', 'bgra',
         '-video_size', '160x160',
         '-r', '30', // Assume 30fps for the input pipe
         '-i', 'pipe:0',
-        '-c:v', 'libwebp',
-        '-lossless', '0',
-        '-compression_level', '4',
-        '-q:v', '75',
+        '-lavfi', 'split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
         '-loop', '0',
-        '-an',
-        '-f', 'webp',
-        'pipe:1'
+        tempOutputFile
     ]);
 
     // 3. Start the Native rlottie-python bridge
@@ -60,22 +57,21 @@ export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer
     }
 
     console.log(`[Sticker Renderer] Using bridge path: ${finalBridgePath} (exists: ${fs.existsSync(finalBridgePath)})`);
-    console.log(`[Sticker Renderer] Current __dirname: ${__dirname}`);
     
     const pythonBridge = spawn('python3', [finalBridgePath]);
 
-    const chunks: Buffer[] = [];
-    ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk));
-    
     // Pipe Python output (raw frames) into FFmpeg input
     pythonBridge.stdout.pipe(ffmpeg.stdin);
 
     // Handle errors
     pythonBridge.stderr.on('data', (data) => console.error(`[rlottie Error] ${data}`));
     
-    // Log FFmpeg errors
+    // Log FFmpeg progress
     ffmpeg.stderr.on('data', (data) => {
-        console.error(`[Sticker Renderer] FFmpeg: ${data.toString()}`);
+        const msg = data.toString();
+        if (msg.includes('frame=')) {
+            console.log(`[Sticker Renderer] FFmpeg: ${msg.trim()}`);
+        }
     });
 
     // Send the Lottie JSON to the bridge
@@ -96,11 +92,17 @@ export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer
             }
         });
 
-        ffmpeg.on('close', (code) => {
+        ffmpeg.on('close', async (code) => {
             if (code === 0) {
-                const buffer = Buffer.concat(chunks);
-                console.log(`[Sticker Renderer] Native render complete: ${buffer.length} bytes`);
-                resolve(buffer);
+                try {
+                    const buffer = await fs.promises.readFile(tempOutputFile);
+                    console.log(`[Sticker Renderer] Native render complete: ${buffer.length} bytes`);
+                    // Cleanup
+                    await fs.promises.unlink(tempOutputFile).catch(() => {});
+                    resolve(buffer);
+                } catch (err) {
+                    reject(err);
+                }
             } else {
                 reject(new Error(`FFmpeg exited with code ${code}`));
             }
@@ -110,6 +112,7 @@ export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer
         setTimeout(() => {
             pythonBridge.kill();
             ffmpeg.kill();
+            fs.promises.unlink(tempOutputFile).catch(() => {});
             reject(new Error('Render timed out'));
         }, 15000);
     });

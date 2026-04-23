@@ -62,14 +62,14 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     try {
       const { url } = z.object({ url: z.string().url() }).parse(request.query);
       const hash = crypto.createHash("md5").update(url).digest("hex");
-      const cachePath = path.join(STICKER_CACHE_DIR, `${hash}.webp`);
+      const cachePath = path.join(STICKER_CACHE_DIR, `${hash}.gif`);
 
       // 1. Check Cache
       const stats = await fs.stat(cachePath).catch(() => null);
       if (stats) {
         console.log(`[Sticker Cache] HIT for ${url}`);
         const buffer = await fs.readFile(cachePath);
-        reply.header("Content-Type", "image/webp");
+        reply.header("Content-Type", "image/gif");
         reply.header("Cache-Control", "public, max-age=31536000, immutable");
         return reply.send(buffer);
       }
@@ -92,15 +92,22 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
         console.error(`[Sticker Cache] Failed to save ${cachePath}:`, err);
       });
 
-      reply.header("Content-Type", "image/webp");
+      reply.header("Content-Type", "image/gif");
       reply.header("Cache-Control", "public, max-age=31536000, immutable");
       return reply.send(finalBuffer);
     } catch (err: any) {
-      console.error(`[Media] Sticker request error:`, err);
+      console.error(`[Media] Sticker request error for ${rawUrl}:`, err);
       if (err instanceof z.ZodError) {
-        return reply.code(400).send({ error: "Invalid URL parameter" });
+        return reply.code(400).send({ error: "Invalid URL parameter", details: err.errors });
       }
-      return reply.code(500).send({ error: "Failed to render sticker" });
+      
+      // Return a 500 but log the specific cause
+      const message = err.message || "Unknown rendering error";
+      return reply.code(500).send({ 
+        error: "Failed to render sticker", 
+        message: message,
+        url: rawUrl
+      });
     }
   }
 

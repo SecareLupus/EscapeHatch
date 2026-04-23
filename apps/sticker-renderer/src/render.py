@@ -18,16 +18,24 @@ def render():
     width, height = 160, 160
     total_frames = anim.lottie_animation_get_totalframe()
     render_frames = min(total_frames, 60)
-    sys.stderr.write(f"Total frames: {total_frames}, Rendering: {render_frames}\n")
+    
+    # Pre-calculate sizes for speed and stability
+    buffer_size = width * height * 4
+    bytes_per_line = width * 4
+    
+    sys.stderr.write(f"Rendering {render_frames} frames at {width}x{height} (buffer={buffer_size}, stride={bytes_per_line})\n")
     
     for i in range(render_frames):
-        # The documentation shows lottie_animation_render(frame_num=i) returns a BGRA buffer
-        buffer = anim.lottie_animation_render(i)
-        if buffer:
-            # We need to write the raw bytes to stdout
-            # FFmpeg is expecting raw BGRA frames
-            sys.stdout.buffer.write(buffer)
-            sys.stdout.buffer.flush()
+        # Call with explicit positional arguments for EVERYTHING
+        # frame_num, buffer_size, width, height, bytes_per_line
+        try:
+            buffer = anim.lottie_animation_render(i, buffer_size, width, height, bytes_per_line)
+            if buffer:
+                sys.stdout.buffer.write(buffer)
+                sys.stdout.buffer.flush()
+        except Exception as e:
+            sys.stderr.write(f"Error rendering frame {i}: {str(e)}\n")
+            break
 
 if __name__ == "__main__":
     render()
