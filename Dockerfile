@@ -31,8 +31,12 @@ CMD [ "pnpm", "--filter", "@skerry/web", "start:prod" ]
 FROM node:20-bookworm-slim AS sticker-renderer
 RUN apt-get update && apt-get install -y ffmpeg python3 python3-pip python3-venv build-essential cmake python3-dev && rm -rf /var/lib/apt/lists/*
 
+# Use a virtual environment for python
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 # Install rlottie-python and verify it works
-RUN python3 -m pip install --break-system-packages rlottie-python && \
+RUN pip install rlottie-python && \
     python3 -c "import rlottie; print('rlottie version:', rlottie.__version__ if hasattr(rlottie, '__version__') else 'installed')"
 
 RUN npm install -g pnpm@9.12.2
