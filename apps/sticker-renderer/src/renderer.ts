@@ -1,7 +1,7 @@
 import { chromium, Browser } from 'playwright';
 import path from 'path';
 import fs from 'fs/promises';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
 
@@ -36,33 +36,63 @@ export async function renderLottieToWebP(animationData: any): Promise<Buffer> {
         await page.waitForFunction(() => typeof (window as any).lottie !== 'undefined', { timeout: 10000 });
 
         const info: any = await page.evaluate((data) => (window as any).renderLottie(data), animationData);
-        const totalFrames = Math.min(info.totalFrames, 150); // Cap frames to avoid massive files
-        const frameRate = info.frameRate || 30;
+        const totalFrames = 60; // Cap at 60 frames (2 seconds at 30fps)
+        const fps = 30;
+    
+        console.log(`[Sticker Renderer] Rendering ${totalFrames} frames at ${fps}fps...`);
 
-        console.log(`Rendering ${totalFrames} frames at ${frameRate}fps...`);
+        const ffmpeg = spawn('ffmpeg', [
+            '-f', 'image2pipe',
+            '-vcodec', 'png',
+            '-i', '-',
+            '-vcodec', 'libwebp',
+            '-lossless', '1',
+            '-loop', '0',
+            '-an',
+            '-f', 'webp',
+            '-'
+        ]);
+
+        const chunks: Buffer[] = [];
+        ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk));
+        
+        ffmpeg.stderr.on('data', (data) => {
+            // Only log ffmpeg errors, not progress
+            if (data.toString().includes('Error')) {
+                console.error(`[FFmpeg Error] ${data}`);
+            }
+        });
+
+        const renderFinished = new Promise<Buffer>((resolve, reject) => {
+            ffmpeg.on('close', (code) => {
+                if (code === 0) resolve(Buffer.concat(chunks));
+                else reject(new Error(`FFmpeg exited with code ${code}`));
+            });
+        });
 
         for (let i = 0; i < totalFrames; i++) {
-            await page.evaluate((f) => (window as any).goToFrame(f), i);
-            await page.screenshot({
-                path: path.join(tempDir, `frame_${i.toString().padStart(4, '0')}.png`),
-                omitBackground: true
+            if (i % 10 === 0) console.log(`[Sticker Renderer] Frame ${i}/${totalFrames}...`);
+            
+            await page.evaluate((f) => {
+                if ((window as any).anim) {
+                    (window as any).anim.goToAndStop(f, true);
+                }
+            }, i);
+            
+            const frameBuffer = await page.screenshot({ 
+                type: 'png', 
+                omitBackground: true,
+                clip: { x: 0, y: 0, width: 160, height: 160 }
             });
+            
+            ffmpeg.stdin.write(frameBuffer);
         }
 
-        const outputWebP = path.join(tempDir, 'output.webp');
+        ffmpeg.stdin.end();
+        const webpBuffer = await renderFinished;
+        console.log(`[Sticker Renderer] Render complete. Size: ${webpBuffer.length} bytes`);
         
-        // Use ffmpeg to stitch frames into animated WebP
-        // -framerate: input fps
-        // -i: input pattern
-        // -loop 0: infinite loop
-        // -lossless 0: slightly compressed but much smaller
-        // -preset default: standard optimization
-        const ffmpegCmd = `ffmpeg -y -framerate ${frameRate} -i "${tempDir}/frame_%04d.png" -vcodec libwebp -lossless 0 -compression_level 6 -q:v 75 -loop 0 -an -vsync 0 "${outputWebP}"`;
-        
-        await execAsync(ffmpegCmd);
-
-        const buffer = await fs.readFile(outputWebP);
-        return buffer;
+        return webpBuffer;
     } finally {
         await context.close();
         await fs.rm(tempDir, { recursive: true, force: true });
