@@ -1,5 +1,8 @@
 {
     email {$EMAIL}
+    log {
+        output stdout
+    }
 }
 
 (common_handlers) {

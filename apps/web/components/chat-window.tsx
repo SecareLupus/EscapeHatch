@@ -100,22 +100,25 @@ const getProxiedUrl = (url: string) => {
 
 function LottieSticker({ url }: { url: string }) {
     console.log("[LottieSticker] Rendering with URL:", url);
-    const stickerUrl = `/v1/media/sticker.webp?url=${encodeURIComponent(url)}`;
+    const controlPlaneUrl = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "";
+    const stickerUrl = `${controlPlaneUrl}/v1/media/sticker.webp?url=${encodeURIComponent(url)}`;
+    console.log("[LottieSticker] Target stickerUrl:", stickerUrl);
 
     return (
-        <div style={{ width: 160, height: 160, borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.02)" }}>
+        <div style={{ width: 160, height: 160, borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.05)", position: "relative", zIndex: 10 }}>
             <img 
                 src={stickerUrl} 
                 alt="Sticker"
-                style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                loading="lazy"
+                style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", position: "relative", zIndex: 11 }}
+                onLoad={() => console.log("[LottieSticker] Successfully loaded:", stickerUrl)}
                 onError={(e) => {
+                    console.error("[LottieSticker] Failed to load:", stickerUrl);
                     // Fallback to error message if WebP fails
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                     const parent = target.parentElement;
                     if (parent) {
-                        parent.innerHTML = '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; opacity:0.5; font-size:0.75rem;">Failed to load sticker</div>';
+                        parent.innerHTML = '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; opacity:0.5; font-size:0.75rem; color: white;">Failed to load sticker</div>';
                     }
                 }}
             />

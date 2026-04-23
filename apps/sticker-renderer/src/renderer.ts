@@ -11,7 +11,14 @@ export async function renderLottieToWebP(url: string): Promise<Buffer> {
     console.log(`[Sticker Renderer] Native render starting for ${url}`);
     
     // 1. Fetch the Lottie JSON
-    const { data: lottieJson } = await axios.get(url, { responseType: 'text' });
+    const { data: lottieJson } = await axios.get(url, { 
+        responseType: 'text',
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+            'Referer': 'https://discord.com/',
+            'Accept': 'application/json'
+        }
+    });
     const lottieString = typeof lottieJson === 'string' ? lottieJson : JSON.stringify(lottieJson);
 
     // 2. Start FFmpeg to receive raw BGRA frames

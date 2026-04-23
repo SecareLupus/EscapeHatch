@@ -14,15 +14,7 @@ app.get('/render', async (request, reply) => {
         
         console.log(`[Sticker Renderer] Starting render for ${url}`);
         
-        // Fetch the JSON from the URL
-        const response = await fetch(url);
-        if (!response.ok) {
-            return reply.code(400).send({ error: `Failed to fetch Lottie JSON: ${response.statusText}` });
-        }
-        
-        const animationData = await response.json();
-        
-        const webpBuffer = await renderLottieToWebP(animationData);
+        const webpBuffer = await renderLottieToWebP(url);
         
         reply.header('Content-Type', 'image/webp');
         reply.header('Cache-Control', 'public, max-age=31536000, immutable');
