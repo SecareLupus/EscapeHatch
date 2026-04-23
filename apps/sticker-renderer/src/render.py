@@ -16,16 +16,19 @@ def render():
         sys.exit(1)
 
     width, height = 160, 160
-    total_frames = anim.total_frames
+    total_frames = anim.lottie_animation_get_totalframe()
     
     # We cap frames to 60 for performance/size
     render_frames = min(total_frames, 60)
-
+    
     for i in range(render_frames):
-        # Render frame to BGRA buffer
-        frame_data = anim.render_frame(i, width, height)
-        # Write raw bytes to stdout for FFmpeg
-        sys.stdout.buffer.write(frame_data)
+        # The documentation shows lottie_animation_render(frame_num=i) returns a BGRA buffer
+        buffer = anim.lottie_animation_render(i)
+        if buffer:
+            # We need to write the raw bytes to stdout
+            # FFmpeg is expecting raw BGRA frames
+            sys.stdout.buffer.write(buffer)
+            sys.stdout.buffer.flush()
 
 if __name__ == "__main__":
     render()
