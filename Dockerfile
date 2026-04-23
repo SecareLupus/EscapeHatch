@@ -1,5 +1,5 @@
 # Base stage for pnpm and shared dependencies
-FROM node:20-slim AS base
+FROM node:20.12-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
@@ -28,7 +28,7 @@ EXPOSE 3000
 CMD [ "pnpm", "--filter", "@skerry/web", "start:prod" ]
 
 # --- Sticker Renderer Runtime ---
-FROM mcr.microsoft.com/playwright:v1.50.0-focal AS sticker-renderer
+FROM mcr.microsoft.com/playwright:v1.49.1-focal AS sticker-renderer
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 ENV PNPM_HOME="/pnpm"
