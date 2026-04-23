@@ -111,7 +111,7 @@ function LottieSticker({ url }: { url: string }) {
             if (currentString !== initialString) {
                 console.warn(`[Lottie Leak Detector] Object grew from ${initialString} to ${currentString} bytes. Cloning to fix...`);
                 // If it grew, we force a clean clone to "reset" the memory
-                setAnimationData(prev => JSON.parse(JSON.stringify(prev)));
+                setAnimationData((prev: any) => JSON.parse(JSON.stringify(prev)));
             }
         }, 15000);
         return () => clearTimeout(timer);
