@@ -29,7 +29,7 @@ CMD [ "pnpm", "--filter", "@skerry/web", "start:prod" ]
 
 # --- Sticker Renderer Runtime ---
 FROM node:20-bookworm-slim AS sticker-renderer
-RUN apt-get update && apt-get install -y ffmpeg python3 python3-pip python3-venv && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ffmpeg python3 python3-pip python3-venv build-essential cmake && rm -rf /var/lib/apt/lists/*
 
 # Install rlottie-python
 RUN python3 -m pip install --break-system-packages rlottie-python

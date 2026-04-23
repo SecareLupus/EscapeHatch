@@ -80,6 +80,19 @@ export async function renderLottieToWebP(url: string): Promise<Buffer> {
     pythonBridge.stdin.end();
 
     return new Promise((resolve, reject) => {
+        let pythonError = '';
+        pythonBridge.stderr.on('data', (data) => {
+            pythonError += data.toString();
+        });
+
+        pythonBridge.on('close', (code) => {
+            if (code !== 0) {
+                console.error(`[Sticker Renderer] Python bridge failed with code ${code}: ${pythonError}`);
+                ffmpeg.kill();
+                reject(new Error(`Python bridge failed (${code}): ${pythonError}`));
+            }
+        });
+
         ffmpeg.on('close', (code) => {
             if (code === 0) {
                 const buffer = Buffer.concat(chunks);
@@ -91,6 +104,10 @@ export async function renderLottieToWebP(url: string): Promise<Buffer> {
         });
         
         // Timeout safety
-        setTimeout(() => reject(new Error('Render timed out')), 15000);
+        setTimeout(() => {
+            pythonBridge.kill();
+            ffmpeg.kill();
+            reject(new Error('Render timed out'));
+        }, 15000);
     });
 }
