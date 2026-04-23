@@ -99,6 +99,7 @@ const getProxiedUrl = (url: string) => {
 };
 
 function LottieSticker({ url }: { url: string }) {
+    console.log("[LottieSticker] Rendering with URL:", url);
     const stickerUrl = `/v1/media/sticker.webp?url=${encodeURIComponent(url)}`;
 
     return (
@@ -1232,12 +1233,28 @@ export function ChatWindow({
                                                     {message.attachments.map((att) => {
                                                         const normalizedUrl = normalizeMediaUrl(att.url);
                                                         const finalUrl = getProxiedUrl(normalizedUrl);
+                                                        const isActuallySticker = att.isSticker || normalizedUrl.includes("/stickers/");
+                                                        const isLottie = normalizedUrl.endsWith(".json") || (att.sourceUrl?.split('?')[0]?.endsWith(".json") ?? false);
+                                                        
+                                                        console.log("[ChatWindow] Rendering attachment:", { 
+                                                            id: att.id, 
+                                                            isSticker: att.isSticker, 
+                                                            isActuallySticker,
+                                                            isLottie,
+                                                            url: att.url, 
+                                                            sourceUrl: att.sourceUrl 
+                                                        });
                                                         
                                                         return (
-                                                            <div key={att.id} className={`attachment ${att.isSticker ? 'sticker' : ''}`}>
-                                                                {att.isSticker ? (
-                                                                    <div className="sticker-container" style={{ width: "160px", height: "160px" }}>
-                                                                        {(normalizedUrl.endsWith(".json") || (att.sourceUrl?.split('?')[0]?.endsWith(".json") ?? false)) ? (
+                                                            <div key={att.id} className={`attachment ${isActuallySticker ? 'sticker' : ''}`}>
+                                                                {isActuallySticker ? (
+                                                                    <div className="sticker-container" style={{ 
+                                                                        width: "160px", 
+                                                                        height: "160px", 
+                                                                        border: "2px solid red",
+                                                                        background: "rgba(255,0,0,0.1)"
+                                                                    }}>
+                                                                        {isLottie ? (
                                                                             <LottieSticker url={normalizedUrl} />
                                                                         ) : (
                                                                             <GifPlayer 
