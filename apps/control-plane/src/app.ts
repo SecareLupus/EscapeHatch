@@ -185,6 +185,12 @@ export async function buildApp() {
 
   await registerAuthRoutes(app);
   await registerDomainRoutes(app);
-  await registerMediaRoutes(app);
+  
+  try {
+    await registerMediaRoutes(app);
+  } catch (err) {
+    console.error("[CRITICAL] Failed to register media routes, but continuing startup:", err);
+  }
+
   return app;
 }

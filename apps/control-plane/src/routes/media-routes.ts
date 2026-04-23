@@ -14,13 +14,14 @@ import path from "node:path";
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
   const initializedAuthHandlers = { preHandler: [requireAuth, requireInitialized] };
-  const STICKER_CACHE_DIR = "/app/cache/stickers";
+  const STICKER_CACHE_DIR = "/tmp/skerry-sticker-cache";
 
   // Ensure cache dir exists
   try {
     await fs.mkdir(STICKER_CACHE_DIR, { recursive: true });
+    console.log(`[Media] Sticker cache initialized at ${STICKER_CACHE_DIR}`);
   } catch (err) {
-    console.warn(`[Media] Could not create sticker cache directory: ${STICKER_CACHE_DIR}`);
+    console.error(`[Media] WARNING: Could not create sticker cache directory: ${STICKER_CACHE_DIR}. Caching will be disabled for this session.`, err);
   }
 
   app.post("/v1/media/upload", initializedAuthHandlers, async (request, reply) => {
