@@ -52,51 +52,57 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     return { url: result.url, contentType: payload.contentType };
   });
 
-  app.get("/v1/media/sticker.webp", async (request, reply) => {
-    console.log(`[Media] GET /v1/media/sticker.webp - URL: ${request.query && (request.query as any).url}`);
-    const { url } = z.object({ url: z.string().url() }).parse(request.query);
+  app.get("/v1/media/sticker.webp", async (request, reply) => handleStickerRequest(request, reply));
+  app.get("/v1/media/sticker", async (request, reply) => handleStickerRequest(request, reply));
+
+  async function handleStickerRequest(request: any, reply: any) {
+    const rawUrl = request.query && (request.query as any).url;
+    console.log(`[Media] ENTRY handleStickerRequest - URL: ${rawUrl}`);
     
-    // Hash the URL to use as a filename
-    const hash = crypto.createHash("md5").update(url).digest("hex");
-    const cachePath = path.join(STICKER_CACHE_DIR, `${hash}.webp`);
-
     try {
-        // 1. Check Cache
-        const stats = await fs.stat(cachePath).catch(() => null);
-        if (stats) {
-            console.log(`[Sticker Cache] HIT for ${url}`);
-            const buffer = await fs.readFile(cachePath);
-            reply.header("Content-Type", "image/webp");
-            reply.header("Cache-Control", "public, max-age=31536000, immutable");
-            return reply.send(buffer);
-        }
+      const { url } = z.object({ url: z.string().url() }).parse(request.query);
+      const hash = crypto.createHash("md5").update(url).digest("hex");
+      const cachePath = path.join(STICKER_CACHE_DIR, `${hash}.webp`);
 
-        // 2. Cache MISS -> Call Renderer
-        console.log(`[Sticker Cache] MISS for ${url}, calling renderer...`);
-        const rendererUrl = `http://sticker-renderer:3000/render?url=${encodeURIComponent(url)}`;
-        const response = await fetch(rendererUrl);
-
-        if (!response.ok) {
-            const errorText = await response.text().catch(() => "No error body");
-            throw new Error(`Renderer failed (${response.status}): ${errorText}`);
-        }
-
-        const buffer = await response.arrayBuffer();
-        const finalBuffer = Buffer.from(buffer);
-
-        // 3. Save to Cache (Background)
-        fs.writeFile(cachePath, finalBuffer).catch(err => {
-            console.error(`[Sticker Cache] Failed to save ${cachePath}:`, err);
-        });
-
+      // 1. Check Cache
+      const stats = await fs.stat(cachePath).catch(() => null);
+      if (stats) {
+        console.log(`[Sticker Cache] HIT for ${url}`);
+        const buffer = await fs.readFile(cachePath);
         reply.header("Content-Type", "image/webp");
         reply.header("Cache-Control", "public, max-age=31536000, immutable");
-        return reply.send(finalBuffer);
-    } catch (err) {
-        console.error(`[Sticker Cache] Error processing ${url}:`, err);
-        return reply.code(500).send({ error: "Failed to render sticker" });
+        return reply.send(buffer);
+      }
+
+      // 2. Cache MISS -> Call Renderer
+      console.log(`[Sticker Cache] MISS for ${url}, calling renderer...`);
+      const rendererUrl = `http://sticker-renderer:3000/render?url=${encodeURIComponent(url)}`;
+      const response = await fetch(rendererUrl);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "No error body");
+        throw new Error(`Renderer failed (${response.status}): ${errorText}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      const finalBuffer = Buffer.from(buffer);
+
+      // 3. Save to Cache (Background)
+      fs.writeFile(cachePath, finalBuffer).catch(err => {
+        console.error(`[Sticker Cache] Failed to save ${cachePath}:`, err);
+      });
+
+      reply.header("Content-Type", "image/webp");
+      reply.header("Cache-Control", "public, max-age=31536000, immutable");
+      return reply.send(finalBuffer);
+    } catch (err: any) {
+      console.error(`[Media] Sticker request error:`, err);
+      if (err instanceof z.ZodError) {
+        return reply.code(400).send({ error: "Invalid URL parameter" });
+      }
+      return reply.code(500).send({ error: "Failed to render sticker" });
     }
-  });
+  }
 
   app.get("/v1/media/proxy", async (request, reply) => {
     console.log(`[Media] GET /v1/media/proxy - URL: ${request.query && (request.query as any).url}`);

@@ -8,6 +8,8 @@ import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { registerDomainRoutes } from "./routes/domain-routes.js";
 import { registerMediaRoutes } from "./routes/media-routes.js";
 import { config } from "./config.js";
+console.log(`[Config] Web Base URL: ${config.webBaseUrl}`);
+console.log(`[Config] Rate Limit: ${config.rateLimitPerMinute}`);
 import { logEvent, httpRequestsTotal, httpRequestDurationSeconds } from "./services/observability-service.js";
 
 declare module "fastify" {
@@ -66,6 +68,7 @@ export async function buildApp() {
   });
 
   app.addHook("onRequest", async (request) => {
+    console.log(`[DEBUG] Incoming Request: ${request.method} ${request.url}`);
     request.startTime = Date.now();
   });
 
