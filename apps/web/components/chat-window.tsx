@@ -19,6 +19,8 @@ import DOMPurify from "dompurify";
 import { LandingJoinButton } from "./landing-join-button";
 import { LandingPageView } from "./landing-page-view";
 import { GifPlayer } from "./gif-player";
+import { useIntersectionObserver } from "../hooks/use-intersection-observer";
+import { fetchLottieData } from "../lib/lottie-cache";
 
 
 
@@ -101,41 +103,60 @@ const getProxiedUrl = (url: string) => {
 function LottieSticker({ url }: { url: string }) {
     const [animationData, setAnimationData] = useState<any>(null);
     const [error, setError] = useState(false);
+    const [ref, isVisible] = useIntersectionObserver<HTMLDivElement>({ rootMargin: "200px" });
+
+    // Mutation Detector: Check if the library is modifying our cached data
+    useEffect(() => {
+        if (!animationData || !isVisible) return;
+        
+        const initialKeys = Object.keys(animationData).length;
+        const initialString = JSON.stringify(animationData).length;
+        
+        const timer = setTimeout(() => {
+            const currentKeys = Object.keys(animationData).length;
+            const currentString = JSON.stringify(animationData).length;
+            
+            if (currentKeys !== initialKeys || currentString !== initialString) {
+                console.warn(`[Lottie Leak Detector] Mutation detected for ${url.slice(-30)}: 
+                    Keys: ${initialKeys} -> ${currentKeys}
+                    Size: ${initialString} -> ${currentString}
+                    This confirms a shared object memory leak.`);
+            }
+        }, 5000); // Check after 5 seconds of visibility
+        
+        return () => clearTimeout(timer);
+    }, [animationData, isVisible, url]);
 
     useEffect(() => {
-        const tryFetch = (fetchUrl: string, isFallback: boolean = false) => {
-            fetch(fetchUrl, { mode: 'cors', cache: 'default' })
-                .then(res => {
-                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                    return res.text();
-                })
-                .then(text => {
-                    try {
-                        const data = JSON.parse(text);
-                        setAnimationData(data);
-                        setError(false);
-                    } catch (e) {
-                        throw new Error("Invalid JSON data");
-                    }
-                })
-                .catch(err => {
-                    console.warn(`LottieSticker: Failed to load from ${isFallback ? 'proxy' : 'direct'}: ${fetchUrl}`, err);
-                    if (!isFallback) {
-                        const proxiedUrl = getProxiedUrl(url);
-                        if (proxiedUrl !== url) {
-                            tryFetch(proxiedUrl, true);
-                        } else {
-                            setError(true);
-                        }
+        const controller = new AbortController();
+
+        const loadSticker = async (fetchUrl: string, isFallback: boolean = false) => {
+            try {
+                const data = await fetchLottieData(fetchUrl, controller.signal);
+                setAnimationData(data);
+                setError(false);
+            } catch (err: any) {
+                if (err.name === 'AbortError') return;
+                
+                console.warn(`LottieSticker: Failed to load from ${isFallback ? 'proxy' : 'direct'}: ${fetchUrl}`, err);
+                if (!isFallback) {
+                    const proxiedUrl = getProxiedUrl(url);
+                    if (proxiedUrl !== url) {
+                        void loadSticker(proxiedUrl, true);
                     } else {
                         setError(true);
                     }
-                });
+                } else {
+                    setError(true);
+                }
+            }
         };
 
-        // If it's a discord sticker, try cdn.discordapp.com directly first (might work if CORS is open on their CDN)
-        // If it fails (due to CORS or 403), the fallback will use the proxy.
-        tryFetch(url);
+        void loadSticker(url);
+
+        return () => {
+            controller.abort();
+        };
     }, [url]);
 
     if (error) {
@@ -151,12 +172,16 @@ function LottieSticker({ url }: { url: string }) {
     }
 
     return (
-        <Lottie 
-            animationData={animationData} 
-            loop={true} 
-            style={{ width: 160, height: 160 }} 
-            rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
-        />
+        <div ref={ref} style={{ width: 160, height: 160 }}>
+            {isVisible && (
+                <Lottie 
+                    animationData={animationData} 
+                    loop={true} 
+                    style={{ width: "100%", height: "100%" }} 
+                    rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
+                />
+            )}
+        </div>
     );
 };
 

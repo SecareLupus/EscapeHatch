@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useIntersectionObserver } from "../hooks/use-intersection-observer";
 
 interface GifPlayerProps {
     src: string;
@@ -16,22 +17,39 @@ interface GifPlayerProps {
  */
 export function GifPlayer({ src, alt, className, style, onClick }: GifPlayerProps) {
     const [useVideo, setUseVideo] = useState(false);
+    const [ref, isVisible] = useIntersectionObserver<HTMLDivElement>({ rootMargin: "200px" });
+    const videoRef = useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        if (useVideo && videoRef.current) {
+            if (isVisible) {
+                console.log(`[GifPlayer] Resuming visible video: ${src.slice(-30)}`);
+                void videoRef.current.play().catch(() => {
+                    // Ignore autoplay blocks
+                });
+            } else {
+                console.log(`[GifPlayer] Pausing off-screen video: ${src.slice(-30)}`);
+                videoRef.current.pause();
+            }
+        }
+    }, [isVisible, useVideo, src]);
 
     if (useVideo) {
         return (
-            <video
-                src={src}
-                className={className}
-                style={{ ...style, display: "block", objectFit: "contain" }}
-                autoPlay
-                loop
-                muted
-                playsInline
-                onClick={onClick}
-                onError={() => {
-                    console.error("GifPlayer: Both image and video failed to load", src);
-                }}
-            />
+            <div ref={ref} className={className} style={{ ...style, display: "contents" }}>
+                <video
+                    ref={videoRef}
+                    src={src}
+                    style={{ ...style, display: "block", objectFit: "contain", width: "100%", height: "100%" }}
+                    loop
+                    muted
+                    playsInline
+                    onClick={onClick}
+                    onError={() => {
+                        console.error("GifPlayer: Both image and video failed to load", src);
+                    }}
+                />
+            </div>
         );
     }
 
