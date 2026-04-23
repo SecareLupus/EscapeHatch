@@ -18,38 +18,30 @@ interface GifPlayerProps {
 export function GifPlayer({ src, alt, className, style, onClick }: GifPlayerProps) {
     const [useVideo, setUseVideo] = useState(false);
     const [ref, isVisible] = useIntersectionObserver<HTMLDivElement>({ rootMargin: "200px" });
-    const videoRef = useRef<HTMLVideoElement>(null);
 
+    // Passive log to test if visibility detection works without pausing
     useEffect(() => {
-        if (useVideo && videoRef.current) {
-            if (isVisible) {
-                console.log(`[GifPlayer] Resuming visible video: ${src.slice(-30)}`);
-                void videoRef.current.play().catch(() => {
-                    // Ignore autoplay blocks
-                });
-            } else {
-                console.log(`[GifPlayer] Pausing off-screen video: ${src.slice(-30)}`);
-                videoRef.current.pause();
-            }
+        if (useVideo) {
+            console.log(`[GifPlayer Test] ${isVisible ? 'VISIBLE' : 'HIDDEN'}: ${src.slice(-30)}`);
         }
     }, [isVisible, useVideo, src]);
 
     if (useVideo) {
         return (
-            <div ref={ref} className={className} style={{ ...style, display: "contents" }}>
-                <video
-                    ref={videoRef}
-                    src={src}
-                    style={{ ...style, display: "block", objectFit: "contain", width: "100%", height: "100%" }}
-                    loop
-                    muted
-                    playsInline
-                    onClick={onClick}
-                    onError={() => {
-                        console.error("GifPlayer: Both image and video failed to load", src);
-                    }}
-                />
-            </div>
+            <video
+                ref={ref as any}
+                src={src}
+                className={className}
+                style={{ ...style, display: "block", objectFit: "contain" }}
+                autoPlay
+                loop
+                muted
+                playsInline
+                onClick={onClick}
+                onError={() => {
+                    console.error("GifPlayer: Both image and video failed to load", src);
+                }}
+            />
         );
     }
 
