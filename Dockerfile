@@ -33,11 +33,12 @@ RUN apt-get update && apt-get install -y ffmpeg python3 python3-pip python3-venv
 
 # Use a virtual environment for python
 RUN python3 -m venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install rlottie-python and verify it works
-RUN pip install rlottie-python && \
-    python3 -c "import rlottie; print('rlottie version:', rlottie.__version__ if hasattr(rlottie, '__version__') else 'installed')"
+# Install rlottie-python using absolute path and verify
+RUN /opt/venv/bin/pip install rlottie-python && \
+    /opt/venv/bin/python3 -c "import rlottie; print('Import worked!')"
 
 RUN npm install -g pnpm@9.12.2
 ENV PNPM_HOME="/pnpm"
