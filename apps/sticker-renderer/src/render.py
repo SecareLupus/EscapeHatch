@@ -17,9 +17,8 @@ def render():
 
     width, height = 160, 160
     total_frames = anim.lottie_animation_get_totalframe()
-    
-    # We cap frames to 60 for performance/size
     render_frames = min(total_frames, 60)
+    sys.stderr.write(f"Total frames: {total_frames}, Rendering: {render_frames}\n")
     
     for i in range(render_frames):
         # The documentation shows lottie_animation_render(frame_num=i) returns a BGRA buffer

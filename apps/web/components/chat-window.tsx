@@ -105,7 +105,7 @@ function LottieSticker({ url }: { url: string }) {
     console.log("[LottieSticker] Target stickerUrl (extension-less):", stickerUrl);
 
     return (
-        <div style={{ width: 160, height: 160, borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.05)", position: "relative", zIndex: 10 }}>
+        <div style={{ width: 160, height: 160, borderRadius: 8, overflow: "hidden", position: "relative", zIndex: 10 }}>
             <img 
                 src={stickerUrl} 
                 alt="Sticker"
@@ -1253,9 +1253,7 @@ export function ChatWindow({
                                                                 {isActuallySticker ? (
                                                                     <div className="sticker-container" style={{ 
                                                                         width: "160px", 
-                                                                        height: "160px", 
-                                                                        border: "2px solid red",
-                                                                        background: "rgba(255,0,0,0.1)"
+                                                                        height: "160px"
                                                                     }}>
                                                                         {isLottie ? (
                                                                             <LottieSticker url={normalizedUrl} />

@@ -12,8 +12,9 @@ export async function initBrowser() {
     return null;
 }
 
-export async function renderLottieToWebP(url: string): Promise<Buffer> {
-    console.log(`[Sticker Renderer] Native render starting for ${url}`);
+export async function renderLottieToWebP(urlInput: string | any): Promise<Buffer> {
+    const url = typeof urlInput === 'object' && urlInput !== null ? (urlInput.url || JSON.stringify(urlInput)) : urlInput;
+    console.log(`[Sticker Renderer] Native render starting for ${url} (type: ${typeof urlInput})`);
     
     // 1. Fetch the Lottie JSON
     const { data: lottieJson } = await axios.get(url, { 
