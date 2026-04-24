@@ -54,8 +54,8 @@ test("Masquerade: admin masquerading as user with badge can see hidden channel",
   await pool!.query("insert into channels (id, server_id, name, type, visitor_access) values ('chn_hidden', 'srv_badge', 'top-secret', 'text', 'hidden')", []);
 
   // Create a badge and a rule that grants access to the hidden channel
-  await pool!.query("insert into badges (id, server_id, name, rank) values ('bdg_vip', 'srv_badge', 'VIP', 10)", []);
-  await pool!.query("insert into channel_badge_rules (channel_id, badge_id, access_level) values ('chn_hidden', 'bdg_vip', 'chat')", []);
+  await pool!.query("insert into badges (id, hub_id, server_id, name, rank) values ('bdg_vip', 'hub_3', 'srv_badge', 'VIP', 10)", []);
+  await pool!.query("insert into channel_badge_rules (id, channel_id, badge_id, access_level) values ('cbr_hidden_vip', 'chn_hidden', 'bdg_vip', 'chat')", []);
 
   // First verify: masquerading as visitor (no badge) -> channel is hidden
   const visitorCookie = createAuthCookie({

@@ -983,6 +983,24 @@ test("read-state mention markers and voice presence flows work for scoped users"
     });
     assert.equal(grantMemberRoleResponse.statusCode, 204);
 
+    // Role grants don't imply membership — the policy engine resolves access
+    // via hub_members / server_members. Normally `joinHub()` is called during
+    // invite redemption; here we shortcut and insert directly.
+    const ctxRes = await app.inject({
+      method: "GET",
+      url: "/v1/bootstrap/context",
+      headers: { cookie: adminCookie }
+    });
+    const hubId = ctxRes.json().hubId as string;
+    await pool.query(
+      "insert into hub_members (hub_id, product_user_id) values ($1, $2) on conflict do nothing",
+      [hubId, memberIdentity.productUserId]
+    );
+    await pool.query(
+      "insert into server_members (server_id, product_user_id) values ($1, $2) on conflict do nothing",
+      [bootstrapBody.defaultServerId, memberIdentity.productUserId]
+    );
+
     const sendMentionResponse = await app.inject({
       method: "POST",
       url: `/v1/channels/${bootstrapBody.defaultChannelId}/messages`,

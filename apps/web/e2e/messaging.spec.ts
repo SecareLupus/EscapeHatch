@@ -6,6 +6,7 @@ import {
   selectChannelByName,
   openDetailsDrawer,
   waitForStatusLive,
+  typeAndSubmit,
 } from './helpers';
 
 /**
@@ -78,12 +79,8 @@ test.describe('Messaging', () => {
 
   test('real-time: Member B message appears live in Admin view', async ({ page }) => {
     const composerB = pageB.locator('textarea[placeholder*="Message"]');
-    await expect(composerB).toBeVisible({ timeout: 15000 });
-    await pageB.waitForTimeout(500);
-
     const msg = `Hello from Member B! ${Date.now()}`;
-    await composerB.fill(msg);
-    await pageB.keyboard.press('Enter');
+    await typeAndSubmit(pageB, composerB, msg);
 
     await expect(pageB.locator(`text="${msg}"`).first()).toBeVisible({ timeout: 15000 });
     await expect(page.locator(`text="${msg}"`).first()).toBeVisible({ timeout: 15000 });
@@ -94,8 +91,7 @@ test.describe('Messaging', () => {
     const ts = Date.now();
     const md = `**Bold Text** ${ts} and [Skerry Link](https://skerry.io)`;
 
-    await composer.fill(md);
-    await composer.press('Enter');
+    await typeAndSubmit(page, composer, md);
 
     const msg = page.locator(`[data-testid="message-item"]:has-text("${ts}")`).first();
     await expect(msg).toBeVisible({ timeout: 15000 });
@@ -106,8 +102,7 @@ test.describe('Messaging', () => {
   test('lifecycle: admin can edit and delete their own message', async ({ page }) => {
     const composer = page.locator('textarea[placeholder*="Message"]');
     const original = `Lifecycle test ${Date.now()}`;
-    await composer.fill(original);
-    await composer.press('Enter');
+    await typeAndSubmit(page, composer, original);
 
     const message = page.locator(`[data-testid="message-item"]:has-text("${original}")`).first();
     await expect(message).toBeVisible();
@@ -117,10 +112,8 @@ test.describe('Messaging', () => {
     await page.getByRole('button', { name: 'Edit Message' }).click();
 
     const editArea = page.locator('.edit-textarea');
-    await expect(editArea).toBeVisible({ timeout: 10000 });
     const edited = `Edited Lifecycle ${Date.now()}`;
-    await editArea.fill(edited);
-    await editArea.press('Enter');
+    await typeAndSubmit(page, editArea, edited);
 
     await expect(page.locator(`text="${edited}"`)).toBeVisible();
     await expect(page.locator(`text="${original}"`)).not.toBeVisible();

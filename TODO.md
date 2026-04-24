@@ -303,6 +303,10 @@ _Items prioritized during the Refactoring Sprint triage._
 - [ ] **Move `config.discordBridge.mockMode = true` out of module-load** — relies on test file import order. A Node test-runner `before()` hook or a dedicated `test/setup.ts` loaded via `--import` is safer.
 - [ ] **Split oversized test files** — [`integration-auth-chat-permissions.test.ts`](apps/control-plane/src/test/integration-auth-chat-permissions.test.ts) (1,415 LOC) and [`message-crud.test.ts`](apps/control-plane/src/test/message-crud.test.ts) (770 LOC) mix unrelated concerns. Split by feature area so failures are easier to locate.
 
+### Performance
+
+- [x] **Collapse pool idle timeout in tests** — [`db/client.ts`](apps/control-plane/src/db/client.ts) set `idleTimeoutMillis: 500` when `NODE_ENV=test`. Each test file was holding the process open for ~30s after the last assertion waiting for idle pg connections to drain; control-plane suite dropped from ~11.5 min to ~2 min.
+
 ### Flakiness
 
 - [x] **Fix event-stream races** — added [`test/helpers/events.ts`](apps/control-plane/src/test/helpers/events.ts) with `captureEvents()` that collects into an array and provides `expect(eventName)` membership-matching. Migrated `realtime-sync.test.ts` (3 tests); `notifications.test.ts` uses HTTP assertions, no subscribe-style capture.

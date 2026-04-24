@@ -6,5 +6,6 @@ export {
   selectChannelByName,
   openDetailsDrawer,
   waitForStatusLive,
+  typeAndSubmit,
 } from './navigation';
 export { createSpace, createTextRoom, bootstrapSpaceWithChannel } from './setup';

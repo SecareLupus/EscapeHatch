@@ -55,3 +55,22 @@ export async function openDetailsDrawer(page: Page): Promise<void> {
 export async function waitForStatusLive(page: Page): Promise<void> {
   await expect(page.locator('.status-pill[data-state="live"]')).toBeVisible({ timeout: 20000 });
 }
+
+/**
+ * Fills a textarea and submits via Enter, guarding against the React race
+ * where `keyboard.press('Enter')` can fire before the controlled-component
+ * state commit from `fill()`. The composer's Enter handler reads `value`
+ * from React state, not the DOM; if the state is still stale, the submit
+ * silently no-ops. Waiting for the controlled-component echo fixes this.
+ */
+export async function typeAndSubmit(
+  page: Page,
+  composer: ReturnType<Page['locator']>,
+  text: string
+): Promise<void> {
+  await expect(composer).toBeEnabled({ timeout: 15000 });
+  await composer.click();
+  await composer.fill(text);
+  await expect(composer).toHaveValue(text, { timeout: 5000 });
+  await page.keyboard.press('Enter');
+}

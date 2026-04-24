@@ -1,8 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { config } from "../config.js";
 import { initDb, pool } from "../db/client.js";
 import { upsertIdentityMapping, getIdentityByProductUserId, ensureIdentityTokenValid } from "../services/identity-service.js";
 import { isTokenExpired } from "../auth/oidc.js";
+
+// `refreshDiscordToken()` throws early if client creds are missing. Inject
+// placeholders so it falls through to the mocked global fetch instead.
+config.oidc.discordClientId = config.oidc.discordClientId ?? "test_discord_client";
+config.oidc.discordClientSecret = config.oidc.discordClientSecret ?? "test_discord_secret";
 
 async function resetDb(): Promise<void> {
     if (!pool) return;
