@@ -98,11 +98,9 @@ const getProxiedUrl = (url: string) => {
     return normalized;
 };
 
-function LottieSticker({ url }: { url: string }) {
-    console.log("[LottieSticker] Rendering with URL:", url);
+const LottieSticker = React.memo(({ url }: { url: string }) => {
     const controlPlaneUrl = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || "";
     const stickerUrl = `${controlPlaneUrl}/v1/media/sticker?url=${encodeURIComponent(url)}`;
-    console.log("[LottieSticker] Target stickerUrl (extension-less):", stickerUrl);
 
     return (
         <div style={{ width: 160, height: 160, borderRadius: 8, overflow: "hidden", position: "relative", zIndex: 10 }}>
@@ -110,7 +108,6 @@ function LottieSticker({ url }: { url: string }) {
                 src={stickerUrl} 
                 alt="Sticker"
                 style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", position: "relative", zIndex: 11 }}
-                onLoad={() => console.log("[LottieSticker] Successfully loaded:", stickerUrl)}
                 onError={(e) => {
                     console.error("[LottieSticker] Failed to load:", stickerUrl);
                     // Fallback to error message if WebP fails
@@ -124,7 +121,7 @@ function LottieSticker({ url }: { url: string }) {
             />
         </div>
     );
-}
+});
 
 function MessageContent({ message, hiddenUrls = [] }: { message: MessageItem; hiddenUrls?: string[] }) {
     const { state } = useChat();
@@ -1239,14 +1236,7 @@ export function ChatWindow({
                                                         const isActuallySticker = att.isSticker || normalizedUrl.includes("/stickers/");
                                                         const isLottie = normalizedUrl.endsWith(".json") || (att.sourceUrl?.split('?')[0]?.endsWith(".json") ?? false);
                                                         
-                                                        console.log("[ChatWindow] Rendering attachment:", { 
-                                                            id: att.id, 
-                                                            isSticker: att.isSticker, 
-                                                            isActuallySticker,
-                                                            isLottie,
-                                                            url: att.url, 
-                                                            sourceUrl: att.sourceUrl 
-                                                        });
+
                                                         
                                                         return (
                                                             <div key={att.id} className={`attachment ${isActuallySticker ? 'sticker' : ''}`}>
