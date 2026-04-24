@@ -2,41 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../app.js";
 import { config } from "../config.js";
-import { createSessionToken } from "../auth/session.js";
 import { initDb, pool } from "../db/client.js";
 import { upsertIdentityMapping } from "../services/identity-service.js";
-
-async function resetDb(): Promise<void> {
-  if (!pool) return;
-  await pool.query("begin");
-  try {
-    await pool.query("delete from mention_markers");
-    await pool.query("delete from channel_read_states");
-    await pool.query("delete from chat_messages");
-    await pool.query("delete from channels");
-    await pool.query("delete from categories");
-    await pool.query("delete from servers");
-    await pool.query("delete from hubs");
-    await pool.query("delete from identity_mappings");
-    await pool.query(
-      "update platform_settings set bootstrap_completed_at = null, bootstrap_admin_user_id = null, bootstrap_hub_id = null, default_server_id = null, default_channel_id = null where id = 'global'"
-    );
-    await pool.query("commit");
-  } catch (error) {
-    await pool.query("rollback");
-    throw error;
-  }
-}
-
-function createAuthCookie(productUserId: string): string {
-  const token = createSessionToken({
-    productUserId,
-    provider: "dev",
-    oidcSubject: `sub_${productUserId.replaceAll("-", "")}`,
-    expiresAt: Date.now() + 60 * 60 * 1000
-  });
-  return `skerry_session=${token}`;
-}
+import { resetDb } from "./helpers/reset-db.js";
+import { createAuthCookie } from "./helpers/auth.js";
 
 test("notifications summary returns unread counts and mentions", async (t) => {
   if (!pool) {

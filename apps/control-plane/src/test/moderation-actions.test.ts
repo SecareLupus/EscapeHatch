@@ -2,136 +2,30 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../app.js";
 import { config } from "../config.js";
-import { createSessionToken } from "../auth/session.js";
 import { initDb, pool } from "../db/client.js";
 import { upsertIdentityMapping } from "../services/identity-service.js";
+import { resetDb as resetDbRaw } from "./helpers/reset-db.js";
+import { createAuthCookie } from "./helpers/auth.js";
+import { bootstrapWithMember as bootstrapWithMemberHelper } from "./helpers/bootstrap.js";
 
 config.discordBridge.mockMode = true;
 
 async function resetDb(): Promise<void> {
-  if (!pool) return;
-  await pool.query("begin");
-  try {
-    await pool.query(`
-      truncate table 
-        moderation_warnings,
-        moderation_strikes,
-        moderation_actions,
-        moderation_reports,
-        discord_bridge_channel_mappings,
-        discord_bridge_connections,
-        federation_policy_events,
-        room_acl_status,
-        hub_federation_policies,
-        delegation_audit_events,
-        space_admin_assignments,
-        role_assignment_audit_logs,
-        role_bindings,
-        chat_messages,
-        channels,
-        categories,
-        servers,
-        hubs,
-        identity_mappings,
-        idempotency_keys
-      restart identity cascade`);
-    await pool.query(
-      "update platform_settings set bootstrap_completed_at = null, bootstrap_admin_user_id = null, bootstrap_hub_id = null, default_server_id = null, default_channel_id = null where id = 'global'"
-    );
-    await pool.query("commit");
-    await resetInternalState();
-  } catch (error) {
-    await pool.query("rollback");
-    throw error;
-  }
-}
-
-async function resetInternalState(): Promise<void> {
+  await resetDbRaw();
   const { resetModerationServiceInternalState } = await import("../services/moderation-service.js");
   resetModerationServiceInternalState();
 }
 
-function createAuthCookie(input: {
-  productUserId: string;
-  provider?: string;
-  oidcSubject?: string;
-}): string {
-  const token = createSessionToken({
-    productUserId: input.productUserId,
-    provider: input.provider ?? "dev",
-    oidcSubject: input.oidcSubject ?? `sub_${input.productUserId}`,
-    expiresAt: Date.now() + 60 * 60 * 1000
+const bootstrapWithMember = (
+  app: Awaited<ReturnType<typeof buildApp>>,
+  uniquePrefix: string
+) =>
+  bootstrapWithMemberHelper(app, {
+    prefix: uniquePrefix,
+    hubName: `${uniquePrefix} Hub`,
+    allowExisting: true,
+    attachMatrixIds: true,
   });
-  return `skerry_session=${token}`;
-}
-
-/** Boots a fresh hub and returns commonly needed IDs */
-async function bootstrapWithMember(app: Awaited<ReturnType<typeof buildApp>>, uniquePrefix: string) {
-  const adminIdentity = await upsertIdentityMapping({
-    provider: "dev",
-    oidcSubject: `${uniquePrefix}_admin`,
-    email: `${uniquePrefix}-admin@dev.local`,
-    preferredUsername: `${uniquePrefix}-admin`,
-    avatarUrl: null
-  });
-  const adminCookie = createAuthCookie({
-    productUserId: adminIdentity.productUserId,
-    provider: "dev",
-    oidcSubject: `${uniquePrefix}_admin`
-  });
-
-  const bsRes = await app.inject({
-    method: "POST",
-    url: "/auth/bootstrap-admin",
-    headers: { cookie: adminCookie },
-    payload: { setupToken: config.setupBootstrapToken, hubName: `${uniquePrefix} Hub` }
-  });
-  // Allow 201 (Created) or 409 (Conflict/Already exists)
-  if (bsRes.statusCode !== 201 && bsRes.statusCode !== 409) {
-    assert.fail(`Bootstrap failed with ${bsRes.statusCode}: ${bsRes.body}`);
-  }
-  const { defaultServerId, defaultChannelId } = bsRes.json() as {
-    defaultServerId: string;
-    defaultChannelId: string;
-  };
-
-  const ctxRes = await app.inject({
-    method: "GET",
-    url: "/v1/bootstrap/context",
-    headers: { cookie: adminCookie }
-  });
-  const hubId = ctxRes.json().hubId as string;
-
-  const memberIdentity = await upsertIdentityMapping({
-    provider: "dev",
-    oidcSubject: `${uniquePrefix}_member`,
-    email: `${uniquePrefix}-member@dev.local`,
-    preferredUsername: `${uniquePrefix}-member`,
-    avatarUrl: null
-  });
-  const memberCookie = createAuthCookie({
-    productUserId: memberIdentity.productUserId,
-    provider: "dev",
-    oidcSubject: `${uniquePrefix}_member`
-  });
-
-  // Give member a 'user' role so they're a hub member
-  await app.inject({
-    method: "POST",
-    url: "/v1/roles/grant",
-    headers: { cookie: adminCookie },
-    payload: {
-      productUserId: memberIdentity.productUserId,
-      role: "user",
-      serverId: defaultServerId
-    }
-  });
-
-  await pool!.query("update servers set matrix_space_id = $1 where id = $2", ["!testspace:dev.local", defaultServerId]);
-  await pool!.query("update channels set matrix_room_id = $1 where id = $2", ["!testroom:dev.local", defaultChannelId]);
-
-  return { adminIdentity, adminCookie, memberIdentity, memberCookie, defaultServerId, defaultChannelId, hubId };
-}
 
 // ---------------------------------------------------------------------------
 

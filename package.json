@@ -14,7 +14,7 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @skerry/web test:e2e",
     "test:e2e:reset": "bash scripts/reset-test-env.sh",
-    "test:e2e:run": "pnpm run test:e2e:reset && pnpm test:e2e -- e2e/sequence-a-community-lifecycle.spec.ts",
+    "test:e2e:run": "pnpm run test:e2e:reset && pnpm test:e2e",
     "test:all": "pnpm test && pnpm test:e2e"
   },
   "dependencies": {

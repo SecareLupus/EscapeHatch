@@ -146,6 +146,7 @@ All Tier 1 blockers from the Feb 28 report are resolved. This roadmap covers the
 ## Current Sprint Focus
 
 Current focus is **Phase 20** (Moderation Hardening) and **Phase 23** (Extensions & Ecosystem).
+
 - [x] Phase 19: Rich Media & Embeds (URL previews, image lightbox, video previews, GIF support)
 - [x] Phase 22: Test Coverage Expansion
 
@@ -169,9 +170,10 @@ Current focus is **Phase 20** (Moderation Hardening) and **Phase 23** (Extension
 
 ## Phase 25 — Triage Backlog
 
-*Items prioritized during the Refactoring Sprint triage.*
+_Items prioritized during the Refactoring Sprint triage._
 
 ### 🚨 Tier 1: Critical Blockers
+
 - [x] **Fix Page Navigation Flashing (#29)** — Eliminate the back-and-forth flashing behavior when switching between rooms or servers.
 - [x] **VC Reliability (#13)** — Fix dropping connections (LiveKit/WebRTC debugging required).
 - [x] **Discord Bridging Refactor (#24)** — Implement dynamic message ID mapping for deletions and editing.
@@ -179,12 +181,14 @@ Current focus is **Phase 20** (Moderation Hardening) and **Phase 23** (Extension
 - [x] **Real-time Message Sync Regression (#30)** — Fix issue where messages/edits/deletions don't appear until page refresh (SSE/EventBus).
 
 ### 🔧 Tier 2: Core UX Bugs
+
 - [x] **Threaded Conversations (#27)** — Fix missing moderation/context menus for threaded replies.
 - [x] **Invite Link Generation (#23)** — Current generated links need a functional contract defining what they do and are for.
 - [x] **Settings Theme Sync (#21)** — Fix state desync where settings page drops dark/light preference.
 - [x] **OAuth Mapping (#9)** — Fix "Guest" issue when linking Twitch after Discord.
 
 ### 🏗️ Tier 3: Medium Features & Polish
+
 - [x] **Discord Content Bridging (#18, #26)** — Fix block quote rendering and implement sticker/emoji support.
 - [ ] **Discord Bridge OAuth Flow (#22)** — Refactor connection UX to prevent losing place in menus.
 - [x] **Twitch Integration UI (#6)** — Fixed alignment and asset issues with Twitch logo on login.
@@ -201,9 +205,139 @@ Current focus is **Phase 20** (Moderation Hardening) and **Phase 23** (Extension
 - [ ] **Deeper Client Isolation** — Maintain strict boundaries between `useChat` hooks and `<ChatClient />` DOM tree across all new features.
 - [ ] **E2E Testing Expansion** — Implement automated headless Cypress/Playwright assertions for isolated Modals and UI triggers.
 - [x] **Video Chat Reliability** — Fix camera preview and subscription bugs (Event listener overhaul).
+
 ### Video Chat Enhancements
+
 - [x] Implement Track-based rendering in `VoiceRoom` (Camera + Screen)
 - [x] Create `VoiceSettingsModal` for device management
 - [x] Implement Stage Layout (Focus Mode)
 - [x] Add Picture-in-Picture (PiP) support
+- [ ] **Voice join redirects to home hub from cold context** — clicking "Join Voice" after a fresh bootstrap flashes `data-voice-connected=true` briefly, then the page navigates back to `General Server / #general` and the voice-room never fully mounts. Previously masked because the monolithic E2E spec only exercised voice join after several warmup steps. See `test.fixme` in [apps/web/e2e/community.spec.ts](apps/web/e2e/community.spec.ts).
 - [ ] Implement "Sing-along" Latency Monitoring Mode (Deferred) Implement Web Audio DelayNode loopback to allow synchronized singing/monitoring with network latency.
+
+---
+
+## Pre-Release List
+
+### Bugs
+
+- [ ] **Sticker cache permission errors** — 6 failing tests trace to [`media-routes.ts:21-25`](apps/control-plane/src/routes/media-routes.ts#L21-L25); `fs.mkdir("/app/cache/stickers")` fails with `EACCES` and lacks fallback.
+- [ ] **Sticker cache race condition** — [`media-routes.ts:105`](apps/control-plane/src/routes/media-routes.ts#L105): `fs.writeFile(...).catch(...)` not awaited; subsequent requests may hit empty/partial cache.
+- [ ] **Silent poll failures** — [`use-chat-realtime.ts:101`](apps/web/src/hooks/use-chat-realtime.ts#L101): `.catch(() => {})` swallows errors; no retry or user notification.
+- [ ] **Stray `console.log` calls** — 179 instances in production paths (`media-routes`, `discord-bridge-service`).
+- [ ] **Unsafe type casts** — 39 `any` casts in control-plane + 15+ `as any` in web (e.g. [`voice-room.tsx:38`](apps/web/src/components/voice-room.tsx#L38) `grant as any`).
+
+### Optimizations
+
+- [ ] **Split `chat-window.tsx`** — 1,828 LOC with 11 `useEffect` + 7 `useMemo`.
+- [ ] **Simplify URL sync** — [`chat-client.tsx:531-582`](apps/web/src/components/chat-client.tsx#L531-L582): 5 interconnected refs; brittle and re-render-prone.
+- [ ] **Gate polling on SSE state** — [`use-chat-realtime.ts:102`](apps/web/src/hooks/use-chat-realtime.ts#L102): 3-second polling fallback can run alongside SSE on reconnect.
+- [ ] **Add LRU/size cap to sticker cache** — currently unbounded disk growth.
+
+### Duplicate Code
+
+- [ ] **MD5 hashing** — repeated in `media-routes`; extract to a shared util.
+- [ ] **Media URL normalization** — [`chat-window.tsx:61-76`](apps/web/src/components/chat-window.tsx#L61-L76) (`normalizeMediaUrl()` / `getProxiedUrl()`) duplicates server-side logic in `media-routes`.
+- [ ] **Discord permission checks** — duplicated between bridge service and bot client.
+- [ ] **Reaction rendering** — duplicated across `chat-window` and `thread-panel`; extract a `<Reactions>` component.
+
+### Missing Features
+
+- [ ] **Report Triage UI** (Phase 20) — admins can't review reports.
+- [ ] **Email notifications for @mentions** (Phase 21).
+- [ ] **SEO metadata, PWA, custom domains** (Phase 24).
+- [ ] **Discord OAuth UX polish** (Phase 25).
+- [ ] **Loading state in `VoiceRoom`** — while fetching LiveKit token.
+- [ ] **Debounce search modal** input.
+- [ ] **Expand E2E coverage** — currently limited to one sequence; no moderation/voice/federation specs.
+
+### Industry-Standard Gaps
+
+- [ ] **Message edit history** — show "edited" with a diff/timestamp on hover.
+- [ ] **Pinned messages per channel** — with a "view all pins" drawer.
+- [ ] **Slash commands** — beyond basic (`/shrug`, `/giphy`, custom webhooks, user-defined).
+- [ ] **Scheduled messages** — compose now, send later.
+- [ ] **Read receipts / last-read markers** — a "new messages" divider that persists across sessions.
+- [ ] **Rich link unfurling** — OpenGraph previews with thumbnail, title, description.
+- [ ] **Drafts per channel** — don't lose typed content when switching rooms.
+- [ ] **Mute granularity** — 1h / 8h / 24h / until morning, not just on/off.
+- [ ] **Do Not Disturb schedules** — status (away/busy/invisible) with auto-responses.
+- [ ] **Code block syntax highlighting + copy button**.
+- [ ] **Message forwarding** — across channels and DMs.
+- [ ] **Native polls** — in messages (Discord/Slack both have them).
+- [ ] **Voice messages** — record & send audio clips inline.
+- [ ] **Screen sharing + server-side recording** — LiveKit already present; recording is a config away.
+- [ ] **Accessibility audit** — keyboard-only navigation, ARIA on message list virtualization, reduced-motion for sticker animations, screen reader support for reactions.
+- [ ] **Mobile web PWA with push notifications**.
+- [ ] **2FA / passkeys** — WebAuthn support.
+- [ ] **Session management UI** — "log out other devices".
+- [ ] **Data export** — GDPR-compliant message download.
+- [ ] **Bulk moderation tools** — select N messages; delete/move; timeout by pattern.
+- [ ] **Audit log** — visible to admins.
+- [ ] **Invite analytics** — track which invite link brought which users.
+
+### Differentiators / Innovative Ideas
+
+- [ ] **AI thread summaries** — "catch me up on the last 200 messages" using the existing Anthropic stack.
+- [ ] **Semantic search** — embeddings-based, beats keyword-only search by a wide margin.
+- [ ] **AI-assisted moderation** — auto-flag harassment/spam for the Report Triage UI.
+- [ ] **Smart notifications** — learn which channels a user actually engages with; demote the rest.
+- [ ] **Threaded voice rooms** — ephemeral breakout rooms spawned from a message.
+- [ ] **Collaborative docs / whiteboard** — embedded in channels (Slack canvas-style).
+- [ ] **Matrix / ActivityPub federation** — complement the existing Discord bridge.
+- [ ] **Per-room custom CSS / themes** — for community identity.
+- [ ] **"Lore" / pinned canon** — long-lived community knowledge surfaced to new joiners; auto-generated from popular pins + AI.
+- [ ] **Creator monetization primitives** — paid channels, message tips, sticker-pack sales (extends Phase 24).
+- [ ] **Voice room transcription + searchable archive** — huge for async communities.
+- [ ] **Message "workflows"** — react with 📌 to auto-pin, 🗑️ to delete (admin), 🧵 to spin a thread; user-configurable.
+
+---
+
+## Test Suite Improvements
+
+### Structural Issues
+
+- [x] **Extract shared `resetDb()` helper** — consolidated into [`test/helpers/reset-db.ts`](apps/control-plane/src/test/helpers/reset-db.ts); table list derived dynamically from `information_schema.tables` (excluding `pgmigrations`/`platform_settings`) so it self-heals.
+- [x] **Consolidate `createAuthCookie` + `bootstrap()` helpers** — extracted into [`test/helpers/auth.ts`](apps/control-plane/src/test/helpers/auth.ts) and [`test/helpers/bootstrap.ts`](apps/control-plane/src/test/helpers/bootstrap.ts) (includes `bootstrap()` + `bootstrapWithMember()`). Migrated 7 test files.
+- [ ] **Replace sequential `delete from` with `TRUNCATE ... CASCADE`** — faster and eliminates the manual dependency-ordering. Alternatively, wrap each test in a transaction that rolls back.
+- [ ] **Move `config.discordBridge.mockMode = true` out of module-load** — relies on test file import order. A Node test-runner `before()` hook or a dedicated `test/setup.ts` loaded via `--import` is safer.
+- [ ] **Split oversized test files** — [`integration-auth-chat-permissions.test.ts`](apps/control-plane/src/test/integration-auth-chat-permissions.test.ts) (1,415 LOC) and [`message-crud.test.ts`](apps/control-plane/src/test/message-crud.test.ts) (770 LOC) mix unrelated concerns. Split by feature area so failures are easier to locate.
+
+### Flakiness
+
+- [x] **Fix event-stream races** — added [`test/helpers/events.ts`](apps/control-plane/src/test/helpers/events.ts) with `captureEvents()` that collects into an array and provides `expect(eventName)` membership-matching. Migrated `realtime-sync.test.ts` (3 tests); `notifications.test.ts` uses HTTP assertions, no subscribe-style capture.
+- [ ] **Inject a clock** — wall-clock timeouts in [`token-refresh.test.ts`](apps/control-plane/src/test/token-refresh.test.ts) (`Date.now() - 1000` for "expired") work today but make debugging painful.
+- [ ] **Guard `fetch` monkey-patching** — no cleanup guard if the test crashes mid-way; the next test inherits the mock. Wrap in a `try/finally` helper.
+- [ ] **Use `beforeEach(resetDb)` instead of start-of-test resets** — one failing test that throws before reset currently leaks state into the next.
+
+### Coverage Gaps
+
+- [x] **Split the 717-line E2E spec** — legacy `sequence-a-community-lifecycle.spec.ts` replaced with 5 feature specs (onboarding, community, invites, messaging, moderation) under [apps/web/e2e/](apps/web/e2e/) + shared [apps/web/e2e/helpers/](apps/web/e2e/helpers/) (reset, auth, navigation, setup). Each spec does its own `resetPlatform` + `bootstrapAdmin` in `beforeEach`, so one failure no longer cascades. Voice-room test left as `test.fixme` — real app-level bug where cold-context Join Voice redirects back to home hub (tracked in Phase 26).
+- [ ] **Voice / LiveKit UI tests** — token issuance is covered server-side, but `VoiceRoom`, device switching, focus mode, PiP, and reconnect are untested.
+- [ ] **Discord bridge E2E** — no end-to-end coverage with a mock Discord gateway; bugs like the recent message-ID mapping / thread resolution issues won't be caught.
+- [ ] **SSE / realtime failure tests** — disconnect, reconnect, missed events, the new polling-fallback logic — all unverified.
+- [ ] **Auth edge cases** — expired session cookies, tampered JWTs, concurrent refresh of the same identity, OAuth provider returning 500. [`token-refresh.test.ts`](apps/control-plane/src/test/token-refresh.test.ts) is happy-path only.
+- [ ] **Federation tests** — Phase 23 shipped Web-of-Trust / guest identity; zero test files touch these.
+- [ ] **Rate-limit tests** — Phase 21 added rate limits, but no test asserts the 241st request in a minute returns 429.
+- [ ] **Migration tests** — [`check-migrations.ts`](apps/control-plane/src/test/check-migrations.ts) doesn't appear to run idempotency checks (apply + re-apply should no-op) or down-migration reversibility.
+- [ ] **Contract tests for `@skerry/shared`** — types are imported everywhere; if an enum changes, consumers break silently.
+- [ ] **Accessibility tests** — `@axe-core/playwright` on the critical flows would be cheap.
+- [ ] **Visual regression** — stickers, emoji, and embed cards are visual-heavy; Playwright `toHaveScreenshot()` on a few key components would catch CSS regressions.
+- [ ] **Performance budgets** — `chat-window.tsx` has no "render under N ms with 500 messages" guardrail.
+
+### Quality-of-Life Upgrades
+
+- [ ] **Standardize test names as sentences** — `"auth/session returns structured unauthorized error with correlation id"` is great; many others (e.g. [`extensions.test.ts`](apps/control-plane/src/test/extensions.test.ts)) are terse. Consistency helps when grepping failures.
+- [ ] **Tag slow / serial tests** — add a convention like `{ concurrency: false }` for DB-touching tests so CI parallelism is explicit.
+- [ ] **Add a JUnit / TAP reporter** — surface failures as CI annotations instead of tail-of-log hunts.
+- [ ] **Expand [`api-snapshot.test.ts`](apps/control-plane/src/test/api-snapshot.test.ts)** — cover every route's response shape to prevent accidental breaking changes.
+- [ ] **Add coverage tooling** — no `.nycrc` or `c8` config present; even a loose >60% threshold would highlight untested branches.
+- [ ] **Seed-data factories** — replace scattered `insert into hubs...` SQL with `createHub()` / `createChannel()` / `createUser()` factories.
+
+### Highest-ROI Next Moves
+
+1. **Extract helpers** (`resetDb`, auth, factories) — cuts suite size ~30% and prevents further drift.
+2. **Fix the event-race pattern everywhere** — single source of unreliable failures.
+3. **Split E2E into 4–5 specs** — independent failure signal.
+4. **Add SSE-reconnect + rate-limit tests** — covers high-risk prod failure modes.
+5. **Turn on a TAP / JUnit reporter + basic coverage** — so all failed tests are visible without scrolling.
