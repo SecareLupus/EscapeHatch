@@ -1,20 +1,22 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../app.js";
 import { config } from "../config.js";
 import { initDb, pool } from "../db/client.js";
 import { upsertIdentityMapping } from "../services/identity-service.js";
-import { resetDb as resetDbRaw } from "./helpers/reset-db.js";
+import { resetDb } from "./helpers/reset-db.js";
 import { createAuthCookie } from "./helpers/auth.js";
 import { bootstrapWithMember as bootstrapWithMemberHelper } from "./helpers/bootstrap.js";
 
 config.discordBridge.mockMode = true;
 
-async function resetDb(): Promise<void> {
-  await resetDbRaw();
+beforeEach(async () => {
+  if (!pool) return;
+  await initDb();
+  await resetDb();
   const { resetModerationServiceInternalState } = await import("../services/moderation-service.js");
   resetModerationServiceInternalState();
-}
+});
 
 const bootstrapWithMember = (
   app: Awaited<ReturnType<typeof buildApp>>,
@@ -33,8 +35,6 @@ test("non-moderator is forbidden from performing ban action", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -64,8 +64,6 @@ test("non-moderator is forbidden from performing kick action", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -92,8 +90,6 @@ test("moderator action reason field is validated (must be at least 3 chars)", as
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -123,8 +119,6 @@ test("hub_admin can issue a warn action (DB-only, no Synapse required)", async (
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -152,8 +146,6 @@ test("hub_admin can issue a strike action (DB-only, no Synapse required)", async
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -181,8 +173,6 @@ test("any member can submit a moderation report; admin can triage and resolve it
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -232,8 +222,6 @@ test("report requires at least one target (userId or messageId)", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -265,8 +253,6 @@ test("channel lock can be toggled by admin; regular member cannot lock", async (
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -310,8 +296,6 @@ test("admin audit log contains moderation events", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -349,8 +333,6 @@ test("strike escalation system (warn -> timeout -> kick -> ban)", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -427,8 +409,6 @@ test("report rate limiting prevents spam", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -467,8 +447,6 @@ test("bulk moderation performs multiple actions and returns mixed results", asyn
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -523,8 +501,6 @@ test("moderation scoping - server moderator cannot perform hub-level ban", async
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -578,8 +554,6 @@ test("timeout prevents actions within the time restriction window", async (t) =>
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {

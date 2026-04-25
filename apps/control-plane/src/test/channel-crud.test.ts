@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../app.js";
 import { config } from "../config.js";
@@ -10,6 +10,13 @@ import { bootstrap as bootstrapHub } from "./helpers/bootstrap.js";
 
 config.discordBridge.mockMode = true;
 
+beforeEach(async () => {
+  if (pool) {
+    await initDb();
+    await resetDb();
+  }
+});
+
 const bootstrap = (app: Awaited<ReturnType<typeof buildApp>>) =>
   bootstrapHub(app, { prefix: "chan", hubName: "Channel CRUD Hub" });
 
@@ -17,8 +24,6 @@ test("channel management with styleContent and CSS safety", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {

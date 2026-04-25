@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../app.js";
 import { config } from "../config.js";
@@ -6,6 +6,13 @@ import { initDb, pool } from "../db/client.js";
 import { upsertIdentityMapping } from "../services/identity-service.js";
 import { resetDb } from "./helpers/reset-db.js";
 import { createAuthCookie } from "./helpers/auth.js";
+
+beforeEach(async () => {
+  if (pool) {
+    await initDb();
+    await resetDb();
+  }
+});
 
 test("notifications summary returns unread counts and mentions", async (t) => {
   if (!pool) {
@@ -16,9 +23,6 @@ test("notifications summary returns unread counts and mentions", async (t) => {
     t.skip("SETUP_BOOTSTRAP_TOKEN not configured.");
     return;
   }
-
-  await initDb();
-  await resetDb();
 
   const app = await buildApp();
   try {

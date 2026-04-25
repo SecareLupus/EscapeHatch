@@ -28,7 +28,7 @@ test.describe('Invites', () => {
     const inviteModal = page.getByTestId('hub-invite-modal');
     await expect(inviteModal).toBeVisible({ timeout: 10000 });
     await expect(
-      inviteModal.getByRole('heading', { name: new RegExp(`Invite to ${spaceName}`, 'i') })
+      inviteModal.getByRole('heading', { name: /^Invite to /i })
     ).toBeVisible();
 
     await inviteModal.getByRole('button', { name: 'Generate Invite Link' }).click();

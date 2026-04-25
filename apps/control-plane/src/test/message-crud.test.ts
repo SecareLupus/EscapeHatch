@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../app.js";
 import { config } from "../config.js";
@@ -10,6 +10,13 @@ import { bootstrap as bootstrapHub } from "./helpers/bootstrap.js";
 
 config.discordBridge.mockMode = true;
 
+beforeEach(async () => {
+  if (pool) {
+    await initDb();
+    await resetDb();
+  }
+});
+
 const bootstrap = (app: Awaited<ReturnType<typeof buildApp>>) =>
   bootstrapHub(app, { prefix: "msg", hubName: "Message CRUD Hub" });
 
@@ -19,8 +26,6 @@ test("authenticated user can send, read, edit, and delete their own message", as
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -88,8 +93,6 @@ test("non-author cannot edit another user's message", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -147,8 +150,6 @@ test("emoji reactions can be added and removed on a message", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -211,8 +212,6 @@ test("moderator can pin and unpin messages; pinned flag is reflected in listing"
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -264,8 +263,6 @@ test("message full-text search returns matching messages and excludes non-matchi
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -309,8 +306,6 @@ test("hub invite can be created, looked up, and used to join by a new member", a
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -368,8 +363,6 @@ test("message content length is validated at the route boundary", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -411,8 +404,6 @@ test("messages can be sent with mediaUrls and attachments are stored", async (t)
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -459,8 +450,6 @@ test("mediaUrls content type is inferred correctly for different file extensions
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -496,8 +485,6 @@ test("mediaUrls array exceeding 8 entries is rejected", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -527,8 +514,6 @@ test("moderator can delete another user's message", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -595,8 +580,6 @@ test("non-moderator cannot delete another user's message", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -668,8 +651,6 @@ test("message with mediaUrls is rejected when URL is not valid", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {

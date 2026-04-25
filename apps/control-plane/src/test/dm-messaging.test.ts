@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../app.js";
 import { config } from "../config.js";
@@ -9,12 +9,17 @@ import { createAuthCookie } from "./helpers/auth.js";
 
 config.discordBridge.mockMode = true;
 
+beforeEach(async () => {
+  if (pool) {
+    await initDb();
+    await resetDb();
+  }
+});
+
 test("DM channel is created and both participants can exchange messages", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -124,8 +129,6 @@ test("opening a DM with yourself returns a valid channel", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -175,8 +178,6 @@ test("DM creation fails with invalid payload (empty userIds)", async (t) => {
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -227,8 +228,6 @@ test("DM channel listing reflects messages from both participants in order", asy
   if (!pool) { t.skip("DATABASE_URL not configured."); return; }
   if (!config.setupBootstrapToken) { t.skip("SETUP_BOOTSTRAP_TOKEN not configured."); return; }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {

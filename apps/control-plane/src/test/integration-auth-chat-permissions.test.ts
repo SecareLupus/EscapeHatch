@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { buildApp } from "../app.js";
 import { config } from "../config.js";
@@ -9,6 +9,13 @@ import { resetDb } from "./helpers/reset-db.js";
 import { createAuthCookie } from "./helpers/auth.js";
 
 config.discordBridge.mockMode = true;
+
+beforeEach(async () => {
+  if (pool) {
+    await initDb();
+    await resetDb();
+  }
+});
 
 test("auth/session returns structured unauthorized error with correlation id", async () => {
   const app = await buildApp();
@@ -84,8 +91,6 @@ test("authenticated bootstrap + provisioning context + permission gate flow", as
     return;
   }
 
-  await initDb();
-  await resetDb();
 
   const app = await buildApp();
   try {
@@ -185,8 +190,6 @@ test("dev login establishes session when bypass is enabled", async (t) => {
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -221,8 +224,6 @@ test("session includes linked identities for same product user", async (t) => {
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -268,8 +269,6 @@ test("onboarding username assignment updates linked identities and enforces uniq
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -361,8 +360,6 @@ test("federation + discord bridge + video controls admin workflow", async (t) =>
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -526,8 +523,6 @@ test("role grants are scope-gated and prevent escalation", async (t) => {
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -629,8 +624,6 @@ test("space owner assignment lifecycle grants and revokes scoped management", as
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -754,8 +747,6 @@ test("expired space owner assignments no longer grant management scope", async (
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -835,8 +826,6 @@ test("space ownership transfer updates effective management owner", async (t) =>
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -915,8 +904,6 @@ test("read-state mention markers and voice presence flows work for scoped users"
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -1104,8 +1091,6 @@ test("space owner can rename their own space and manage categories", async (t) =
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -1213,8 +1198,6 @@ test("Discord bridge permissions respect Hub setting for Space Owners", async (t
     return;
   }
 
-  await initDb();
-  await resetDb();
   const app = await buildApp();
 
   try {
@@ -1302,7 +1285,6 @@ test("Discord bridge permissions respect Hub setting for Space Owners", async (t
 });
 
 test("hub admin can see all channels in a server even if they are not a server member", async () => {
-  await resetDb();
   const app = await buildApp();
   try {
     // 1. Setup Hub Admin

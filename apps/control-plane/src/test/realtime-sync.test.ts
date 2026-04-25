@@ -1,10 +1,14 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { pool } from "../db/client.js";
 import { createMessage, updateMessageByExternalId, deleteMessage } from "../services/chat/message-service.js";
 import { subscribeToChannelMessages } from "../services/chat-realtime.js";
 import { resetDb } from "./helpers/reset-db.js";
 import { captureEvents } from "./helpers/events.js";
+
+beforeEach(async () => {
+  if (pool) await resetDb();
+});
 
 async function seedChannel(): Promise<void> {
   await pool!.query("insert into hubs (id, name, owner_user_id) values ('hub_1', 'Test Hub', 'usr_1')");
@@ -13,7 +17,6 @@ async function seedChannel(): Promise<void> {
 }
 
 test("Real-time Sync: createMessage emits events to subscribers", async () => {
-  await resetDb();
   await seedChannel();
 
   const capture = captureEvents((listener) =>
@@ -36,7 +39,6 @@ test("Real-time Sync: createMessage emits events to subscribers", async () => {
 });
 
 test("Real-time Sync: updateMessageByExternalId (Discord) emits events", async () => {
-  await resetDb();
   await seedChannel();
 
   const msg = await createMessage({
@@ -66,7 +68,6 @@ test("Real-time Sync: updateMessageByExternalId (Discord) emits events", async (
 });
 
 test("Real-time Sync: deleteMessage emits message.deleted event", async () => {
-  await resetDb();
   await seedChannel();
 
   const msg = await createMessage({
