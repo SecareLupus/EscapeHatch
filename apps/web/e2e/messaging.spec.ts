@@ -106,6 +106,11 @@ test.describe('Messaging', () => {
 
     const message = page.locator(`[data-testid="message-item"]:has-text("${original}")`).first();
     await expect(message).toBeVisible();
+    // Wait for the optimistic message to be reconciled with its server-issued
+    // canonical ID. Without this, right-clicking can target the still-pending
+    // optimistic message — the subsequent edit then references the temp ID
+    // and silently no-ops on the server.
+    await expect(message).not.toContainText('Sending...', { timeout: 10000 });
 
     await message.click({ button: 'right' });
     await expect(page.locator('.context-menu')).toBeVisible();
@@ -118,7 +123,15 @@ test.describe('Messaging', () => {
     await expect(page.locator(`text="${edited}"`)).toBeVisible();
     await expect(page.locator(`text="${original}"`)).not.toBeVisible();
 
-    await page.locator(`[data-testid="message-item"]:has-text("${edited}")`).click({ button: 'right' });
+    const editedMessage = page
+      .locator(`[data-testid="message-item"]:has-text("${edited}")`)
+      .first();
+    // Same guard for the edit echo — `updateMessage`'s `.then()` writes
+    // optimistically, then SSE re-echoes; right-clicking before that settles
+    // can race the delete just like the initial send.
+    await expect(editedMessage).not.toContainText('Sending...', { timeout: 10000 });
+
+    await editedMessage.click({ button: 'right' });
     await expect(page.locator('.context-menu')).toBeVisible();
     await page.getByRole('button', { name: 'Delete Message' }).click();
 
@@ -126,9 +139,7 @@ test.describe('Messaging', () => {
     await expect(modal).toBeVisible();
     await modal.getByRole('button', { name: 'Delete' }).click();
 
-    await expect(
-      page.locator(`[data-testid="message-item"]:has-text("${edited}")`)
-    ).not.toBeVisible({ timeout: 10000 });
+    await expect(editedMessage).not.toBeVisible({ timeout: 10000 });
   });
 
   test('social: reactions and threaded replies', async ({ page }) => {
