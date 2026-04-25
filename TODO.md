@@ -299,7 +299,7 @@ _Items prioritized during the Refactoring Sprint triage._
 
 - [x] **Extract shared `resetDb()` helper** — consolidated into [`test/helpers/reset-db.ts`](apps/control-plane/src/test/helpers/reset-db.ts); table list derived dynamically from `information_schema.tables` (excluding `pgmigrations`/`platform_settings`) so it self-heals.
 - [x] **Consolidate `createAuthCookie` + `bootstrap()` helpers** — extracted into [`test/helpers/auth.ts`](apps/control-plane/src/test/helpers/auth.ts) and [`test/helpers/bootstrap.ts`](apps/control-plane/src/test/helpers/bootstrap.ts) (includes `bootstrap()` + `bootstrapWithMember()`). Migrated 7 test files.
-- [ ] **Replace sequential `delete from` with `TRUNCATE ... CASCADE`** — faster and eliminates the manual dependency-ordering. Alternatively, wrap each test in a transaction that rolls back.
+- [x] **Replace sequential `delete from` with `TRUNCATE ... CASCADE`** — 5 files (`api-snapshot`, `identity-service`, `hub-service`, `sql-robustness`, `masquerade`, plus narrower variants in `policy` and `presence-service`) had local `delete from`-based resetDb functions; all now use the shared `helpers/reset-db.ts` which truncates dynamically-discovered public tables in one statement.
 - [ ] **Move `config.discordBridge.mockMode = true` out of module-load** — relies on test file import order. A Node test-runner `before()` hook or a dedicated `test/setup.ts` loaded via `--import` is safer.
 - [ ] **Split oversized test files** — [`integration-auth-chat-permissions.test.ts`](apps/control-plane/src/test/integration-auth-chat-permissions.test.ts) (1,415 LOC) and [`message-crud.test.ts`](apps/control-plane/src/test/message-crud.test.ts) (770 LOC) mix unrelated concerns. Split by feature area so failures are easier to locate.
 
@@ -311,19 +311,19 @@ _Items prioritized during the Refactoring Sprint triage._
 
 - [x] **Fix event-stream races** — added [`test/helpers/events.ts`](apps/control-plane/src/test/helpers/events.ts) with `captureEvents()` that collects into an array and provides `expect(eventName)` membership-matching. Migrated `realtime-sync.test.ts` (3 tests); `notifications.test.ts` uses HTTP assertions, no subscribe-style capture.
 - [ ] **Inject a clock** — wall-clock timeouts in [`token-refresh.test.ts`](apps/control-plane/src/test/token-refresh.test.ts) (`Date.now() - 1000` for "expired") work today but make debugging painful.
-- [ ] **Guard `fetch` monkey-patching** — no cleanup guard if the test crashes mid-way; the next test inherits the mock. Wrap in a `try/finally` helper.
-- [ ] **Use `beforeEach(resetDb)` instead of start-of-test resets** — one failing test that throws before reset currently leaks state into the next.
+- [x] **Guard `fetch` monkey-patching** — added [`test/helpers/fetch-mock.ts`](apps/control-plane/src/test/helpers/fetch-mock.ts) exporting `withMockedFetch(mock, body)` which always restores `globalThis.fetch` even on throw. Migrated `token-refresh.test.ts`.
+- [x] **Use `beforeEach(resetDb)` instead of start-of-test resets** — all 15 control-plane test files migrated to `beforeEach(async () => { if (pool) { await initDb(); await resetDb(); } })`. State leaks between tests are no longer possible.
 
 ### Coverage Gaps
 
 - [x] **Split the 717-line E2E spec** — legacy `sequence-a-community-lifecycle.spec.ts` replaced with 5 feature specs (onboarding, community, invites, messaging, moderation) under [apps/web/e2e/](apps/web/e2e/) + shared [apps/web/e2e/helpers/](apps/web/e2e/helpers/) (reset, auth, navigation, setup). Each spec does its own `resetPlatform` + `bootstrapAdmin` in `beforeEach`, so one failure no longer cascades. Voice-room test left as `test.fixme` — real app-level bug where cold-context Join Voice redirects back to home hub (tracked in Phase 26).
 - [ ] **Voice / LiveKit UI tests** — token issuance is covered server-side, but `VoiceRoom`, device switching, focus mode, PiP, and reconnect are untested.
 - [ ] **Discord bridge E2E** — no end-to-end coverage with a mock Discord gateway; bugs like the recent message-ID mapping / thread resolution issues won't be caught.
-- [ ] **SSE / realtime failure tests** — disconnect, reconnect, missed events, the new polling-fallback logic — all unverified.
-- [ ] **Auth edge cases** — expired session cookies, tampered JWTs, concurrent refresh of the same identity, OAuth provider returning 500. [`token-refresh.test.ts`](apps/control-plane/src/test/token-refresh.test.ts) is happy-path only.
+- [x] **SSE / realtime failure tests** — added [`realtime-failures.test.ts`](apps/control-plane/src/test/realtime-failures.test.ts) (7 tests): multi-subscriber, unsubscribe isolation, re-subscribe, no-buffering-while-disconnected, hub fan-out across channels, cross-hub isolation, cache short-circuit. Covers the in-process pub/sub layer; HTTP SSE transport tests deferred (route uses `reply.hijack()` which breaks `app.inject()`).
+- [x] **Auth edge cases** — added [`auth-edge-cases.test.ts`](apps/control-plane/src/test/auth-edge-cases.test.ts) with 8 tests: tampered/expired/malformed/garbled session tokens (5 unit), tampered/expired cookie HTTP integration (2), OAuth refresh 500 graceful handling (1). Bundled an app fix to `auth/session.ts` that wraps `JSON.parse` in try/catch — without it, garbled payloads surfaced as 500s. Concurrent-refresh test deferred. Federation edge cases deferred to post-launch sprint.
 - [ ] **Federation tests** — Phase 23 shipped Web-of-Trust / guest identity; zero test files touch these.
-- [ ] **Rate-limit tests** — Phase 21 added rate limits, but no test asserts the 241st request in a minute returns 429.
-- [ ] **Migration tests** — [`check-migrations.ts`](apps/control-plane/src/test/check-migrations.ts) doesn't appear to run idempotency checks (apply + re-apply should no-op) or down-migration reversibility.
+- [x] **Rate-limit tests** — added [`rate-limit.test.ts`](apps/control-plane/src/test/rate-limit.test.ts) (4 tests) covering 429 with structured body, `x-ratelimit-*` headers, per-IP buckets, x-forwarded-for chain handling.
+- [x] **Migration tests** — added [`migrations.test.ts`](apps/control-plane/src/test/migrations.test.ts) with two tests: `up` twice is a no-op (idempotency) and a down→up roundtrip on the latest migration that diffs both `pgmigrations` and the `information_schema.columns` snapshot. Catches non-reversible migrations and partially-applied downs.
 - [ ] **Contract tests for `@skerry/shared`** — types are imported everywhere; if an enum changes, consumers break silently.
 - [ ] **Accessibility tests** — `@axe-core/playwright` on the critical flows would be cheap.
 - [ ] **Visual regression** — stickers, emoji, and embed cards are visual-heavy; Playwright `toHaveScreenshot()` on a few key components would catch CSS regressions.
@@ -340,8 +340,20 @@ _Items prioritized during the Refactoring Sprint triage._
 
 ### Highest-ROI Next Moves
 
-1. **Extract helpers** (`resetDb`, auth, factories) — cuts suite size ~30% and prevents further drift.
-2. **Fix the event-race pattern everywhere** — single source of unreliable failures.
-3. **Split E2E into 4–5 specs** — independent failure signal.
-4. **Add SSE-reconnect + rate-limit tests** — covers high-risk prod failure modes.
-5. **Turn on a TAP / JUnit reporter + basic coverage** — so all failed tests are visible without scrolling.
+X. **Extract helpers** (`resetDb`, auth, factories) — cuts suite size ~30% and prevents further drift.
+X. **Fix the event-race pattern everywhere** — single source of unreliable failures.
+X. **Split E2E into 4–5 specs** — independent failure signal.
+X. **Add SSE-reconnect + rate-limit tests** — covers high-risk prod failure modes (`realtime-failures.test.ts` + `rate-limit.test.ts`, 11 tests).
+X. **Migrate to `beforeEach(resetDb)` + replace local `delete from` resets** — all 15 control-plane test files now share one `beforeEach` and the TRUNCATE CASCADE helper.
+
+X. **Auth edge cases** — `auth-edge-cases.test.ts` (8 tests) + JSON.parse-in-verify bug fix.
+X. **Migration idempotency** — `migrations.test.ts` (2 tests) covering up-twice and down→up roundtrip.
+
+1. **CI strategy decision** — self-hosted runner vs. cloud workflow with `services.postgres` (+ Synapse/LiveKit containers). Without this, none of the new tests run automatically. Unblocks #2.
+2. **TAP reporter + coverage tooling** — deferred until (1) lands.
+3. **Concurrent-refresh test** — deferred from auth edge cases batch; deserves single-flight verification rather than a sprinkle.
+4. **Split oversized test files** — `integration-auth-chat-permissions.test.ts` (1,415 LOC) and `message-crud.test.ts` (770 LOC). Quality-of-life, not bug-catching.
+5. **Move `config.discordBridge.mockMode = true` out of module-load** — fragile but not actively biting.
+
+**Deferred to post-launch sprint:**
+- **Federation tests** — Phase 23 shipped Web-of-Trust + guest identity with zero coverage; revisit when federation work is the active focus.
