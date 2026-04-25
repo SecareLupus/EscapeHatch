@@ -26,13 +26,7 @@ test.describe('Community Orchestration', () => {
     await createTextRoom(page, 'Text Lab');
   });
 
-  // KNOWN FLAKY: After clicking "Join Voice" the React state flips
-  // `data-voice-connected` to "true" briefly, then the page redirects back to
-  // the home hub's #general channel and the voice-room never fully mounts.
-  // The monolithic legacy spec passed this step only when it ran after several
-  // prior steps had warmed SSE/LiveKit state. Marked `fixme` until we have a
-  // reliable way to establish LiveKit presence in a cold context.
-  test.fixme('admin can create and join a voice room', async ({ page }) => {
+  test('admin can create and join a voice room', async ({ page }) => {
     await createSpace(page, 'Playwright Server');
 
     await page.getByTestId('add-channel-menu-trigger').click();
