@@ -8,8 +8,6 @@ import { upsertIdentityMapping } from "../services/identity-service.js";
 import { updateUserPresence, listUserPresence } from "../services/presence-service.js";
 import { resetDb } from "./helpers/reset-db.js";
 
-config.discordBridge.mockMode = true;
-
 const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // mirrors the constant in presence-service.ts
 
 beforeEach(async () => {

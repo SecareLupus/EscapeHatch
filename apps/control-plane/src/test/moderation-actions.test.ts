@@ -8,8 +8,6 @@ import { resetDb } from "./helpers/reset-db.js";
 import { createAuthCookie } from "./helpers/auth.js";
 import { bootstrapWithMember as bootstrapWithMemberHelper } from "./helpers/bootstrap.js";
 
-config.discordBridge.mockMode = true;
-
 beforeEach(async () => {
   if (!pool) return;
   await initDb();

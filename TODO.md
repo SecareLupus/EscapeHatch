@@ -249,7 +249,7 @@ _Items prioritized during the Refactoring Sprint triage._
 - [ ] **Discord OAuth UX polish** (Phase 25).
 - [ ] **Loading state in `VoiceRoom`** — while fetching LiveKit token.
 - [ ] **Debounce search modal** input.
-- [ ] **Expand E2E coverage** — currently limited to one sequence; no moderation/voice/federation specs.
+- [x] **Expand E2E coverage** — split monolithic spec into onboarding, community, invites, messaging, moderation, accessibility, visual-regression, voice-channel, voice-settings (10 spec files, 27+ tests). Federation E2E deferred to post-launch sprint.
 
 ### Industry-Standard Gaps
 
@@ -300,8 +300,8 @@ _Items prioritized during the Refactoring Sprint triage._
 - [x] **Extract shared `resetDb()` helper** — consolidated into [`test/helpers/reset-db.ts`](apps/control-plane/src/test/helpers/reset-db.ts); table list derived dynamically from `information_schema.tables` (excluding `pgmigrations`/`platform_settings`) so it self-heals.
 - [x] **Consolidate `createAuthCookie` + `bootstrap()` helpers** — extracted into [`test/helpers/auth.ts`](apps/control-plane/src/test/helpers/auth.ts) and [`test/helpers/bootstrap.ts`](apps/control-plane/src/test/helpers/bootstrap.ts) (includes `bootstrap()` + `bootstrapWithMember()`). Migrated 7 test files.
 - [x] **Replace sequential `delete from` with `TRUNCATE ... CASCADE`** — 5 files (`api-snapshot`, `identity-service`, `hub-service`, `sql-robustness`, `masquerade`, plus narrower variants in `policy` and `presence-service`) had local `delete from`-based resetDb functions; all now use the shared `helpers/reset-db.ts` which truncates dynamically-discovered public tables in one statement.
-- [ ] **Move `config.discordBridge.mockMode = true` out of module-load** — relies on test file import order. A Node test-runner `before()` hook or a dedicated `test/setup.ts` loaded via `--import` is safer.
-- [ ] **Split oversized test files** — [`integration-auth-chat-permissions.test.ts`](apps/control-plane/src/test/integration-auth-chat-permissions.test.ts) (1,415 LOC) and [`message-crud.test.ts`](apps/control-plane/src/test/message-crud.test.ts) (770 LOC) mix unrelated concerns. Split by feature area so failures are easier to locate.
+- [x] **Move `config.discordBridge.mockMode = true` out of module-load** — created [`test/setup.ts`](apps/control-plane/src/test/setup.ts) preloaded via `tsx --import ./src/test/setup.ts --test ...`. Removed the per-file `config.discordBridge.mockMode = true;` line from 8 test files. New test files automatically inherit the baseline.
+- [x] **Split oversized test files** — `integration-auth-chat-permissions.test.ts` (1,415 LOC, 18 tests) split into [`auth-basics.test.ts`](apps/control-plane/src/test/auth-basics.test.ts) (8 tests), [`federation.test.ts`](apps/control-plane/src/test/federation.test.ts) (2 tests), [`role-grants.test.ts`](apps/control-plane/src/test/role-grants.test.ts) (5 tests), [`space-permissions.test.ts`](apps/control-plane/src/test/space-permissions.test.ts) (3 tests). `message-crud.test.ts` (770 LOC, 13 tests) split into slimmed [`message-crud.test.ts`](apps/control-plane/src/test/message-crud.test.ts) (6 CRUD/permission tests), [`message-validation.test.ts`](apps/control-plane/src/test/message-validation.test.ts) (5 validation/media tests + search), [`hub-invites.test.ts`](apps/control-plane/src/test/hub-invites.test.ts) (1 invite test). 116/116 tests still green; biggest file dropped from 1,415 → 583 LOC.
 
 ### Performance
 
@@ -318,10 +318,10 @@ _Items prioritized during the Refactoring Sprint triage._
 
 - [x] **Split the 717-line E2E spec** — legacy `sequence-a-community-lifecycle.spec.ts` replaced with 5 feature specs (onboarding, community, invites, messaging, moderation) under [apps/web/e2e/](apps/web/e2e/) + shared [apps/web/e2e/helpers/](apps/web/e2e/helpers/) (reset, auth, navigation, setup). Each spec does its own `resetPlatform` + `bootstrapAdmin` in `beforeEach`, so one failure no longer cascades. Voice-room test left as `test.fixme` — real app-level bug where cold-context Join Voice redirects back to home hub (tracked in Phase 26).
 - [~] **Voice / LiveKit UI tests** — pre-join in [`voice-channel.spec.ts`](apps/web/e2e/voice-channel.spec.ts) (2 tests); full create+join flow in [`community.spec.ts`](apps/web/e2e/community.spec.ts); VoiceSettingsModal in [`voice-settings.spec.ts`](apps/web/e2e/voice-settings.spec.ts) (4 tests: opens, dropdowns render, Cancel closes without reload, Save & Apply persists + reloads). **Bug surfaced + fixed during the test write:** `"voice-settings"` was missing from the `ModalType` union, dispatched via `"voice-settings" as any`, and `ClientModals.tsx` early-returned `null` for any modal not in its `isClientControlled` list — VoiceSettingsModal at [ClientModals.tsx:232](apps/web/components/modals/ClientModals.tsx#L232) was unreachable. Fix: add to union, drop `as any`, change early-return to short-circuit only when no modal is active. Still deferred: focus mode (needs 2-user multi-context test), PiP (`requestPictureInPicture()` unreliable in headless Chromium), reconnect (LiveKit reconnect timing non-deterministic).
-- [ ] **Discord bridge E2E** — no end-to-end coverage with a mock Discord gateway; bugs like the recent message-ID mapping / thread resolution issues won't be caught.
+- [~] **Discord bridge E2E** — gateway-side coverage deferred (no credible mock library; building one isn't worth the maintenance cost). REST/OAuth side may eventually use a forked `glideapps/fake-discord`. Until then, gateway flows are tested manually or via the future session-takeover system.
 - [x] **SSE / realtime failure tests** — added [`realtime-failures.test.ts`](apps/control-plane/src/test/realtime-failures.test.ts) (7 tests): multi-subscriber, unsubscribe isolation, re-subscribe, no-buffering-while-disconnected, hub fan-out across channels, cross-hub isolation, cache short-circuit. Covers the in-process pub/sub layer; HTTP SSE transport tests deferred (route uses `reply.hijack()` which breaks `app.inject()`).
 - [x] **Auth edge cases** — added [`auth-edge-cases.test.ts`](apps/control-plane/src/test/auth-edge-cases.test.ts) with 8 tests: tampered/expired/malformed/garbled session tokens (5 unit), tampered/expired cookie HTTP integration (2), OAuth refresh 500 graceful handling (1). Bundled an app fix to `auth/session.ts` that wraps `JSON.parse` in try/catch — without it, garbled payloads surfaced as 500s. Concurrent-refresh test deferred. Federation edge cases deferred to post-launch sprint.
-- [ ] **Federation tests** — Phase 23 shipped Web-of-Trust / guest identity; zero test files touch these.
+- [~] **Federation tests** — deferred to post-launch sprint per direction; Phase 23 shipped Web-of-Trust / guest identity with zero coverage, revisit when federation is the active focus.
 - [x] **Rate-limit tests** — added [`rate-limit.test.ts`](apps/control-plane/src/test/rate-limit.test.ts) (4 tests) covering 429 with structured body, `x-ratelimit-*` headers, per-IP buckets, x-forwarded-for chain handling.
 - [x] **Migration tests** — added [`migrations.test.ts`](apps/control-plane/src/test/migrations.test.ts) with two tests: `up` twice is a no-op (idempotency) and a down→up roundtrip on the latest migration that diffs both `pgmigrations` and the `information_schema.columns` snapshot. Catches non-reversible migrations and partially-applied downs.
 - [x] **Contract tests for `@skerry/shared`** — extended [`contracts.test.ts`](packages/shared/src/test/contracts.test.ts) with exhaustive `never` checks for all 9 string-union exports (AccessLevel, Role, ChannelType, JoinPolicy, ModerationActionType, ReportStatus, PrivilegedAction, DelegationAssignmentStatus, IdentityProvider) plus zod runtime tests for `MasqueradeParamsSchema`. Removing a value fails the array literal at compile; adding a value fails the `assertNever` branch at compile. 14 new tests, 16 total.
@@ -356,12 +356,17 @@ X. **Accessibility, visual regression, and pre-join voice tests** — `accessibi
 X. **Voice join cold-context bug (Phase 26)** — fixed via single useEffect that keeps `localStorage.lastServerId` in sync with `selectedServerId`. Test passes deterministically; full e2e suite green.
 
 X. **VoiceSettingsModal coverage + ClientModals visibility bug** — `voice-settings.spec.ts` (4 tests) + 3-line app fix in `ClientModals.tsx`/`chat-context.tsx`/`chat-window.tsx`.
+X. **Inject a clock for token-refresh** — `t.mock.timers` pinning "now" to a fixed ISO instant. Self-documenting traces.
+X. **Move `config.discordBridge.mockMode` out of module-load** — centralized in `test/setup.ts`, preloaded via `tsx --import`. 8 per-file lines removed.
+X. **Split oversized test files** — `integration-auth-chat-permissions.test.ts` (1,415 LOC) → 4 files; `message-crud.test.ts` (770 LOC) → 3 files. 116/116 still green.
 
-1. **Remaining Voice/LiveKit coverage** — focus mode (2-user multi-context test), PiP (skip — headless Chromium can't assert), reconnect (skip — LiveKit timing non-deterministic). Of these, only focus mode is realistic for E2E; PiP and reconnect should stay manual.
+1. **Remaining Voice/LiveKit coverage** — focus mode (2-user multi-context test, realistic for E2E). PiP and reconnect stay manual (headless Chromium can't assert PiP; LiveKit reconnect timing non-deterministic).
 2. **CI strategy decision** — self-hosted runner vs. cloud workflow with `services.postgres` (+ Synapse/LiveKit containers). Without this, none of the new tests run automatically. Unblocks #3.
 3. **TAP reporter + coverage tooling** — deferred until (2) lands.
-4. **Split oversized test files** — `integration-auth-chat-permissions.test.ts` (1,415 LOC) and `message-crud.test.ts` (770 LOC). Quality-of-life, not bug-catching.
-5. **Move `config.discordBridge.mockMode = true` out of module-load** — fragile but not actively biting.
+
+**Deferred to post-launch sprint:**
+- **Federation tests** — Phase 23 shipped Web-of-Trust + guest identity with zero coverage; revisit when federation work is the active focus.
+- **Discord bridge E2E** — gateway mocking has no good library and isn't worth building in-house; gateway flows stay manual or wait for the session-takeover system. REST/OAuth mocking still tracked separately if the fake-discord fork moves forward.
 
 **Deferred to post-launch sprint:**
 - **Federation tests** — Phase 23 shipped Web-of-Trust + guest identity with zero coverage; revisit when federation work is the active focus.

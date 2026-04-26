@@ -17,8 +17,6 @@ import {
 import { resetDb } from "./helpers/reset-db.js";
 import { withMockedFetch } from "./helpers/fetch-mock.js";
 
-config.discordBridge.mockMode = true;
-
 beforeEach(async () => {
   if (pool) {
     await initDb();

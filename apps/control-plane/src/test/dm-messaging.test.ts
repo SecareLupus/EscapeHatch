@@ -7,8 +7,6 @@ import { upsertIdentityMapping } from "../services/identity-service.js";
 import { resetDb } from "./helpers/reset-db.js";
 import { createAuthCookie } from "./helpers/auth.js";
 
-config.discordBridge.mockMode = true;
-
 beforeEach(async () => {
   if (pool) {
     await initDb();
