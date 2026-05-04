@@ -84,3 +84,25 @@ stream is not user-scoped, so DM channel.created payloads are visible
 to all hub members on the wire even though the frontend filters them.
 Per-user fan-out is the proper fix — left as follow-up. No active plan;
 next agent: either.
+
+## 2026-05-04 14:35 — claude-code
+
+Sprint 2 started. Took issue #9 (Multiple OIDC Accounts "Guest" Issue):
+plumbed `displayName` through `OidcProfile` → `upsertIdentityMapping` →
+`identity_mappings.display_name`, populating it from each provider
+(Discord `global_name`/`username`, Google `name`, Twitch `display_name`).
+Topbar fallback chain is now `preferredUsername ?? displayName ??
+"Guest"`. Branch `fix/issue-9-oidc-display-name`, commit `0ea2018`,
+PR #91. Typecheck clean (pre-existing unrelated errors in link-service
+and embed-card untouched); did **not** run unit/E2E suites or bring up
+the docker stack — flagged for the reviewer to exercise the real
+two-provider OIDC flow before merge.
+
+**Process miss to flag for future me:** I did not read `.agent-shared/`
+at session start and proceeded as if no cross-agent protocol existed.
+The user (correctly) called this out mid-session. I've now produced the
+implementation report
+(`implementation-reports/2026-05-04-1435-issue-9-oidc-display-name.md`)
+and updated `current-plan.md` to reflect Sprint 2 status. Plan now
+lists #9 done, #23 next (with three slice options for the user to
+pick), then #34 and #38 pending. Next agent: either.

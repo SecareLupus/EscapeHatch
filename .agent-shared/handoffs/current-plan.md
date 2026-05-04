@@ -1,77 +1,81 @@
 ---
 created_by: claude-code
-last_updated: 2026-05-03T22:30:00Z
+last_updated: 2026-05-04T18:35:00Z
 next_agent: either
-status: complete
+status: in-progress
 ---
 
-> **Note (2026-05-03 22:30):** Sprint 1 Lane C complete — issues #35,
-> #40, #41, #45 all landed on `fix/sprint-1-dm-reactivity` (single
-> branch, four issues bundled). Backend now emits `channel.created` for
-> new DMs and `dm.left` / `channel.deleted` for departures; frontend
-> wires those to `ADD_DM_CHANNEL` / `REMOVE_DM_CHANNEL`, adds a
-> notifications bell + panel in the topbar, and a "Leave Conversation"
-> context-menu item on DM rows. Suite on localhost: shared 16/16,
-> web 11/11, control-plane 123/123, E2E 33/33. Report at
-> `implementation-reports/2026-05-03-2230-sprint-1-dm-reactivity.md`.
-> Open follow-up: per-user SSE fan-out (DM event scoping). No active
-> plan in flight; the user's next request should seed a new one.
+> **Note (2026-05-04 14:35):** Sprint 2 kicked off. Issue #9 (Multiple OIDC
+> Accounts "Guest" Issue) landed on `fix/issue-9-oidc-display-name`,
+> commit `0ea2018`, PR #91 open against `main`. Implementation report at
+> `implementation-reports/2026-05-04-1435-issue-9-oidc-display-name.md`.
+> Agent (claude-code) failed to read `.agent-shared/` at session start
+> and proceeded as if no prior cross-agent protocol existed; the user
+> caught this and the agent course-corrected mid-session. Subsequent
+> Sprint 2 work should follow the protocol from the start.
 
-> **Note (2026-05-03):** Issue #21 (Settings menu theme persistence)
-> verified fixed on the current build. The Phase 27 FOUC guard
-> (`fe54478`) already addresses it; this turn added a Playwright
-> regression test that exercises the literal repro (seed
-> `localStorage.theme=dark`, navigate to `/settings`, reload, assert no
-> flash to light) so the path stays covered. Branch
-> `fix/issue-21-settings-theme`, report at
-> `implementation-reports/2026-05-03-1706-issue-21-settings-theme.md`.
-> No active plan is in flight.
-
-> **Note (2026-05-02):** Phase 27 merged via PR #37 (`edfb91e`). A
-> follow-up fix for Issue #22 (Discord Bridge OAuth scroll/state
-> restore) merged separately via PR #47 (`72aaae4`, commits `29785c3`
-> + `61134c9` + `171c2de`) and the corresponding TODO.md entry has been
-> checked off. No active plan is in flight; the user's next request
-> should seed a new plan.
-
-# Plan: Phase 27 — BugFixesAndPolish Retry
+# Plan: Skerry MVP Sprint 2
 
 ## Goal
-Re-apply the fixes from the `BugFixesAndPolish` branch one at a time on
-`Phase-27` (forked from main), instead of as a single batch.
+Land all four Sprint 2 issues from GitHub Project #2 (`Skerry MVP Sprint
+Plan`), one PR per issue. The user is near a weekly model-usage cap, so
+**no batching, no overlapping branches**.
 
 ## Steps
-- [x] **Item 1** — Theme toggle FOUC guard re-applied with E2E regression
-  (`fe54478`).
-- [x] **Item 2** — `ModalManager` wrapped in `ChatHandlersProvider` with
-  E2E regression (`83db799`).
-- [x] **Items 3+4** — `ADD_DM_CHANNEL` reducer + DM-list optimistic seed
-  + channel-membership recovery, with 4 reducer regression tests
-  (`d86c360`).
-- [x] **Item 5** — Discord reactions stored in tag form; `ReactionEmoji`
-  renders CDN URL; 5 encoder regression tests (`dcd629b`).
-- [x] **Item 6** — Investigation only, no code change. See
-  `implementation-reports/2026-05-02-1730-phase-27-items-1-through-6.md`
-  — partial backfill is mostly Unicode (correct); only one custom name
-  (`zombieTwerk`, 3 rows on pangolin) is genuinely missing because the
-  bot never seeded it into `discord_seen_emojis`.
-- [x] **Item 8** — DM picker + reaction button rewired to current theme
-  tokens; `--bg-strong` (light), `--accent-soft` (both), `.interaction-btn`,
-  scrollbar styling, modal scoped styles added (`f940bfd`).
 
-(Item 7 — Skerry-side mirror — remains deferred per `TODO.md`.)
+- [x] **Issue #9** — Multiple OIDC Accounts "Guest" Issue.
+  Done by claude-code (PR #91, branch `fix/issue-9-oidc-display-name`).
+  See `implementation-reports/2026-05-04-1435-issue-9-oidc-display-name.md`.
 
-## Final verification (localhost)
-- Unit: 146/146 (shared 16, web 9, control-plane 121).
-- E2E: 29/29 on the post-Item-8 build.
+- [ ] **Issue #23** — Invite Link Buttons Do Not Currently Generate Links.
+  **NEXT** — assigned to: either.
+  - Context: Per the issue body, two features are missing:
+    (a) optional default role baked into an invite (space-admin use case);
+    (b) optional default server placement on join. The most recent owner
+    comment (2026-05-02) confirms invites grant server access for
+    logged-in users; remaining work is the broader "permissions & invites"
+    cleanup. The `hub_invites` table currently has no `role` or
+    `server_id` columns (see
+    `apps/control-plane/src/services/chat/server-service.ts` ~L248-266).
+    The redeem page at `apps/web/app/invite/[inviteId]/page.tsx` does not
+    handle logged-out visitors gracefully — clicking Accept while logged
+    out hits a 401 with no login redirect. The "Create Hub Invite" modal
+    in `apps/web/components/modals/InviteModals.tsx` is titled "Invite to
+    {serverName}" but creates a hub-level invite.
+  - Recommended slicing (one slice per PR, do not batch):
+    - **Slice A (recommended first):** Fix the unauthenticated redeem
+      flow (login redirect with return-to, then auto-trigger join after
+      auth) and correct the modal title copy. Small, user-visible,
+      no schema change.
+    - **Slice B:** Schema migration adds `default_role` and
+      `default_server_id` to `hub_invites`; create-invite UI exposes
+      optional dropdowns; redeem applies them. Medium scope, separate
+      PR.
+    - **Slice C:** Broader permissions/invites cleanup. Out of scope
+      for one PR — leave for a follow-up ticket.
+  - Acceptance: PR open against `main`, branch
+    `fix/issue-23-<slice-name>`, typecheck clean, manual repro
+    documented. Mark this step `[x]` per slice landed; if all three
+    slices are needed, expand this step into A/B/C sub-items.
+
+- [ ] **Issue #34** — Onboarding Display Name. Pending.
+  - Context: Not yet investigated this session. Read the issue + code
+    before scoping.
+
+- [ ] **Issue #38** — Changing Server Permissions Does Not Update Backend.
+  Pending.
+  - Context: Not yet investigated this session. Read the issue + code
+    before scoping.
 
 ## Open Questions
-- Should the optional Item 6 follow-ups (one-shot manual backfill of
-  `zombieTwerk`'s 3 rows + extending the bot's reaction-event seed
-  logic) land as a separate PR, or are 3 stale rows acceptable as-is?
-- One unrelated flake observed in `messaging.spec.ts:145` (reactions +
-  threaded replies) during the post-Items-3+4 run; recovered on retry
-  and did not recur. Worth a closer look if it returns.
+
+- For #23: which slice does the user want first? Slice A is the
+  recommended start (smallest, fixes a visible regression), but the
+  user has not yet confirmed. Default to Slice A if the user does not
+  pick one.
+- Should the "two productUserIds when emails differ" downstream concern
+  noted in the #9 report be filed as a separate issue?
 
 ## Blocking Issues
+
 None.
